@@ -504,6 +504,7 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'products') {
       return ProductsPage(
         repository: productRepository,
+        categoryRepository: categoryRepository,
         user: user,
         membership: membership,
       );

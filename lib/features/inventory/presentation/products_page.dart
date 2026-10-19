@@ -4,6 +4,8 @@ import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../categories/domain/entities/category.dart';
+import '../../categories/domain/repositories/category_repository.dart';
 import '../domain/entities/product.dart';
 import '../domain/repositories/product_repository.dart';
 import 'product_editor_dialog.dart';
@@ -13,12 +15,14 @@ class ProductsPage extends StatefulWidget {
     required this.repository,
     required this.user,
     required this.membership,
+    this.categoryRepository,
     super.key,
   });
 
   final ProductRepository? repository;
   final AuthenticatedUser user;
   final StoreMembership membership;
+  final CategoryRepository? categoryRepository;
 
   @override
   State<ProductsPage> createState() => _ProductsPageState();
@@ -27,6 +31,7 @@ class ProductsPage extends StatefulWidget {
 class _ProductsPageState extends State<ProductsPage> {
   final _searchController = TextEditingController();
   List<Product> _products = const [];
+  List<Category> _categories = const <Category>[];
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -34,6 +39,7 @@ class _ProductsPageState extends State<ProductsPage> {
   void initState() {
     super.initState();
     _loadProducts();
+    _loadCategories();
   }
 
   @override
@@ -206,6 +212,7 @@ class _ProductsPageState extends State<ProductsPage> {
       builder: (_) => ProductEditorDialog(
         storeId: widget.membership.storeId,
         initialProduct: initialProduct,
+        categories: _categories,
       ),
     );
     if (!mounted || product == null) {
@@ -232,6 +239,26 @@ class _ProductsPageState extends State<ProductsPage> {
         initialProduct == null ? 'تمت إضافة الصنف.' : 'تم تحديث الصنف.',
       );
       await _loadProducts();
+    }
+  }
+
+  Future<void> _loadCategories() async {
+    final repository = widget.categoryRepository;
+    if (repository == null) {
+      return;
+    }
+
+    final result = await repository.getCategories(
+      context: StoreContext(
+        storeId: widget.membership.storeId,
+        userId: widget.user.id,
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (result is Success<List<Category>>) {
+      setState(() => _categories = result.value);
     }
   }
 

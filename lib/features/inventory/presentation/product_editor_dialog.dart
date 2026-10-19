@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 
 import '../../../core/money/money.dart';
 import '../../../core/quantity/quantity.dart';
+import '../../categories/domain/entities/category.dart';
 import '../domain/entities/product.dart';
 
 class ProductEditorDialog extends StatefulWidget {
   const ProductEditorDialog({
     required this.storeId,
     this.initialProduct,
+    this.categories = const <Category>[],
     super.key,
   });
 
   final String storeId;
   final Product? initialProduct;
+  final List<Category> categories;
 
   @override
   State<ProductEditorDialog> createState() => _ProductEditorDialogState();
@@ -33,6 +36,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
 
   late bool _isService;
   late bool _isActive;
+  String? _selectedCategoryId;
   String? _errorMessage;
 
   Product? get _initialProduct => widget.initialProduct;
@@ -45,6 +49,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
     _categoryController = TextEditingController(
       text: product?.categoryId ?? 'general',
     );
+    _selectedCategoryId = product?.categoryId;
     _purchasePriceController = TextEditingController(
       text: product?.purchasePrice.formatted.split(' ').first ?? '',
     );
@@ -87,11 +92,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
             children: [
               _textField(
                   _nameController, 'اسم الصنف', Icons.inventory_2_outlined),
-              _textField(
-                _categoryController,
-                'معرّف التصنيف',
-                Icons.category_outlined,
-              ),
+              _buildCategoryField(),
               Row(
                 children: [
                   Expanded(
@@ -195,6 +196,48 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
     );
   }
 
+  Widget _buildCategoryField() {
+    if (widget.categories.isEmpty) {
+      return _textField(
+        _categoryController,
+        'معرّف التصنيف',
+        Icons.category_outlined,
+      );
+    }
+
+    final currentId = _selectedCategoryId;
+    final hasCurrent = currentId != null &&
+        widget.categories.any((category) => category.id == currentId);
+    final items = <DropdownMenuItem<String>>[
+      if (!hasCurrent && currentId != null && currentId.isNotEmpty)
+        DropdownMenuItem<String>(
+          value: currentId,
+          child: Text('تصنيف سابق: $currentId'),
+        ),
+      ...widget.categories.map(
+        (category) => DropdownMenuItem<String>(
+          value: category.id,
+          child: Text(category.name),
+        ),
+      ),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DropdownButtonFormField<String>(
+        initialValue: currentId ?? items.first.value,
+        decoration: const InputDecoration(
+          labelText: 'التصنيف',
+          prefixIcon: Icon(Icons.category_outlined),
+        ),
+        items: items,
+        onChanged: (value) {
+          setState(() => _selectedCategoryId = value);
+        },
+      ),
+    );
+  }
+
   Widget _textField(
     TextEditingController controller,
     String label,
@@ -265,7 +308,9 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
 
   void _save() {
     final name = _nameController.text.trim();
-    final categoryId = _categoryController.text.trim();
+    final categoryId = widget.categories.isEmpty
+        ? _categoryController.text.trim()
+        : (_selectedCategoryId ?? '').trim();
     final purchasePrice = _parseMoney(_purchasePriceController.text);
     final sellingPrice = _parseMoney(_sellingPriceController.text);
     final wholesalePrice = _parseMoney(_wholesalePriceController.text);
