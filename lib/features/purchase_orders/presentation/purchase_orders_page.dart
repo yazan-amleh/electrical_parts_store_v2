@@ -212,7 +212,8 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
     });
 
     final ordersResult = await repository.getPurchaseOrders(context: _context);
-    final productsResult = await productRepository.getProducts(context: _context);
+    final productsResult =
+        await productRepository.getProducts(context: _context);
     final suppliersResult = await partyRepository.getParties(
       context: _context,
       type: PartyType.supplier,
@@ -499,7 +500,8 @@ class _ReceivePurchaseOrderDialogState
             const SizedBox(height: 12),
             TextField(
               controller: _taxController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: 'ضريبة المدخلات (اختياري)',
                 hintText: '0.00',
@@ -655,9 +657,7 @@ class _CreatePurchaseOrderDialogState
                     dense: true,
                     title: Text(line.productName),
                     subtitle: Text(
-                      line.quantity.formatted +
-                          ' × ' +
-                          line.unitCost.formatted,
+                      line.quantity.formatted + ' × ' + line.unitCost.formatted,
                     ),
                     trailing: IconButton(
                       onPressed: () => setState(() => _lines.remove(line)),

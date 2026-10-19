@@ -30,7 +30,8 @@ abstract final class PurchaseOrderFirestoreMapper {
       orderNumber: _string(data['orderNumber'], snapshot.id),
       supplierId: _string(data['supplierId']),
       supplierName: _string(data['supplierName'], 'مورد غير معروف'),
-      orderedAt: _date(data['orderedAt']) ?? DateTime.fromMillisecondsSinceEpoch(0),
+      orderedAt:
+          _date(data['orderedAt']) ?? DateTime.fromMillisecondsSinceEpoch(0),
       lines: lines,
       status: purchaseOrderStatusFromName(data['status'] as String?),
       notes: data['notes'] as String?,

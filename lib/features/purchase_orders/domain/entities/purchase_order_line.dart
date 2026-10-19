@@ -12,8 +12,7 @@ class PurchaseOrderLine {
     this.unitId,
     this.unitName,
     Quantity? receivedQuantity,
-  }) : receivedQuantity =
-            receivedQuantity ?? const Quantity.fromMilliUnits(0) {
+  }) : receivedQuantity = receivedQuantity ?? const Quantity.fromMilliUnits(0) {
     _ensureIdentifier(id, 'Purchase order line id');
     _ensureIdentifier(productId, 'Purchase order product id');
     if (productName.trim().isEmpty) {
@@ -53,8 +52,7 @@ class PurchaseOrderLine {
 
   Quantity get baseQuantity {
     final numerator = quantity.milliUnits * unitFactorToBase.milliUnits;
-    final baseMilliUnits =
-        (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
+    final baseMilliUnits = (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
     return Quantity.fromMilliUnits(baseMilliUnits);
   }
 

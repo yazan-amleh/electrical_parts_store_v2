@@ -309,8 +309,7 @@ class _AppShellPageState extends State<AppShellPage> {
           inventoryRepository: widget.dependencies.inventoryRepository,
           saleRepository: widget.dependencies.saleRepository,
           purchaseRepository: widget.dependencies.purchaseRepository,
-          purchaseOrderRepository:
-              widget.dependencies.purchaseOrderRepository,
+          purchaseOrderRepository: widget.dependencies.purchaseOrderRepository,
           expenseRepository: widget.dependencies.expenseRepository,
           accountingRepository: widget.dependencies.accountingRepository,
           partyPaymentRepository: widget.dependencies.partyPaymentRepository,
