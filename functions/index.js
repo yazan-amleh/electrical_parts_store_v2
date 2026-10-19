@@ -143,6 +143,448 @@ exports.postPartyPayment = onCall(async (request) => {
   }
 });
 
+function parseExpenseCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const expense = asObject(command.expense, 'expense');
+  const postingAccounts = asObject(
+    command.postingAccounts,
+    'postingAccounts',
+  );
+
+  const paymentMethod = stringValue(
+    expense.paymentMethod,
+    'expense.paymentMethod',
+  );
+  if (!EXPENSE_PAYMENT_METHODS.has(paymentMethod)) {
+    invalid('Unsupported expense payment method.');
+  }
+
+  const supplierId = optionalSafeId(expense.supplierId, 'supplierId');
+  if (paymentMethod === 'credit' && !supplierId) {
+    invalid('A credit expense requires a supplier.');
+  }
+
+  const accounts = {
+    settlementAccountId: optionalSafeId(
+      postingAccounts.settlementAccountId,
+      'settlementAccountId',
+    ),
+    supplierPayableAccountId: optionalSafeId(
+      postingAccounts.supplierPayableAccountId,
+      'supplierPayableAccountId',
+    ),
+    inputTaxAccountId: optionalSafeId(
+      postingAccounts.inputTaxAccountId,
+      'inputTaxAccountId',
+    ),
+  };
+  const expenseAccountId = safeId(
+    expense.expenseAccountId,
+    'expenseAccountId',
+  );
+  const paymentAccountId = paymentMethod === 'credit'
+    ? accounts.supplierPayableAccountId
+    : accounts.settlementAccountId;
+  if (!paymentAccountId) {
+    invalid(
+      paymentMethod === 'credit'
+        ? 'A supplier payable account is required for credit expenses.'
+        : 'A settlement account is required for paid expenses.',
+    );
+  }
+
+  const amountMinorUnits = positiveInt(
+    expense.amountMinorUnits,
+    'expense.amountMinorUnits',
+  );
+  const taxMinorUnits = nonNegativeInt(
+    expense.taxMinorUnits,
+    'expense.taxMinorUnits',
+  );
+  if (taxMinorUnits > 0 && !accounts.inputTaxAccountId) {
+    invalid('An input tax account is required when tax is present.');
+  }
+
+  const providedAccountIds = [
+    expenseAccountId,
+    accounts.settlementAccountId,
+    accounts.supplierPayableAccountId,
+    accounts.inputTaxAccountId,
+  ].filter(Boolean);
+  if (new Set(providedAccountIds).size !== providedAccountIds.length) {
+    invalid('Expense posting accounts must be distinct.');
+  }
+
+  return {
+    storeId,
+    expense: {
+      id: safeId(expense.id, 'expense id'),
+      idempotencyKey: safeId(
+        expense.idempotencyKey,
+        'expense idempotency key',
+      ),
+      postedAt: parseDate(expense.postedAt, 'expense.postedAt'),
+      paymentMethod,
+      expenseAccountId,
+      supplierId,
+      description: expense.description == null
+        ? null
+        : stringValue(expense.description, 'expense.description'),
+      currency: stringValue(expense.currency, 'expense.currency'),
+      amountMinorUnits,
+      taxMinorUnits,
+    },
+    accounts,
+  };
+}
+
+async function postExpenseInTransaction(transaction, userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberRef = storeRef.collection('members').doc(userId);
+  const expenseRef = storeRef
+    .collection('expenses')
+    .doc(command.expense.id);
+  const expenseIdempotencyRef = storeRef
+    .collection('expense_idempotency')
+    .doc(command.expense.idempotencyKey);
+  const journalEntryId = command.expense.id + '-journal';
+  const journalIdempotencyKey = command.expense.idempotencyKey +
+    ':journal';
+  const journalRef = storeRef
+    .collection('journal_entries')
+    .doc(journalEntryId);
+  const journalIdempotencyRef = storeRef
+    .collection('idempotency_keys')
+    .doc(journalIdempotencyKey);
+  const isCreditExpense = command.expense.paymentMethod === 'credit';
+  const supplierLedgerId = isCreditExpense
+    ? command.expense.id + '-supplier'
+    : null;
+  const supplierLedgerRef = isCreditExpense
+    ? storeRef.collection('party_ledger_entries').doc(supplierLedgerId)
+    : null;
+  const supplierBalanceId = isCreditExpense
+    ? 'supplier-' + command.expense.supplierId
+    : null;
+  const supplierBalanceRef = isCreditExpense
+    ? storeRef.collection('party_balances').doc(supplierBalanceId)
+    : null;
+
+  const membershipSnapshot = await transaction.get(memberRef);
+  assertMembership(
+    membershipSnapshot,
+    command.storeId,
+    'post expenses',
+  );
+
+  const expenseIdempotencySnapshot = await transaction.get(
+    expenseIdempotencyRef,
+  );
+  if (expenseIdempotencySnapshot.exists) {
+    const existingExpenseId =
+      expenseIdempotencySnapshot.data().expenseId;
+    if (existingExpenseId === command.expense.id) {
+      return {
+        status: 'already_posted',
+        expenseId: command.expense.id,
+        journalEntryId,
+      };
+    }
+    conflict('The expense idempotency key is already assigned.');
+  }
+
+  const existingExpenseSnapshot = await transaction.get(expenseRef);
+  if (existingExpenseSnapshot.exists) {
+    conflict('The expense id already exists.');
+  }
+
+  const existingJournalSnapshot = await transaction.get(journalRef);
+  if (existingJournalSnapshot.exists) {
+    conflict('The expense journal id already exists.');
+  }
+
+  const journalIdempotencySnapshot = await transaction.get(
+    journalIdempotencyRef,
+  );
+  if (journalIdempotencySnapshot.exists) {
+    conflict('The expense journal idempotency key already exists.');
+  }
+
+  let supplierLedgerSnapshot = null;
+  let supplierBalanceSnapshot = null;
+  if (isCreditExpense) {
+    supplierLedgerSnapshot = await transaction.get(supplierLedgerRef);
+    if (supplierLedgerSnapshot.exists) {
+      conflict('A supplier ledger entry for this expense already exists.');
+    }
+    supplierBalanceSnapshot = await transaction.get(supplierBalanceRef);
+  }
+
+  const paymentAccountId = isCreditExpense
+    ? command.accounts.supplierPayableAccountId
+    : command.accounts.settlementAccountId;
+  if (!paymentAccountId) {
+    invalid('The expense payment account is required.');
+  }
+
+  const accountIds = [
+    command.expense.expenseAccountId,
+    paymentAccountId,
+  ];
+  if (command.expense.taxMinorUnits > 0) {
+    accountIds.push(command.accounts.inputTaxAccountId);
+  }
+
+  const accountRefs = new Map(
+    accountIds.map((accountId) => [
+      accountId,
+      storeRef.collection('accounts').doc(accountId),
+    ]),
+  );
+  const accountSnapshots = new Map();
+  for (const [accountId, accountRef] of accountRefs) {
+    accountSnapshots.set(
+      accountId,
+      await transaction.get(accountRef),
+    );
+  }
+
+  const balanceRefs = new Map(
+    accountIds.map((accountId) => [
+      accountId,
+      storeRef.collection('account_balances').doc(accountId),
+    ]),
+  );
+  const balanceSnapshots = new Map();
+  for (const [accountId, balanceRef] of balanceRefs) {
+    balanceSnapshots.set(
+      accountId,
+      await transaction.get(balanceRef),
+    );
+  }
+
+  assertAccount(
+    accountSnapshots.get(command.expense.expenseAccountId),
+    command.expense.expenseAccountId,
+    command.storeId,
+    command.expense.currency,
+    'expense',
+  );
+  if (isCreditExpense) {
+    assertAccount(
+      accountSnapshots.get(command.accounts.supplierPayableAccountId),
+      command.accounts.supplierPayableAccountId,
+      command.storeId,
+      command.expense.currency,
+      'liability',
+      'supplierPayable',
+    );
+  } else {
+    assertAccount(
+      accountSnapshots.get(command.accounts.settlementAccountId),
+      command.accounts.settlementAccountId,
+      command.storeId,
+      command.expense.currency,
+      'asset',
+      paymentAccountControlType(command.expense.paymentMethod),
+    );
+  }
+  if (command.expense.taxMinorUnits > 0) {
+    assertAccount(
+      accountSnapshots.get(command.accounts.inputTaxAccountId),
+      command.accounts.inputTaxAccountId,
+      command.storeId,
+      command.expense.currency,
+      'asset',
+      'inputTax',
+    );
+  }
+
+  const totalMinorUnits =
+    command.expense.amountMinorUnits + command.expense.taxMinorUnits;
+  const accountDeltas = new Map();
+  addDelta(
+    accountDeltas,
+    command.expense.expenseAccountId,
+    command.expense.amountMinorUnits,
+    0,
+  );
+  if (command.expense.taxMinorUnits > 0) {
+    addDelta(
+      accountDeltas,
+      command.accounts.inputTaxAccountId,
+      command.expense.taxMinorUnits,
+      0,
+    );
+  }
+  addDelta(accountDeltas, paymentAccountId, 0, totalMinorUnits);
+
+  const journalLines = [
+    {
+      id: command.expense.id + '-expense',
+      storeId: command.storeId,
+      accountId: command.expense.expenseAccountId,
+      description: 'Operating expense',
+      lineNumber: 1,
+      debitMinorUnits: command.expense.amountMinorUnits,
+      creditMinorUnits: 0,
+    },
+  ];
+  if (command.expense.taxMinorUnits > 0) {
+    journalLines.push({
+      id: command.expense.id + '-input-tax',
+      storeId: command.storeId,
+      accountId: command.accounts.inputTaxAccountId,
+      description: 'Input tax',
+      lineNumber: journalLines.length + 1,
+      debitMinorUnits: command.expense.taxMinorUnits,
+      creditMinorUnits: 0,
+    });
+  }
+  journalLines.push({
+    id: command.expense.id + '-payment',
+    storeId: command.storeId,
+    accountId: paymentAccountId,
+    description: command.expense.paymentMethod,
+    lineNumber: journalLines.length + 1,
+    debitMinorUnits: 0,
+    creditMinorUnits: totalMinorUnits,
+  });
+
+  const expenseData = {
+    storeId: command.storeId,
+    idempotencyKey: command.expense.idempotencyKey,
+    postedAt: Timestamp.fromDate(command.expense.postedAt),
+    paymentMethod: command.expense.paymentMethod,
+    expenseAccountId: command.expense.expenseAccountId,
+    supplierId: command.expense.supplierId,
+    description: command.expense.description,
+    currency: command.expense.currency,
+    amountMinorUnits: command.expense.amountMinorUnits,
+    taxMinorUnits: command.expense.taxMinorUnits,
+    totalMinorUnits,
+    journalEntryId,
+    status: 'posted',
+    createdAt: FieldValue.serverTimestamp(),
+  };
+  transaction.set(expenseRef, expenseData);
+
+  transaction.set(
+    journalRef,
+    {
+      storeId: command.storeId,
+      idempotencyKey: journalIdempotencyKey,
+      sourceType: 'expense',
+      description: command.expense.description,
+      status: 'posted',
+      currency: command.expense.currency,
+      totalDebitMinorUnits: totalMinorUnits,
+      totalCreditMinorUnits: totalMinorUnits,
+      postedAt: Timestamp.fromDate(command.expense.postedAt),
+    },
+  );
+  for (const line of journalLines) {
+    transaction.set(
+      journalRef.collection('lines').doc(line.id),
+      line,
+    );
+  }
+
+  if (isCreditExpense) {
+    const balance = supplierBalanceSnapshot.exists
+      ? supplierBalanceSnapshot.data()
+      : {};
+    const currentDebit = storedInt(balance.debitMinorUnits, 0);
+    const currentCredit = storedInt(balance.creditMinorUnits, 0);
+    const nextDebit = currentDebit;
+    const nextCredit = currentCredit + totalMinorUnits;
+
+    transaction.set(
+      supplierLedgerRef,
+      {
+        storeId: command.storeId,
+        partyType: 'supplier',
+        partyId: command.expense.supplierId,
+        sourceType: 'expense',
+        sourceId: command.expense.id,
+        currency: command.expense.currency,
+        debitMinorUnits: 0,
+        creditMinorUnits: totalMinorUnits,
+        description: command.expense.description,
+        postedAt: Timestamp.fromDate(command.expense.postedAt),
+      },
+    );
+    transaction.set(
+      supplierBalanceRef,
+      {
+        storeId: command.storeId,
+        partyType: 'supplier',
+        partyId: command.expense.supplierId,
+        currency: command.expense.currency,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextDebit - nextCredit,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  for (const accountId of accountIds) {
+    const balanceSnapshot = balanceSnapshots.get(accountId);
+    const balance = balanceSnapshot.exists
+      ? balanceSnapshot.data()
+      : {};
+    const currentDebit = storedInt(balance.debitMinorUnits, 0);
+    const currentCredit = storedInt(balance.creditMinorUnits, 0);
+    const delta = accountDeltas.get(accountId) || {
+      debit: 0,
+      credit: 0,
+    };
+    const nextDebit = currentDebit + delta.debit;
+    const nextCredit = currentCredit + delta.credit;
+
+    transaction.set(
+      balanceRefs.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.expense.currency,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextDebit - nextCredit,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  transaction.set(
+    expenseIdempotencyRef,
+    {
+      storeId: command.storeId,
+      expenseId: command.expense.id,
+      idempotencyKey: command.expense.idempotencyKey,
+      journalEntryId,
+      createdAt: FieldValue.serverTimestamp(),
+    },
+  );
+  transaction.set(
+    journalIdempotencyRef,
+    {
+      storeId: command.storeId,
+      entryId: journalEntryId,
+      idempotencyKey: journalIdempotencyKey,
+      createdAt: FieldValue.serverTimestamp(),
+    },
+  );
+
+  return {
+    status: 'posted',
+    expenseId: command.expense.id,
+    journalEntryId,
+  };
+}
+
 function parsePartyPaymentCommand(rawCommand) {
   const command = asObject(rawCommand, 'command');
   const storeId = safeId(command.storeId, 'storeId');
