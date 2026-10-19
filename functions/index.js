@@ -276,6 +276,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
     membershipSnapshot,
     command.storeId,
     'post expenses',
+    PAYMENT_POSTING_ROLES,
   );
 
   const expenseIdempotencySnapshot = await transaction.get(
