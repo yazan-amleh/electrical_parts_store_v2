@@ -24,6 +24,7 @@ import '../../sales/domain/repositories/sale_repository.dart';
 import '../../sales/presentation/sales_page.dart';
 import '../../purchases/domain/repositories/purchase_repository.dart';
 import '../../purchases/presentation/purchases_page.dart';
+import '../../offers/presentation/offers_page.dart';
 import '../../purchase_orders/domain/repositories/purchase_order_repository.dart';
 import '../../purchase_orders/presentation/purchase_orders_page.dart';
 import '../../expenses/domain/repositories/expense_repository.dart';
@@ -90,7 +91,7 @@ class _AppShellPageState extends State<AppShellPage> {
           icon: Icons.request_quote_outlined,
           description: 'العروض والطلبات قبل تحويلها إلى مستندات مرحّلة.',
           capabilities: ['مسودة', 'تحويل إلى بيع', 'تتبع الحالة'],
-          foundationReady: false,
+          foundationReady: true,
         ),
       ],
     ),
@@ -310,6 +311,7 @@ class _AppShellPageState extends State<AppShellPage> {
           saleRepository: widget.dependencies.saleRepository,
           purchaseRepository: widget.dependencies.purchaseRepository,
           purchaseOrderRepository: widget.dependencies.purchaseOrderRepository,
+          offerRepository: widget.dependencies.offerRepository,
           expenseRepository: widget.dependencies.expenseRepository,
           accountingRepository: widget.dependencies.accountingRepository,
           partyPaymentRepository: widget.dependencies.partyPaymentRepository,
@@ -424,6 +426,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.saleRepository,
     required this.purchaseRepository,
     required this.purchaseOrderRepository,
+    required this.offerRepository,
     required this.expenseRepository,
     required this.accountingRepository,
     required this.partyPaymentRepository,
@@ -441,6 +444,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
   final PurchaseOrderRepository? purchaseOrderRepository;
+  final OfferRepository? offerRepository;
   final ExpenseRepository? expenseRepository;
   final AccountingRepository? accountingRepository;
   final PartyPaymentRepository? partyPaymentRepository;
@@ -455,6 +459,15 @@ class _ModuleLandingPage extends StatelessWidget {
       return SalesPage(
         repository: saleRepository,
         productRepository: productRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'offers') {
+      return OffersPage(
+        repository: offerRepository,
+        productRepository: productRepository,
+        partyRepository: partyRepository,
         user: user,
         membership: membership,
       );

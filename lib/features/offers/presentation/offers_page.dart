@@ -387,7 +387,10 @@ class _OffersPageState extends State<OffersPage> {
       return;
     }
     final saveResult =
-        await repository.createOffer(context: _context, offer: offer);
+        await repository.createOffer(
+      context: _context,
+      offer: offer.copyWith(storeId: _context.storeId),
+    );
     if (!mounted) {
       return;
     }
@@ -428,6 +431,7 @@ class _OffersPageState extends State<OffersPage> {
         offers: activeOffers,
         customers: customers,
         initialOffer: initialOffer,
+        storeId: _context.storeId,
       ),
     );
     if (order == null || !mounted) {
@@ -664,11 +668,9 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
             originalUnitPrice: draft.product.sellingPrice,
             finalUnitPrice: price,
             quantity: quantity,
-            unitFactorToBase: draft.product.units.isEmpty
-                ? const Quantity.fromMilliUnits(1000)
-                : draft.product.units.first.factorToBase,
+            unitFactorToBase: const Quantity.fromMilliUnits(1000),
             priceType: draft.priceType,
-            unitId: draft.product.baseUnitId,
+            unitId: null,
             unitName: draft.product.baseUnitName,
             isService: draft.product.isService,
           ),
@@ -893,11 +895,13 @@ class _CreateOfferOrderDialog extends StatefulWidget {
   const _CreateOfferOrderDialog({
     required this.offers,
     required this.customers,
+    required this.storeId,
     this.initialOffer,
   });
 
   final List<Offer> offers;
   final List<Party> customers;
+  final String storeId;
   final Offer? initialOffer;
 
   @override
@@ -926,7 +930,7 @@ class _CreateOfferOrderDialogState extends State<_CreateOfferOrderDialog> {
     final stamp = DateTime.now().microsecondsSinceEpoch;
     final order = OfferOrder(
       id: 'offer-order-' + stamp.toString(),
-      storeId: '',
+      storeId: widget.storeId,
       orderNumber: 'OO-' + stamp.toString(),
       offerId: _offer.id,
       offerNumber: _offer.offerNumber,
