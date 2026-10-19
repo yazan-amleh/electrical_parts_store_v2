@@ -9,6 +9,8 @@ import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../auth/domain/enums/store_role.dart';
 import '../../parties/domain/enums/party_type.dart';
+import '../../parties/domain/repositories/party_repository.dart';
+import '../../parties/presentation/party_directory_page.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
 import '../../inventory/presentation/products_page.dart';
 import '../../inventory/domain/repositories/inventory_repository.dart';
@@ -302,6 +304,7 @@ class _AppShellPageState extends State<AppShellPage> {
           purchaseRepository: widget.dependencies.purchaseRepository,
           expenseRepository: widget.dependencies.expenseRepository,
           partyPaymentRepository: widget.dependencies.partyPaymentRepository,
+          partyRepository: widget.dependencies.partyRepository,
           accountTransferRepository:
               widget.dependencies.accountTransferRepository,
           accountingQueryRepository:
@@ -412,6 +415,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.purchaseRepository,
     required this.expenseRepository,
     required this.partyPaymentRepository,
+    required this.partyRepository,
     required this.accountTransferRepository,
     required this.accountingQueryRepository,
     required this.membership,
@@ -425,6 +429,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final PurchaseRepository? purchaseRepository;
   final ExpenseRepository? expenseRepository;
   final PartyPaymentRepository? partyPaymentRepository;
+  final PartyRepository? partyRepository;
   final AccountTransferRepository? accountTransferRepository;
   final AccountingQueryRepository? accountingQueryRepository;
   final StoreMembership membership;
@@ -455,16 +460,18 @@ class _ModuleLandingPage extends StatelessWidget {
       );
     }
     if (module.id == 'customers') {
-      return PartyPaymentsPage(
-        repository: partyPaymentRepository,
+      return PartyDirectoryPage(
+        repository: partyRepository,
+        paymentRepository: partyPaymentRepository,
         user: user,
         membership: membership,
         initialPartyType: PartyType.customer,
       );
     }
     if (module.id == 'suppliers') {
-      return PartyPaymentsPage(
-        repository: partyPaymentRepository,
+      return PartyDirectoryPage(
+        repository: partyRepository,
+        paymentRepository: partyPaymentRepository,
         user: user,
         membership: membership,
         initialPartyType: PartyType.supplier,

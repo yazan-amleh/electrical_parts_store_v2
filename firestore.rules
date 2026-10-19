@@ -39,6 +39,10 @@ service cloud.firestore {
       return hasRole(storeId, ['owner', 'admin', 'warehouse']);
     }
 
+    function canManageParties(storeId) {
+      return hasRole(storeId, ['owner', 'admin', 'accountant', 'sales']);
+    }
+
     match /stores/{storeId} {
       allow read: if canReadStore(storeId);
       allow create: if signedIn() &&
@@ -69,6 +73,19 @@ service cloud.firestore {
             resource.data.quantityOnHandMilliUnits &&
           request.resource.data.inventoryValueMinorUnits ==
             resource.data.inventoryValueMinorUnits;
+        allow delete: if false;
+      }
+
+      match /parties/{partyId} {
+        allow read: if canReadStore(storeId);
+        allow create: if canManageParties(storeId) &&
+          request.resource.data.storeId == storeId &&
+          request.resource.data.partyType in ['customer', 'supplier'] &&
+          request.resource.data.name is string;
+        allow update: if canManageParties(storeId) &&
+          request.resource.data.storeId == storeId &&
+          request.resource.data.partyType == resource.data.partyType &&
+          request.resource.data.name is string;
         allow delete: if false;
       }
 

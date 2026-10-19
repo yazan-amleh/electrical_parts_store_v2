@@ -18,6 +18,7 @@ class PartyPaymentsPage extends StatefulWidget {
     required this.user,
     required this.membership,
     this.initialPartyType = PartyType.customer,
+    this.initialPartyId,
     super.key,
   });
 
@@ -25,6 +26,7 @@ class PartyPaymentsPage extends StatefulWidget {
   final AuthenticatedUser user;
   final StoreMembership membership;
   final PartyType initialPartyType;
+  final String? initialPartyId;
 
   @override
   State<PartyPaymentsPage> createState() => _PartyPaymentsPageState();
@@ -50,6 +52,9 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
   void initState() {
     super.initState();
     _partyType = widget.initialPartyType;
+    if (widget.initialPartyId != null) {
+      _partyController.text = widget.initialPartyId!;
+    }
   }
 
   @override
