@@ -130,7 +130,8 @@ class FirestoreInventoryRepository implements InventoryRepository {
   }) async {
     if (limit <= 0 || limit > 500) {
       return const FailureResult<List<InventoryMovement>>(
-        ValidationFailure('Inventory movement limit must be between 1 and 500.'),
+        ValidationFailure(
+            'Inventory movement limit must be between 1 and 500.'),
       );
     }
 
