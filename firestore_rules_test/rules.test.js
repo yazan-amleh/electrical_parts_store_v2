@@ -185,6 +185,20 @@ describe('Firestore security rules', function () {
       }),
     );
     await assertSucceeds(
+      setDoc(storeDoc(warehouseDb, 'products', 'product-2'), {
+        storeId: STORE_ID,
+        name: 'Product 2',
+        quantityOnHandMilliUnits: 0,
+        inventoryValueMinorUnits: 0,
+      }),
+    );
+    await assertFails(
+      updateDoc(storeDoc(warehouseDb, 'products', 'product-1'), {
+        quantityOnHandMilliUnits: 1000,
+        inventoryValueMinorUnits: 100,
+      }),
+    );
+    await assertFails(
       setDoc(storeDoc(warehouseDb, 'inventory_movements', 'movement-1'), {
         storeId: STORE_ID,
         productId: 'product-1',
