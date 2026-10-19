@@ -57,8 +57,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
     _minimumQuantityController = TextEditingController(
       text: product == null
           ? '0'
-          : (product.minimumQuantity.milliUnits / Quantity.scale)
-              .toString(),
+          : (product.minimumQuantity.milliUnits / Quantity.scale).toString(),
     );
     _skuController = TextEditingController(text: product?.sku ?? '');
     _barcodeController = TextEditingController(text: product?.barcode ?? '');
@@ -86,7 +85,8 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _textField(_nameController, 'اسم الصنف', Icons.inventory_2_outlined),
+              _textField(
+                  _nameController, 'اسم الصنف', Icons.inventory_2_outlined),
               _textField(
                 _categoryController,
                 'معرّف التصنيف',
