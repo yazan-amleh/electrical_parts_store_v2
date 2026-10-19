@@ -104,7 +104,8 @@ service cloud.firestore {
             'postPurchase',
             'postPartyPayment',
             'postExpense',
-            'postAccountTransfer'
+            'postAccountTransfer',
+            'postJournalEntry'
           ] &&
           request.resource.data.idempotencyKey is string;
         allow update: if canReadStore(storeId) &&
