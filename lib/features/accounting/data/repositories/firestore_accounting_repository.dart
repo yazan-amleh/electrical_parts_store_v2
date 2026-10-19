@@ -222,7 +222,7 @@ class FirestoreAccountingRepository implements AccountingRepository {
 
       if (!accountSnapshot.exists) {
         return FailureResult<Money>(
-          ValidationFailure('Account not found: ${accountId}'),
+          ValidationFailure('Account not found: $accountId'),
         );
       }
 
