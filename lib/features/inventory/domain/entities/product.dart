@@ -13,6 +13,7 @@ class Product {
     required this.quantityOnHand,
     required this.minimumQuantity,
     required this.categoryId,
+    Money? inventoryValue,
     this.supplierId,
     this.description = '',
     this.imageUrl = '',
@@ -29,7 +30,9 @@ class Product {
     this.expiryDate,
     this.isActive = true,
     List<ProductUnit> units = const [],
-  }) : units = List.unmodifiable(units) {
+  })  : inventoryValue = inventoryValue ??
+            _defaultInventoryValue(purchasePrice, quantityOnHand),
+        units = List.unmodifiable(units) {
     if (id.trim().isEmpty ||
         storeId.trim().isEmpty ||
         name.trim().isEmpty ||
@@ -37,8 +40,12 @@ class Product {
       throw ArgumentError('Product identity fields are required.');
     }
     if (purchasePrice.currency != sellingPrice.currency ||
-        purchasePrice.currency != wholesalePrice.currency) {
+        purchasePrice.currency != wholesalePrice.currency ||
+        purchasePrice.currency != this.inventoryValue.currency) {
       throw ArgumentError('Product prices must use one currency.');
+    }
+    if (this.inventoryValue.isNegative) {
+      throw ArgumentError('Product inventory value cannot be negative.');
     }
     for (final unit in this.units) {
       if (unit.productId != id || unit.storeId != storeId) {
@@ -58,6 +65,7 @@ class Product {
   final Money purchasePrice;
   final Money sellingPrice;
   final Money wholesalePrice;
+  final Money inventoryValue;
   final Quantity quantityOnHand;
   final Quantity minimumQuantity;
   final String categoryId;
@@ -81,5 +89,17 @@ class Product {
   bool get isLowStock {
     return !isService &&
         quantityOnHand.milliUnits <= minimumQuantity.milliUnits;
+  }
+
+  static Money _defaultInventoryValue(
+    Money purchasePrice,
+    Quantity quantity,
+  ) {
+    final numerator = purchasePrice.minorUnits * quantity.milliUnits;
+    final minorUnits = (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
+    return Money(
+      minorUnits: minorUnits,
+      currency: purchasePrice.currency,
+    );
   }
 }
