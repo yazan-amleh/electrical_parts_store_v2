@@ -35,7 +35,8 @@ class FirestoreOfferRepository implements OfferRepository {
     bool includeInactive = true,
   }) async {
     try {
-      final snapshot = await FirebasePaths.offers(_firestore, context.storeId).get();
+      final snapshot =
+          await FirebasePaths.offers(_firestore, context.storeId).get();
       final offers = snapshot.docs
           .map(OfferFirestoreMapper.fromSnapshot)
           .where((offer) =>
@@ -49,7 +50,8 @@ class FirestoreOfferRepository implements OfferRepository {
         InfrastructureFailure(error.message ?? error.code),
       );
     } catch (error) {
-      return FailureResult<List<Offer>>(InfrastructureFailure(error.toString()));
+      return FailureResult<List<Offer>>(
+          InfrastructureFailure(error.toString()));
     }
   }
 
@@ -169,7 +171,8 @@ class FirestoreOfferRepository implements OfferRepository {
         InfrastructureFailure(error.message ?? error.code),
       );
     } catch (error) {
-      return FailureResult<List<OfferOrder>>(InfrastructureFailure(error.toString()));
+      return FailureResult<List<OfferOrder>>(
+          InfrastructureFailure(error.toString()));
     }
   }
 

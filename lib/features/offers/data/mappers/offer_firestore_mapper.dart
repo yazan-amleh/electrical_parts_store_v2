@@ -29,8 +29,8 @@ abstract final class OfferFirestoreMapper {
       name: _string(data['name'], 'عرض'),
       description: data['description'] as String?,
       lines: lines,
-      createdAt: _date(data['createdAt']) ??
-          DateTime.fromMillisecondsSinceEpoch(0),
+      createdAt:
+          _date(data['createdAt']) ?? DateTime.fromMillisecondsSinceEpoch(0),
       isActive: data['isActive'] != false,
       globalDiscount: Money(
         minorUnits: _int(data['globalDiscountMinorUnits']),
@@ -64,8 +64,8 @@ abstract final class OfferFirestoreMapper {
       customerId: _string(data['customerId']),
       customerName: _string(data['customerName'], 'عميل'),
       lines: lines,
-      createdAt: _date(data['createdAt']) ??
-          DateTime.fromMillisecondsSinceEpoch(0),
+      createdAt:
+          _date(data['createdAt']) ?? DateTime.fromMillisecondsSinceEpoch(0),
       status: offerOrderStatusFromName(data['status'] as String?),
       globalDiscount: Money(
         minorUnits: _int(data['globalDiscountMinorUnits']),
@@ -87,9 +87,8 @@ abstract final class OfferFirestoreMapper {
       'currency': offer.currency,
       'createdAt': Timestamp.fromDate(offer.createdAt),
       'isActive': offer.isActive,
-      'startDate': offer.startDate == null
-          ? null
-          : Timestamp.fromDate(offer.startDate!),
+      'startDate':
+          offer.startDate == null ? null : Timestamp.fromDate(offer.startDate!),
       'endDate':
           offer.endDate == null ? null : Timestamp.fromDate(offer.endDate!),
       'imageUrl': offer.imageUrl,

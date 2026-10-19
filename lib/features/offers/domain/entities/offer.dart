@@ -43,9 +43,7 @@ class Offer {
     if (this.globalDiscount.minorUnits > lineFinalTotal.minorUnits) {
       throw ArgumentError('Offer discount cannot exceed the offer total.');
     }
-    if (startDate != null &&
-        endDate != null &&
-        startDate!.isAfter(endDate!)) {
+    if (startDate != null && endDate != null && startDate!.isAfter(endDate!)) {
       throw ArgumentError('Offer start date must be before its end date.');
     }
   }

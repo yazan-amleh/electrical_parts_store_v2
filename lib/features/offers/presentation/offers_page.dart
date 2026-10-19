@@ -235,8 +235,7 @@ class _OffersPageState extends State<OffersPage> {
 
   Widget _buildOfferCard(Offer offer) {
     final status = offer.isCurrentlyActive ? 'نشط' : 'غير نشط';
-    final statusColor =
-        offer.isCurrentlyActive ? Colors.green : Colors.grey;
+    final statusColor = offer.isCurrentlyActive ? Colors.green : Colors.grey;
     return Card(
       child: ExpansionTile(
         leading: CircleAvatar(
@@ -386,8 +385,7 @@ class _OffersPageState extends State<OffersPage> {
     if (offer == null || !mounted) {
       return;
     }
-    final saveResult =
-        await repository.createOffer(
+    final saveResult = await repository.createOffer(
       context: _context,
       offer: offer.copyWith(storeId: _context.storeId),
     );
@@ -624,10 +622,10 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
         final proposed = product.isService
             ? product.sellingPrice
             : Money(
-                minorUnits: product.wholesalePrice.minorUnits >
-                        original.minorUnits
-                    ? original.minorUnits
-                    : product.wholesalePrice.minorUnits,
+                minorUnits:
+                    product.wholesalePrice.minorUnits > original.minorUnits
+                        ? original.minorUnits
+                        : product.wholesalePrice.minorUnits,
                 currency: original.currency,
               );
         _selected[product.id] = _OfferDraft(
@@ -658,8 +656,8 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
         if (price == null) {
           throw ArgumentError('تحقق من أسعار العرض.');
         }
-        final quantity =
-            Quantity.fromString(draft.quantityController.text.replaceAll(',', '.'));
+        final quantity = Quantity.fromString(
+            draft.quantityController.text.replaceAll(',', '.'));
         lines.add(
           OfferLine(
             id: 'offer-line-' + draft.product.id,
@@ -676,9 +674,8 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
           ),
         );
       }
-      final discount =
-          _parseMoney(_globalDiscountController.text, _currency) ??
-              Money.zero(currency: _currency);
+      final discount = _parseMoney(_globalDiscountController.text, _currency) ??
+          Money.zero(currency: _currency);
       final stamp = DateTime.now().microsecondsSinceEpoch;
       final offer = Offer(
         id: 'offer-' + stamp.toString(),
@@ -699,7 +696,8 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
         Navigator.pop(context, offer);
       }
     } catch (error) {
-      setState(() => _errorMessage = error.toString().replaceFirst('Invalid argument(s): ', ''));
+      setState(() => _errorMessage =
+          error.toString().replaceFirst('Invalid argument(s): ', ''));
     }
   }
 
@@ -735,7 +733,8 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
               ),
               TextField(
                 controller: _globalDiscountController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
                   labelText: 'خصم إضافي على كامل العرض',
                 ),
@@ -774,7 +773,8 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
                     _errorMessage!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
                   ),
                 ),
             ],
@@ -811,7 +811,7 @@ class _OfferDraft {
     required this.product,
     required Money finalPrice,
     required this.priceType,
-  }) : priceController = TextEditingController(
+  })  : priceController = TextEditingController(
           text: (finalPrice.minorUnits / 100).toStringAsFixed(2),
         ),
         quantityController = TextEditingController(text: '1');
@@ -1020,9 +1020,8 @@ Money? _parseMoney(String raw, String currency) {
       (fractionText.isNotEmpty && int.tryParse(fractionText) == null)) {
     return null;
   }
-  final fraction = fractionText.isEmpty
-      ? 0
-      : int.parse(fractionText.padRight(2, '0'));
+  final fraction =
+      fractionText.isEmpty ? 0 : int.parse(fractionText.padRight(2, '0'));
   return Money(
     minorUnits: major * 100 + fraction,
     currency: currency,
