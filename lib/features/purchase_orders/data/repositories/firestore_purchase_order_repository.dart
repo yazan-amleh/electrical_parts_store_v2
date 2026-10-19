@@ -82,7 +82,7 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'purchase-order-' + order.id,
+        commandId: 'purchase-order-${order.id}',
         operation: 'createPurchaseOrder',
         idempotencyKey: order.id,
         payload: payload,
@@ -116,9 +116,9 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'cancel-purchase-order-' + orderId,
+        commandId: 'cancel-purchase-order-${orderId}',
         operation: 'cancelPurchaseOrder',
-        idempotencyKey: 'cancel-' + orderId,
+        idempotencyKey: 'cancel-$orderId',
         payload: payload,
       );
       if (queued != null) {
@@ -138,7 +138,7 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
     required PurchasePostingAccounts accounts,
     required int taxMinorUnits,
   }) async {
-    final receiptId = 'purchase-' + order.id + '-receipt';
+    final receiptId = 'purchase-${order.id}-receipt';
     final payload = PurchaseOrderCommandMapper.receiveRequest(
       order: order,
       receiptId: receiptId,
@@ -162,9 +162,9 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'receive-purchase-order-' + order.id,
+        commandId: 'receive-purchase-order-${order.id}',
         operation: 'receivePurchaseOrder',
-        idempotencyKey: receiptId + '-key',
+        idempotencyKey: '$receiptId-key',
         payload: payload,
       );
       if (queued != null) {
@@ -186,13 +186,14 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
     required String idempotencyKey,
     required Map<String, dynamic> payload,
   }) async {
-    if (_commandQueue == null ||
+    final commandQueue = _commandQueue;
+    if (commandQueue == null ||
         !CloudFunctionQueueFallback.isTransient(error)) {
       return null;
     }
 
     final queueFailure = await CloudFunctionQueueFallback.enqueue(
-      repository: _commandQueue!,
+      repository: commandQueue,
       context: context,
       commandId: commandId,
       operation: operation,

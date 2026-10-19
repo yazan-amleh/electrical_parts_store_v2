@@ -178,16 +178,13 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
     return Card(
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: color.withOpacity(.12),
+          backgroundColor: color.withValues(alpha: .12),
           child: Icon(Icons.playlist_add_check, color: color),
         ),
-        title: Text(order.orderNumber + ' • ' + order.supplierName),
+        title: Text('${order.orderNumber} • ${order.supplierName}'),
         subtitle: Text(
-          order.status.arabicLabel +
-              ' • ' +
-              order.lines.length.toString() +
-              ' أصناف • ' +
-              order.total.formatted,
+          '${order.status.arabicLabel} • ${order.lines.length} أصناف • '
+          '${order.total.formatted}',
         ),
         trailing: const Icon(Icons.chevron_left),
         onTap: () => _showDetails(order),
@@ -286,29 +283,29 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
     final action = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('طلب ' + order.orderNumber),
+        title: Text('طلب ${order.orderNumber}'),
         content: SizedBox(
           width: 520,
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('المورد: ' + order.supplierName),
-                Text('الحالة: ' + order.status.arabicLabel),
-                Text('الإجمالي: ' + order.total.formatted),
+                Text('المورد: ${order.supplierName}'),
+                Text('الحالة: ${order.status.arabicLabel}'),
+                Text('الإجمالي: ${order.total.formatted}'),
                 const Divider(),
                 for (final line in order.lines)
                   ListTile(
                     dense: true,
                     title: Text(line.productName),
                     subtitle: Text(
-                      line.quantity.formatted + ' × ' + line.unitCost.formatted,
+                      '${line.quantity.formatted} × ${line.unitCost.formatted}',
                     ),
                     trailing: Text(line.total.formatted),
                   ),
                 if (order.notes?.trim().isNotEmpty == true) ...[
                   const Divider(),
-                  Text('ملاحظات: ' + order.notes!),
+                  Text('ملاحظات: ${order.notes!}'),
                 ],
               ],
             ),
@@ -657,7 +654,7 @@ class _CreatePurchaseOrderDialogState
                     dense: true,
                     title: Text(line.productName),
                     subtitle: Text(
-                      line.quantity.formatted + ' × ' + line.unitCost.formatted,
+                      '${line.quantity.formatted} × ${line.unitCost.formatted}',
                     ),
                     trailing: IconButton(
                       onPressed: () => setState(() => _lines.remove(line)),
@@ -714,7 +711,7 @@ class _CreatePurchaseOrderDialogState
     setState(() {
       _lines.add(
         PurchaseOrderLine(
-          id: 'line-' + DateTime.now().microsecondsSinceEpoch.toString(),
+          id: 'line-${DateTime.now().microsecondsSinceEpoch}',
           productId: product.id,
           productName: product.name,
           quantity: quantity,
@@ -741,13 +738,13 @@ class _CreatePurchaseOrderDialogState
       return;
     }
 
-    final id = 'po-' + DateTime.now().microsecondsSinceEpoch.toString();
+    final id = 'po-${DateTime.now().microsecondsSinceEpoch}';
     Navigator.pop(
       context,
       PurchaseOrder(
         id: id,
         storeId: widget.storeId,
-        orderNumber: 'PO-' + DateTime.now().millisecondsSinceEpoch.toString(),
+        orderNumber: 'PO-${DateTime.now().millisecondsSinceEpoch}',
         supplierId: supplier.id,
         supplierName: supplier.name,
         orderedAt: DateTime.now().toUtc(),

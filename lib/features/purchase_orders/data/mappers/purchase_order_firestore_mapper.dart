@@ -12,12 +12,14 @@ abstract final class PurchaseOrderFirestoreMapper {
   ) {
     final data = snapshot.data() ?? const <String, dynamic>{};
     final currency = _string(data['currency'], 'ILS');
-    final rawLines = data['lines'] is List ? data['lines'] as List : const [];
+    final rawLines = data['lines'] is List<Object?>
+        ? data['lines'] as List<Object?>
+        : const <Object?>[];
     final lines = rawLines
-        .whereType<Map>()
+        .whereType<Map<String, dynamic>>()
         .map(
           (raw) => _lineFromMap(
-            raw.cast<String, dynamic>(),
+            raw,
             productIdFallback: snapshot.id,
             currency: currency,
           ),

@@ -1,6 +1,7 @@
 import '../../../purchases/domain/entities/purchase_posting_plan.dart';
 import '../../../purchases/domain/enums/purchase_payment_method.dart';
 import '../../domain/entities/purchase_order.dart';
+import '../../domain/entities/purchase_order_line.dart';
 
 abstract final class PurchaseOrderCommandMapper {
   static Map<String, dynamic> createRequest(PurchaseOrder order) {
@@ -40,7 +41,7 @@ abstract final class PurchaseOrderCommandMapper {
       'storeId': order.storeId,
       'orderId': order.id,
       'receiptId': receiptId,
-      'idempotencyKey': receiptId + '-key',
+      'idempotencyKey': '$receiptId-key',
       'postedAt': DateTime.now().toUtc().toIso8601String(),
       'paymentMethod': paymentMethod.name,
       'taxMinorUnits': taxMinorUnits,
@@ -54,7 +55,7 @@ abstract final class PurchaseOrderCommandMapper {
     };
   }
 
-  static Map<String, dynamic> _lineToMap(line) {
+  static Map<String, dynamic> _lineToMap(PurchaseOrderLine line) {
     return <String, dynamic>{
       'id': line.id,
       'productId': line.productId,
