@@ -269,7 +269,7 @@ class _AppShellPageState extends State<AppShellPage> {
             const SizedBox(width: 12),
           ],
         ),
-        drawer: _buildDrawer(context, modules),
+        drawer: _buildDrawer(context),
         body: _ModuleLandingPage(
           module: selected,
           user: widget.user,
@@ -279,7 +279,7 @@ class _AppShellPageState extends State<AppShellPage> {
     );
   }
 
-  Widget _buildDrawer(BuildContext context, List<_Module> modules) {
+  Widget _buildDrawer(BuildContext context) {
     final navigationItems = <Widget>[];
     var moduleOffset = 0;
 
