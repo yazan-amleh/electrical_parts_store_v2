@@ -7,8 +7,8 @@ import '../../../../core/tenancy/store_context.dart';
 import '../../domain/entities/party_payment.dart';
 import '../../domain/entities/party_payment_posting_plan.dart';
 import '../../domain/repositories/party_payment_repository.dart';
-import '../../domain/services/party_payment_posting_planner.dart';
 import '../../../../infrastructure/queue/cloud_function_queue_fallback.dart';
+import '../../domain/services/party_payment_posting_planner.dart';
 import '../mappers/party_payment_command_mapper.dart';
 
 class FirestorePartyPaymentRepository implements PartyPaymentRepository {
