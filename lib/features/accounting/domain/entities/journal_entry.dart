@@ -24,6 +24,7 @@ class JournalEntry {
   final String? description;
 
   Money get totalDebit {
+    _ensureHasLines();
     return lines.fold(
       Money.zero(currency: lines.first.debit.currency),
       (sum, line) => sum + line.debit,
@@ -31,6 +32,7 @@ class JournalEntry {
   }
 
   Money get totalCredit {
+    _ensureHasLines();
     return lines.fold(
       Money.zero(currency: lines.first.credit.currency),
       (sum, line) => sum + line.credit,
@@ -57,6 +59,12 @@ class JournalEntry {
     }
     if (!isBalanced) {
       throw ArgumentError('Journal entry must be balanced.');
+    }
+  }
+
+  void _ensureHasLines() {
+    if (lines.isEmpty) {
+      throw ArgumentError('Journal entry must contain lines.');
     }
   }
 }
