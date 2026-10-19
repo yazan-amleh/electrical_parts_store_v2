@@ -1,6 +1,6 @@
 import '../core/config/app_runtime_config.dart';
 import '../features/accounting/domain/repositories/accounting_query_repository.dart';
-import '../features/offers/domain/repositories/offer_repository.dart;
+import '../features/offers/domain/repositories/offer_repository.dart';
 import '../features/accounting/domain/repositories/accounting_repository.dart';
 import '../features/categories/domain/repositories/category_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
