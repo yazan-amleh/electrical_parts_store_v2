@@ -7,8 +7,8 @@ import '../../../../core/tenancy/store_context.dart';
 import '../../domain/entities/sale.dart';
 import '../../domain/entities/sale_posting_plan.dart';
 import '../../domain/repositories/sale_repository.dart';
-import '../../domain/services/sale_posting_planner.dart';
 import '../../../../infrastructure/queue/cloud_function_queue_fallback.dart';
+import '../../domain/services/sale_posting_planner.dart';
 import '../mappers/sale_command_mapper.dart';
 
 class FirestoreSaleRepository implements SaleRepository {
