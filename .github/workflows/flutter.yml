@@ -43,3 +43,11 @@ jobs:
 
       - name: Test
         run: flutter test
+
+      - name: Install Firestore rules test dependencies
+        working-directory: firestore_rules_test
+        run: npm install --no-audit --no-fund
+
+      - name: Test Firestore security rules
+        working-directory: firestore_rules_test
+        run: npx firebase-tools emulators:exec --only firestore --project demo-electrical-parts-v2-rules "npm test"
