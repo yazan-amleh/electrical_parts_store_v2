@@ -792,9 +792,13 @@ function parseCommand(rawCommand) {
   }
 
   const accounts = {
-    settlementAccountId: safeId(
+    settlementAccountId: optionalSafeId(
       postingAccounts.settlementAccountId,
       'settlementAccountId',
+    ),
+    customerReceivableAccountId: optionalSafeId(
+      postingAccounts.customerReceivableAccountId,
+      'customerReceivableAccountId',
     ),
     salesAccountId: safeId(
       postingAccounts.salesAccountId,
@@ -814,8 +818,19 @@ function parseCommand(rawCommand) {
     ),
   };
 
+  const paymentAccountId = paymentMethod === 'credit'
+    ? accounts.customerReceivableAccountId
+    : accounts.settlementAccountId;
+  if (!paymentAccountId) {
+    invalid(
+      paymentMethod === 'credit'
+        ? 'A customer receivable account is required for credit sales.'
+        : 'A settlement account is required for paid sales.',
+    );
+  }
+
   const accountIds = [
-    accounts.settlementAccountId,
+    paymentAccountId,
     accounts.salesAccountId,
     accounts.inventoryAccountId,
     accounts.costOfSalesAccountId,
@@ -917,8 +932,15 @@ async function postSaleInTransaction(transaction, userId, command) {
     );
   }
 
+  const paymentAccountId = command.sale.paymentMethod === 'credit'
+    ? command.accounts.customerReceivableAccountId
+    : command.accounts.settlementAccountId;
+  if (!paymentAccountId) {
+    invalid('The sale payment account is required.');
+  }
+
   const accountIds = [
-    command.accounts.settlementAccountId,
+    paymentAccountId,
     command.accounts.salesAccountId,
     command.accounts.inventoryAccountId,
     command.accounts.costOfSalesAccountId,
@@ -985,13 +1007,23 @@ async function postSaleInTransaction(transaction, userId, command) {
     }
   }
 
-  assertAccount(
-    accountSnapshots.get(command.accounts.settlementAccountId),
-    command.accounts.settlementAccountId,
-    command.storeId,
-    command.sale.currency,
-    'asset',
-  );
+  if (command.sale.paymentMethod === 'credit') {
+    assertAccount(
+      accountSnapshots.get(command.accounts.customerReceivableAccountId),
+      command.accounts.customerReceivableAccountId,
+      command.storeId,
+      command.sale.currency,
+      'asset',
+    );
+  } else {
+    assertAccount(
+      accountSnapshots.get(command.accounts.settlementAccountId),
+      command.accounts.settlementAccountId,
+      command.storeId,
+      command.sale.currency,
+      'asset',
+    );
+  }
   assertAccount(
     accountSnapshots.get(command.accounts.salesAccountId),
     command.accounts.salesAccountId,
@@ -1175,7 +1207,7 @@ async function postSaleInTransaction(transaction, userId, command) {
   const accountDeltas = new Map();
   addDelta(
     accountDeltas,
-    command.accounts.settlementAccountId,
+    paymentAccountId,
     grandTotalMinorUnits,
     0,
   );
@@ -1225,7 +1257,7 @@ async function postSaleInTransaction(transaction, userId, command) {
     {
       id: command.sale.id + '-settlement',
       storeId: command.storeId,
-      accountId: command.accounts.settlementAccountId,
+      accountId: paymentAccountId,
       description: command.sale.paymentMethod,
       lineNumber: 1,
       debitMinorUnits: grandTotalMinorUnits,
