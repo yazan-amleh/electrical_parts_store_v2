@@ -22,7 +22,6 @@ import '../../purchases/presentation/purchases_page.dart';
 import '../../expenses/domain/repositories/expense_repository.dart';
 import '../../expenses/presentation/expenses_page.dart';
 import '../../payments/domain/repositories/party_payment_repository.dart';
-import '../../payments/presentation/party_payments_page.dart';
 import '../../transfers/domain/repositories/account_transfer_repository.dart';
 import '../../transfers/presentation/account_transfers_page.dart';
 
