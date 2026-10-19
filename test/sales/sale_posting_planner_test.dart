@@ -99,6 +99,48 @@ void main() {
     );
   });
 
+  test('routes credit sales to customer receivables', () {
+    final sale = Sale(
+      id: 'sale-credit-1',
+      storeId: 'store-1',
+      idempotencyKey: const IdempotencyKey('sale-credit-1'),
+      postedAt: DateTime.utc(2026, 1, 1),
+      paymentMethod: SalePaymentMethod.credit,
+      customerId: 'customer-1',
+      tax: const Money(minorUnits: 0, currency: 'ILS'),
+      lines: <SaleLine>[
+        SaleLine(
+          id: 'line-1',
+          productId: 'product-1',
+          description: 'Cable',
+          quantity: Quantity.fromDouble(1),
+          unitFactorToBase: Quantity.fromDouble(1),
+          unitPrice: const Money(minorUnits: 1000, currency: 'ILS'),
+          unitCost: const Money(minorUnits: 600, currency: 'ILS'),
+          discount: const Money(minorUnits: 0, currency: 'ILS'),
+        ),
+      ],
+    );
+
+    const creditAccounts = SalePostingAccounts(
+      settlementAccountId: '1110',
+      customerReceivableAccountId: '1140',
+      salesAccountId: '4100',
+      inventoryAccountId: '1150',
+      costOfSalesAccountId: '5100',
+    );
+
+    final result = const SalePostingPlanner().prepare(
+      context: context,
+      sale: sale,
+      accounts: creditAccounts,
+    );
+
+    expect(result, isA<Success<SalePostingPlan>>());
+    final plan = (result as Success<SalePostingPlan>).value;
+    expect(plan.journalEntry.lines.first.accountId, '1140');
+  });
+
   test('rejects tax without a tax account', () {
     final sale = Sale(
       id: 'sale-1',
