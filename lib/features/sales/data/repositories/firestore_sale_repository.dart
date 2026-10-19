@@ -44,16 +44,7 @@ class FirestoreSaleRepository implements SaleRepository {
           accounts: accounts,
         ),
       );
-      final rawData = response.data;
-      if (rawData is! Map) {
-        return const FailureResult<SalePostingPlan>(
-          InfrastructureFailure(
-            'The sale service returned an invalid response.',
-          ),
-        );
-      }
-
-      final data = Map<String, dynamic>.from(rawData);
+      final data = response.data;
       if (data['saleId'] != sale.id) {
         return const FailureResult<SalePostingPlan>(
           InfrastructureFailure(
