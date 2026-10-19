@@ -13,7 +13,7 @@ abstract final class AppTheme {
         filled: true,
         fillColor: Colors.white,
       ),
-      cardTheme: const CardTheme(
+      cardTheme: const CardThemeData(
         elevation: 0,
         margin: EdgeInsets.zero,
       ),
