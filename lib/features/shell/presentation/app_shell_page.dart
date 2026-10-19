@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
 import '../../dashboard/presentation/dashboard_page.dart';
+import '../../categories/domain/repositories/category_repository.dart';
+import '../../categories/presentation/categories_page.dart';
 import '../../accounting/domain/repositories/accounting_query_repository.dart';
 import '../../accounting/domain/repositories/accounting_repository.dart';
 import '../../accounting/presentation/financial_statements_page.dart';
@@ -136,7 +138,7 @@ class _AppShellPageState extends State<AppShellPage> {
           icon: Icons.category_outlined,
           description: 'تنظيم الأصناف ضمن شجرة تصنيفات قابلة للتوسع.',
           capabilities: ['تصنيفات', 'بحث', 'فلترة'],
-          foundationReady: false,
+          foundationReady: true,
         ),
       ],
     ),
@@ -301,6 +303,7 @@ class _AppShellPageState extends State<AppShellPage> {
           module: selected,
           user: widget.user,
           productRepository: widget.dependencies.productRepository,
+          categoryRepository: widget.dependencies.categoryRepository,
           inventoryRepository: widget.dependencies.inventoryRepository,
           saleRepository: widget.dependencies.saleRepository,
           purchaseRepository: widget.dependencies.purchaseRepository,
@@ -413,6 +416,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.module,
     required this.user,
     required this.productRepository,
+    required this.categoryRepository,
     required this.inventoryRepository,
     required this.saleRepository,
     required this.purchaseRepository,
@@ -428,6 +432,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final _Module module;
   final AuthenticatedUser user;
   final ProductRepository? productRepository;
+  final CategoryRepository? categoryRepository;
   final InventoryRepository? inventoryRepository;
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
@@ -485,6 +490,13 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'expenses') {
       return ExpensesPage(
         repository: expenseRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'categories') {
+      return CategoriesPage(
+        repository: categoryRepository,
         user: user,
         membership: membership,
       );

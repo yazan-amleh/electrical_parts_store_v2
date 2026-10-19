@@ -105,6 +105,13 @@ async function seedStore() {
       name: 'Customer 1',
       isActive: true,
     });
+    await setDoc(storeDoc(db, 'categories', 'general'), {
+      storeId: STORE_ID,
+      name: 'General',
+      parentId: null,
+      sortOrder: 0,
+      isActive: true,
+    });
     await setDoc(storeDoc(db, 'party_balances', 'customer-1'), {
       storeId: STORE_ID,
       partyType: 'customer',
@@ -267,6 +274,41 @@ describe('Firestore security rules', function () {
         partyId: 'customer-2',
         balanceMinorUnits: 100,
       }),
+    );
+  });
+
+  it('protects category writes by role and tenant', async () => {
+    await assertSucceeds(
+      getDoc(storeDoc(accountantDb, 'categories', 'general')),
+    );
+    await assertSucceeds(
+      setDoc(storeDoc(warehouseDb, 'categories', 'electrical'), {
+        storeId: STORE_ID,
+        name: 'Electrical',
+        parentId: 'general',
+        sortOrder: 1,
+        isActive: true,
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(storeDoc(warehouseDb, 'categories', 'electrical'), {
+        name: 'Electrical Parts',
+      }),
+    );
+    await assertFails(
+      setDoc(storeDoc(salesDb, 'categories', 'forbidden'), {
+        storeId: STORE_ID,
+        name: 'Forbidden',
+      }),
+    );
+    await assertFails(
+      setDoc(storeDoc(warehouseDb, 'categories', 'foreign-category'), {
+        storeId: 'store-b',
+        name: 'Foreign',
+      }),
+    );
+    await assertFails(
+      deleteDoc(storeDoc(warehouseDb, 'categories', 'electrical')),
     );
   });
 

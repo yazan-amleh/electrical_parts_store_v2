@@ -1,6 +1,7 @@
 import '../core/config/app_runtime_config.dart';
 import '../features/accounting/domain/repositories/accounting_query_repository.dart';
 import '../features/accounting/domain/repositories/accounting_repository.dart';
+import '../features/categories/domain/repositories/category_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
 import '../features/inventory/domain/repositories/inventory_repository.dart';
 import '../features/inventory/domain/repositories/product_repository.dart';
@@ -16,6 +17,7 @@ class AppDependencies {
     required this.runtime,
     this.authSession,
     this.accountingRepository,
+    this.categoryRepository,
     this.accountingQueryRepository,
     this.inventoryRepository,
     this.productRepository,
@@ -30,6 +32,7 @@ class AppDependencies {
   final AppRuntimeConfig runtime;
   final AuthSessionController? authSession;
   final AccountingRepository? accountingRepository;
+  final CategoryRepository? categoryRepository;
   final AccountingQueryRepository? accountingQueryRepository;
   final InventoryRepository? inventoryRepository;
   final ProductRepository? productRepository;
