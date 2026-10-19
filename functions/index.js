@@ -226,6 +226,11 @@ async function postSaleInTransaction(transaction, userId, command) {
     conflict('The sale id already exists.');
   }
 
+  const existingJournalSnapshot = await transaction.get(journalRef);
+  if (existingJournalSnapshot.exists) {
+    conflict('The sale journal id already exists.');
+  }
+
   const journalIdempotencySnapshot = await transaction.get(
     journalIdempotencyRef,
   );
