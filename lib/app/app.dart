@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../features/auth/presentation/auth_gate.dart';
+import 'app_dependencies.dart';
 import 'theme/app_theme.dart';
-import '../features/shell/presentation/app_shell_page.dart';
 
 class V2App extends StatelessWidget {
-  const V2App({super.key});
+  const V2App({
+    required this.dependencies,
+    super.key,
+  });
+
+  final AppDependencies dependencies;
 
   @override
   Widget build(BuildContext context) {
@@ -12,7 +18,7 @@ class V2App extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'متجر القطع الكهربائية V2',
       theme: AppTheme.light(),
-      home: const AppShellPage(),
+      home: AuthGate(dependencies: dependencies),
     );
   }
 }
