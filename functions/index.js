@@ -23,6 +23,36 @@ const PAYMENT_POSTING_ROLES = new Set(['owner', 'admin', 'accountant']);
 const PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
 const PURCHASE_PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
 
+exports.postJournalEntry = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parseJournalEntryCommand(request.data);
+
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return postJournalEntryInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('postJournalEntry failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The journal entry could not be posted.',
+    );
+  }
+});
+
 exports.postSale = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
@@ -172,6 +202,241 @@ exports.postPartyPayment = onCall(async (request) => {
     );
   }
 });
+
+function parseJournalEntryCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const rawEntry = asObject(command.entry, 'entry');
+  const rawLines = rawEntry.lines;
+
+  if (!Array.isArray(rawLines) ||
+      rawLines.length < 2 ||
+      rawLines.length > MAX_LINES) {
+    invalid('A journal entry must contain between 2 and ' + MAX_LINES +
+      ' lines.');
+  }
+
+  const currency = stringValue(rawEntry.currency, 'entry.currency');
+  const lines = [];
+  const lineIds = new Set();
+  let totalDebitMinorUnits = 0;
+  let totalCreditMinorUnits = 0;
+
+  for (let index = 0; index < rawLines.length; index++) {
+    const rawLine = asObject(rawLines[index], 'entry.lines[' + index + ']');
+    const lineId = safeId(
+      rawLine.id,
+      'entry.lines[' + index + '].id',
+    );
+    if (lineIds.has(lineId)) {
+      invalid('Journal line ids must be unique.');
+    }
+    lineIds.add(lineId);
+
+    const debitMinorUnits = nonNegativeInt(
+      rawLine.debitMinorUnits,
+      'entry.lines[' + index + '].debitMinorUnits',
+    );
+    const creditMinorUnits = nonNegativeInt(
+      rawLine.creditMinorUnits,
+      'entry.lines[' + index + '].creditMinorUnits',
+    );
+    if ((debitMinorUnits === 0) === (creditMinorUnits === 0)) {
+      invalid('Each journal line must contain exactly one side.');
+    }
+
+    totalDebitMinorUnits += debitMinorUnits;
+    totalCreditMinorUnits += creditMinorUnits;
+    lines.push({
+      id: lineId,
+      accountId: safeId(
+        rawLine.accountId,
+        'entry.lines[' + index + '].accountId',
+      ),
+      description: rawLine.description == null
+        ? null
+        : stringValue(
+          rawLine.description,
+          'entry.lines[' + index + '].description',
+        ),
+      debitMinorUnits,
+      creditMinorUnits,
+      lineNumber: index + 1,
+    });
+  }
+
+  if (totalDebitMinorUnits <= 0 ||
+      totalDebitMinorUnits !== totalCreditMinorUnits) {
+    invalid('The journal entry must be balanced and greater than zero.');
+  }
+
+  return {
+    storeId,
+    entry: {
+      id: safeId(rawEntry.id, 'entry.id'),
+      idempotencyKey: safeId(
+        rawEntry.idempotencyKey,
+        'entry.idempotencyKey',
+      ),
+      postedAt: parseDate(rawEntry.postedAt, 'entry.postedAt'),
+      sourceType: stringValue(rawEntry.sourceType, 'entry.sourceType'),
+      description: rawEntry.description == null
+        ? null
+        : stringValue(rawEntry.description, 'entry.description'),
+      currency,
+      totalDebitMinorUnits,
+      totalCreditMinorUnits,
+      lines,
+    },
+  };
+}
+
+async function postJournalEntryInTransaction(
+  transaction,
+  userId,
+  command,
+) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberRef = storeRef.collection('members').doc(userId);
+  const journalRef = storeRef
+    .collection('journal_entries')
+    .doc(command.entry.id);
+  const idempotencyRef = storeRef
+    .collection('idempotency_keys')
+    .doc(command.entry.idempotencyKey);
+
+  const membershipSnapshot = await transaction.get(memberRef);
+  assertMembership(
+    membershipSnapshot,
+    command.storeId,
+    'post journal entries',
+    PAYMENT_POSTING_ROLES,
+  );
+
+  const idempotencySnapshot = await transaction.get(idempotencyRef);
+  if (idempotencySnapshot.exists) {
+    const existingEntryId = idempotencySnapshot.data().entryId;
+    if (existingEntryId === command.entry.id) {
+      return {
+        status: 'already_posted',
+        entryId: command.entry.id,
+      };
+    }
+    conflict('The journal idempotency key is already assigned.');
+  }
+
+  const existingJournalSnapshot = await transaction.get(journalRef);
+  if (existingJournalSnapshot.exists) {
+    conflict('The journal entry id already exists.');
+  }
+
+  const accountIds = [
+    ...new Set(command.entry.lines.map((line) => line.accountId)),
+  ];
+  const accountSnapshots = new Map();
+  const balanceSnapshots = new Map();
+  for (const accountId of accountIds) {
+    const accountRef = storeRef.collection('accounts').doc(accountId);
+    accountSnapshots.set(accountId, await transaction.get(accountRef));
+  }
+  for (const accountId of accountIds) {
+    const balanceRef = storeRef.collection('account_balances').doc(accountId);
+    balanceSnapshots.set(accountId, await transaction.get(balanceRef));
+  }
+
+  const deltas = new Map();
+  for (const line of command.entry.lines) {
+    const accountSnapshot = accountSnapshots.get(line.accountId);
+    if (!accountSnapshot.exists) {
+      invalid('Account was not found: ' + line.accountId);
+    }
+
+    const account = accountSnapshot.data();
+    if (account.storeId !== command.storeId) {
+      deny('Account belongs to another store.');
+    }
+    if (account.isActive === false || account.isHeader === true) {
+      invalid('Account is not postable: ' + line.accountId);
+    }
+    if (account.currency !== command.entry.currency) {
+      invalid('Account currency does not match the journal.');
+    }
+
+    const previous = deltas.get(line.accountId) || {
+      debit: 0,
+      credit: 0,
+    };
+    deltas.set(line.accountId, {
+      debit: previous.debit + line.debitMinorUnits,
+      credit: previous.credit + line.creditMinorUnits,
+    });
+  }
+
+  transaction.set(journalRef, {
+    storeId: command.storeId,
+    idempotencyKey: command.entry.idempotencyKey,
+    sourceType: command.entry.sourceType,
+    description: command.entry.description,
+    status: 'posted',
+    currency: command.entry.currency,
+    totalDebitMinorUnits: command.entry.totalDebitMinorUnits,
+    totalCreditMinorUnits: command.entry.totalCreditMinorUnits,
+    postedAt: Timestamp.fromDate(command.entry.postedAt),
+  });
+
+  for (const line of command.entry.lines) {
+    transaction.set(
+      journalRef.collection('lines').doc(line.id),
+      {
+        storeId: command.storeId,
+        entryId: command.entry.id,
+        accountId: line.accountId,
+        description: line.description,
+        lineNumber: line.lineNumber,
+        currency: command.entry.currency,
+        debitMinorUnits: line.debitMinorUnits,
+        creditMinorUnits: line.creditMinorUnits,
+        postedAt: Timestamp.fromDate(command.entry.postedAt),
+      },
+    );
+  }
+
+  for (const accountId of accountIds) {
+    const balanceSnapshot = balanceSnapshots.get(accountId);
+    const balance = balanceSnapshot.exists
+      ? balanceSnapshot.data()
+      : {};
+    const previousDebit = storedInt(balance.debitMinorUnits, 0);
+    const previousCredit = storedInt(balance.creditMinorUnits, 0);
+    const delta = deltas.get(accountId);
+
+    transaction.set(
+      storeRef.collection('account_balances').doc(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.entry.currency,
+        debitMinorUnits: previousDebit + delta.debit,
+        creditMinorUnits: previousCredit + delta.credit,
+        balanceMinorUnits:
+          previousDebit + delta.debit - previousCredit - delta.credit,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  transaction.set(idempotencyRef, {
+    storeId: command.storeId,
+    entryId: command.entry.id,
+    idempotencyKey: command.entry.idempotencyKey,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    status: 'posted',
+    entryId: command.entry.id,
+  };
+}
 
 function parseAccountTransferCommand(rawCommand) {
   const command = asObject(rawCommand, 'command');
