@@ -50,18 +50,7 @@ class _ProductsPageState extends State<ProductsPage> {
 
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('الأصناف والخدمات'),
-          actions: [
-            IconButton(
-              onPressed: _isLoading ? null : _loadProducts,
-              tooltip: 'تحديث',
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
-        ),
-        body: Column(
+      child: Column(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -77,7 +66,6 @@ class _ProductsPageState extends State<ProductsPage> {
             Expanded(child: _buildBody(context, filtered)),
           ],
         ),
-      ),
     );
   }
 
