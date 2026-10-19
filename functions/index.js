@@ -18,6 +18,7 @@ const QUANTITY_SCALE = 1000;
 const MAX_LINES = 100;
 const POSTING_ROLES = new Set(['owner', 'admin', 'accountant', 'sales']);
 const PARTY_PAYMENT_METHODS = new Set(['cash', 'bank', 'card']);
+const EXPENSE_PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
 const PAYMENT_POSTING_ROLES = new Set(['owner', 'admin', 'accountant']);
 const PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
 const PURCHASE_PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
