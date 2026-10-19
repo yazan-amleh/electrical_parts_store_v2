@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
+import '../../dashboard/presentation/dashboard_page.dart';
 import '../../accounting/domain/repositories/accounting_query_repository.dart';
 import '../../accounting/domain/repositories/accounting_repository.dart';
 import '../../accounting/presentation/financial_statements_page.dart';
@@ -56,7 +57,7 @@ class _AppShellPageState extends State<AppShellPage> {
           icon: Icons.dashboard_outlined,
           description: 'ملخص المبيعات والمشتريات والمخزون والسيولة.',
           capabilities: ['ملخص اليوم', 'تنبيهات التشغيل', 'اختصارات العمل'],
-          foundationReady: false,
+          foundationReady: true,
         ),
       ],
     ),
@@ -533,7 +534,9 @@ class _ModuleLandingPage extends StatelessWidget {
       );
     }
     if (module.id == 'dashboard') {
-      return _DashboardOverview(
+      return DashboardPage(
+        accountingQueryRepository: accountingQueryRepository,
+        productRepository: productRepository,
         user: user,
         membership: membership,
       );
@@ -593,80 +596,6 @@ class _ModuleLandingPage extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DashboardOverview extends StatelessWidget {
-  const _DashboardOverview({
-    required this.user,
-    required this.membership,
-  });
-
-  final AuthenticatedUser user;
-  final StoreMembership membership;
-
-  @override
-  Widget build(BuildContext context) {
-    final cards = [
-      ('المبيعات', Icons.point_of_sale_outlined),
-      ('المخزون', Icons.inventory_2_outlined),
-      ('الذمم', Icons.people_outline),
-      ('السيولة', Icons.account_balance_wallet_outlined),
-    ];
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1000),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'أهلاً بك، ${user.displayName?.trim().isNotEmpty == true ? user.displayName : user.email}',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 4),
-              Text('المتجر: ${membership.storeId} — لوحة V2 الأساسية'),
-              const SizedBox(height: 24),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: cards.length,
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 240,
-                  mainAxisExtent: 120,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                ),
-                itemBuilder: (context, index) {
-                  final card = cards[index];
-                  return Card(
-                    child: ListTile(
-                      leading: Icon(card.$2, size: 32),
-                      title: Text(card.$1),
-                      subtitle: const Text('سيظهر بعد ربط الاستعلام'),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 24),
-              Card(
-                child: const Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Text(
-                    'تم بناء هذا الهيكل ليحمل كل وحدات V1 دون خلط الواجهة '
-                    'بمصدر البيانات. الأرقام لن تُعرض قبل ربطها بمستودعات '
-                    'حقيقية واختبارات صلاحياتها.',
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       ),
