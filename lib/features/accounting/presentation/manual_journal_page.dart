@@ -514,7 +514,7 @@ class _ManualJournalPageState extends State<ManualJournalPage> {
   String _formatDate(DateTime date) {
     final day = date.day.toString().padLeft(2, '0');
     final month = date.month.toString().padLeft(2, '0');
-    return '${date.year}/${month}/${day}';
+    return '${date.year}/$month/$day';
   }
 
   Widget _buildErrorState() {
