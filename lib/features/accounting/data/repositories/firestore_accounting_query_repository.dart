@@ -122,7 +122,7 @@ class FirestoreAccountingQueryRepository
         .value
         .asMap()
         .map(
-          (key, value) => MapEntry(value.accountId, value),
+          (_, value) => MapEntry(value.accountId, value),
         );
 
     final lines = <TrialBalanceLine>[];
