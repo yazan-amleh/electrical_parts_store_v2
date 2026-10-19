@@ -9,6 +9,7 @@ class AppRuntimeConfig {
     required this.environment,
     required this.useFirebase,
     this.firebaseProjectId = '',
+    this.storeId = '',
   });
 
   factory AppRuntimeConfig.fromEnvironment() {
@@ -31,12 +32,17 @@ class AppRuntimeConfig {
         'FIREBASE_PROJECT_ID',
         defaultValue: '',
       ),
+      storeId: String.fromEnvironment(
+        'STORE_ID',
+        defaultValue: '',
+      ),
     );
   }
 
   final AppEnvironment environment;
   final bool useFirebase;
   final String firebaseProjectId;
+  final String storeId;
 
   bool get isProduction => environment == AppEnvironment.production;
 }
