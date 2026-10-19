@@ -83,6 +83,36 @@ exports.postPurchase = onCall(async (request) => {
   }
 });
 
+exports.postAccountTransfer = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parseAccountTransferCommand(request.data);
+
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return postAccountTransferInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('postAccountTransfer failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The account transfer could not be posted.',
+    );
+  }
+});
+
 exports.postExpense = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
