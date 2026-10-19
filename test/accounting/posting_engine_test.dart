@@ -64,8 +64,8 @@ void main() {
       accounts: <String, Account>{'cash': cash, 'sales': sales},
     );
 
-    expect(result, isA<Success>());
-    final posting = (result as Success).value;
+    expect(result, isA<Success<PostingResult>>());
+    final posting = (result as Success<PostingResult>).value;
     expect(posting.deltas, hasLength(2));
   });
 
@@ -81,7 +81,7 @@ void main() {
         context: context,
         entry: entry,
       )),
-      isA<Success>(),
+      isA<Success<JournalEntry>>(),
     );
     expect(
       (await repository.postJournalEntry(
@@ -139,6 +139,6 @@ void main() {
       },
     );
 
-    expect(result, isA<FailureResult>());
+    expect(result, isA<FailureResult<PostingResult>>());
   });
 }
