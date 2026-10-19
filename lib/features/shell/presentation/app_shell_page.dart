@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/app_dependencies.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../auth/domain/enums/store_role.dart';
+import '../../inventory/domain/repositories/product_repository.dart';
+import '../../inventory/presentation/products_page.dart';
 
 class AppShellPage extends StatefulWidget {
   const AppShellPage({
+    required this.dependencies,
     required this.user,
     required this.membership,
     required this.onSignOut,
     super.key,
   });
 
+  final AppDependencies dependencies;
   final AuthenticatedUser user;
   final StoreMembership membership;
   final Future<void> Function() onSignOut;
@@ -273,6 +278,7 @@ class _AppShellPageState extends State<AppShellPage> {
         body: _ModuleLandingPage(
           module: selected,
           user: widget.user,
+          productRepository: widget.dependencies.productRepository,
           membership: widget.membership,
         ),
       ),
@@ -372,15 +378,24 @@ class _ModuleLandingPage extends StatelessWidget {
   const _ModuleLandingPage({
     required this.module,
     required this.user,
+    required this.productRepository,
     required this.membership,
   });
 
   final _Module module;
   final AuthenticatedUser user;
+  final ProductRepository? productRepository;
   final StoreMembership membership;
 
   @override
   Widget build(BuildContext context) {
+    if (module.id == 'products') {
+      return ProductsPage(
+        repository: productRepository,
+        user: user,
+        membership: membership,
+      );
+    }
     if (module.id == 'dashboard') {
       return _DashboardOverview(
         user: user,
