@@ -7,6 +7,7 @@ import '../features/inventory/domain/repositories/inventory_repository.dart';
 import '../features/inventory/domain/repositories/product_repository.dart';
 import '../features/sales/domain/repositories/sale_repository.dart';
 import '../features/purchases/domain/repositories/purchase_repository.dart';
+import '../features/purchase_orders/domain/repositories/purchase_order_repository.dart';
 import '../features/expenses/domain/repositories/expense_repository.dart';
 import '../features/payments/domain/repositories/party_payment_repository.dart';
 import '../features/parties/domain/repositories/party_repository.dart';
@@ -23,6 +24,7 @@ class AppDependencies {
     this.productRepository,
     this.saleRepository,
     this.purchaseRepository,
+    this.purchaseOrderRepository,
     this.expenseRepository,
     this.partyPaymentRepository,
     this.partyRepository,
@@ -38,6 +40,7 @@ class AppDependencies {
   final ProductRepository? productRepository;
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
+  final PurchaseOrderRepository? purchaseOrderRepository;
   final ExpenseRepository? expenseRepository;
   final PartyPaymentRepository? partyPaymentRepository;
   final PartyRepository? partyRepository;

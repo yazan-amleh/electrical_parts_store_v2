@@ -64,6 +64,22 @@ abstract final class FirebasePaths {
     return store(firestore, storeId).collection('purchases');
   }
 
+  static CollectionReference<Map<String, dynamic>> purchaseOrders(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('purchase_orders');
+  }
+
+  static CollectionReference<Map<String, dynamic>> purchaseOrderReceiptIdempotency(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection(
+      'purchase_order_receipt_idempotency',
+    );
+  }
+
   static CollectionReference<Map<String, dynamic>> purchaseIdempotency(
     FirebaseFirestore firestore,
     String storeId,

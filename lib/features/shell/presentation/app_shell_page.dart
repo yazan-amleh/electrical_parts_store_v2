@@ -24,6 +24,8 @@ import '../../sales/domain/repositories/sale_repository.dart';
 import '../../sales/presentation/sales_page.dart';
 import '../../purchases/domain/repositories/purchase_repository.dart';
 import '../../purchases/presentation/purchases_page.dart';
+import '../../purchase_orders/domain/repositories/purchase_order_repository.dart';
+import '../../purchase_orders/presentation/purchase_orders_page.dart';
 import '../../expenses/domain/repositories/expense_repository.dart';
 import '../../expenses/presentation/expenses_page.dart';
 import '../../payments/domain/repositories/party_payment_repository.dart';
@@ -307,6 +309,8 @@ class _AppShellPageState extends State<AppShellPage> {
           inventoryRepository: widget.dependencies.inventoryRepository,
           saleRepository: widget.dependencies.saleRepository,
           purchaseRepository: widget.dependencies.purchaseRepository,
+          purchaseOrderRepository:
+              widget.dependencies.purchaseOrderRepository,
           expenseRepository: widget.dependencies.expenseRepository,
           accountingRepository: widget.dependencies.accountingRepository,
           partyPaymentRepository: widget.dependencies.partyPaymentRepository,
@@ -420,6 +424,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.inventoryRepository,
     required this.saleRepository,
     required this.purchaseRepository,
+    required this.purchaseOrderRepository,
     required this.expenseRepository,
     required this.accountingRepository,
     required this.partyPaymentRepository,
@@ -436,6 +441,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final InventoryRepository? inventoryRepository;
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
+  final PurchaseOrderRepository? purchaseOrderRepository;
   final ExpenseRepository? expenseRepository;
   final AccountingRepository? accountingRepository;
   final PartyPaymentRepository? partyPaymentRepository;
@@ -458,6 +464,15 @@ class _ModuleLandingPage extends StatelessWidget {
       return PurchasesPage(
         repository: purchaseRepository,
         productRepository: productRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'purchase-orders') {
+      return PurchaseOrdersPage(
+        repository: purchaseOrderRepository,
+        productRepository: productRepository,
+        partyRepository: partyRepository,
         user: user,
         membership: membership,
       );
