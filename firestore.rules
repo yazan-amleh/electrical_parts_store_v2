@@ -10,7 +10,10 @@ service cloud.firestore {
       return signedIn() &&
         exists(
           /databases/$(database)/documents/stores/$(storeId)/members/$(request.auth.uid)
-        );
+        ) &&
+        get(
+          /databases/$(database)/documents/stores/$(storeId)/members/$(request.auth.uid)
+        ).data.isActive == true;
     }
 
     function hasRole(storeId, roles) {
