@@ -1,0 +1,89 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(storeId) {
+      return signedIn() &&
+        exists(
+          /databases/$(database)/documents/stores/$(storeId)/members/$(request.auth.uid)
+        );
+    }
+
+    function hasRole(storeId, roles) {
+      return isMember(storeId) &&
+        get(
+          /databases/$(database)/documents/stores/$(storeId)/members/$(request.auth.uid)
+        ).data.role in roles;
+    }
+
+    function canReadStore(storeId) {
+      return isMember(storeId);
+    }
+
+    function canManageStore(storeId) {
+      return hasRole(storeId, ['owner', 'admin']);
+    }
+
+    function canPostAccounting(storeId) {
+      return hasRole(storeId, ['owner', 'admin', 'accountant']);
+    }
+
+    match /stores/{storeId} {
+      allow read: if canReadStore(storeId);
+      allow create: if signedIn() &&
+        request.resource.data.ownerId == request.auth.uid;
+      allow update: if canManageStore(storeId);
+      allow delete: if false;
+
+      match /members/{userId} {
+        allow read: if canReadStore(storeId);
+        allow create, update, delete: if canManageStore(storeId);
+      }
+
+      match /accounts/{accountId} {
+        allow read: if canReadStore(storeId);
+        allow create, update: if canManageStore(storeId);
+        allow delete: if false;
+      }
+
+      match /journal_entries/{entryId} {
+        allow read: if canReadStore(storeId);
+        allow create: if canPostAccounting(storeId) &&
+          request.resource.data.storeId == storeId &&
+          request.resource.data.status == 'posted' &&
+          request.resource.data.totalDebitMinorUnits ==
+            request.resource.data.totalCreditMinorUnits;
+        allow update, delete: if false;
+
+        match /lines/{lineId} {
+          allow read: if canReadStore(storeId);
+          allow create: if canPostAccounting(storeId) &&
+            request.resource.data.storeId == storeId;
+          allow update, delete: if false;
+        }
+      }
+
+      match /account_balances/{accountId} {
+        allow read: if canReadStore(storeId);
+        allow create, update: if canPostAccounting(storeId) &&
+          request.resource.data.storeId == storeId;
+        allow delete: if false;
+      }
+
+      match /idempotency_keys/{key} {
+        allow read: if canPostAccounting(storeId);
+        allow create: if canPostAccounting(storeId) &&
+          request.resource.data.storeId == storeId;
+        allow update, delete: if false;
+      }
+
+      match /{document=**} {
+        allow read, write: if false;
+      }
+    }
+  }
+}
