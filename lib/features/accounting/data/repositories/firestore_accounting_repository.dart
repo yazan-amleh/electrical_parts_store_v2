@@ -98,7 +98,7 @@ class FirestoreAccountingRepository implements AccountingRepository {
             if (accountSnapshot == null || !accountSnapshot.exists) {
               return FailureResult<JournalEntry>(
                 ValidationFailure(
-                  'Account not found in current store: ${line.accountId},
+                  'Account not found in current store: ${line.accountId}',
                 ),
               );
             }
@@ -109,14 +109,14 @@ class FirestoreAccountingRepository implements AccountingRepository {
             if (account.storeId != context.storeId) {
               return FailureResult<JournalEntry>(
                 AuthorizationFailure(
-                  'Account belongs to another store: ${line.accountId},
+                  'Account belongs to another store: ${line.accountId}',
                 ),
               );
             }
             if (!account.canPost) {
               return FailureResult<JournalEntry>(
                 ValidationFailure(
-                  'Account is not postable: ${line.accountId},
+                  'Account is not postable: ${line.accountId}',
                 ),
               );
             }
