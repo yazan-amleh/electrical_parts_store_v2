@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../core/idempotency/idempotency_key.dart';
+
 import '../../../../core/money/money.dart';
 import '../../../../core/quantity/quantity.dart';
 import '../../domain/entities/inventory_movement.dart';
