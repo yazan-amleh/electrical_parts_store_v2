@@ -22,8 +22,7 @@ class OfferOrder {
     this.confirmedAt,
   })  : lines = List.unmodifiable(lines),
         createdAt = createdAt.toUtc(),
-        globalDiscount =
-            globalDiscount ?? Money.zero(currency: lines.first.currency),
+        globalDiscount = globalDiscount ?? const Money.zero(),
         idempotencyKey = IdempotencyKey(id) {
     _ensureIdentifier(id, 'Offer order id');
     _ensureIdentifier(storeId, 'Offer order store id');

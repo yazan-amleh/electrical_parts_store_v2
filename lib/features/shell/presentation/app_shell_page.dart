@@ -24,6 +24,7 @@ import '../../sales/domain/repositories/sale_repository.dart';
 import '../../sales/presentation/sales_page.dart';
 import '../../purchases/domain/repositories/purchase_repository.dart';
 import '../../purchases/presentation/purchases_page.dart';
+import '../../offers/domain/repositories/offer_repository.dart';
 import '../../offers/presentation/offers_page.dart';
 import '../../purchase_orders/domain/repositories/purchase_order_repository.dart';
 import '../../purchase_orders/presentation/purchase_orders_page.dart';

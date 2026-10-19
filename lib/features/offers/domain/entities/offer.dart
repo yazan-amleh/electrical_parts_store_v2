@@ -18,8 +18,7 @@ class Offer {
     this.imageUrl,
   })  : lines = List.unmodifiable(lines),
         createdAt = createdAt.toUtc(),
-        globalDiscount =
-            globalDiscount ?? Money.zero(currency: lines.first.currency) {
+        globalDiscount = globalDiscount ?? const Money.zero() {
     _ensureIdentifier(id, 'Offer id');
     _ensureIdentifier(storeId, 'Offer store id');
     if (offerNumber.trim().isEmpty) {

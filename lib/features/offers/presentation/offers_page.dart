@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/errors/failure.dart';
-import '../../../core/idempotency/idempotency_key.dart';
 import '../../../core/money/money.dart';
 import '../../../core/quantity/quantity.dart';
 import '../../../core/result/result.dart';
@@ -18,6 +17,7 @@ import '../../sales/domain/enums/sale_payment_method.dart';
 import '../domain/entities/offer.dart';
 import '../domain/entities/offer_line.dart';
 import '../domain/entities/offer_order.dart';
+import '../domain/entities/offer_order_confirmation.dart';
 import '../domain/enums/offer_order_status.dart';
 import '../domain/enums/offer_price_type.dart';
 import '../domain/repositories/offer_repository.dart';
