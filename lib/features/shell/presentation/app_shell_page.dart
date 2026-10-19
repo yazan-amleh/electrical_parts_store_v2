@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/app_dependencies.dart';
 import '../../accounting/domain/repositories/accounting_query_repository.dart';
 import '../../accounting/presentation/trial_balance_page.dart';
+import '../../accounting/presentation/ledger_page.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../auth/domain/enums/store_role.dart';
@@ -473,6 +474,13 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'products') {
       return ProductsPage(
         repository: productRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'ledger') {
+      return LedgerPage(
+        repository: accountingQueryRepository,
         user: user,
         membership: membership,
       );
