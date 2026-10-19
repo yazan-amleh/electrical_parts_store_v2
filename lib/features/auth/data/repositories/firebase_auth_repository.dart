@@ -44,7 +44,8 @@ class FirebaseAuthRepository implements AuthRepository {
       final user = credential.user;
       if (user == null) {
         return const FailureResult<AuthenticatedUser>(
-          AuthorizationFailure('Firebase did not return an authenticated user.'),
+          AuthorizationFailure(
+              'Firebase did not return an authenticated user.'),
         );
       }
 
