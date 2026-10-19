@@ -173,6 +173,282 @@ exports.postPartyPayment = onCall(async (request) => {
   }
 });
 
+function parseAccountTransferCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const transfer = asObject(command.transfer, 'transfer');
+  const fromAccountId = safeId(
+    transfer.fromAccountId,
+    'fromAccountId',
+  );
+  const toAccountId = safeId(
+    transfer.toAccountId,
+    'toAccountId',
+  );
+  if (fromAccountId === toAccountId) {
+    invalid('Source and destination accounts must be different.');
+  }
+
+  return {
+    storeId,
+    transfer: {
+      id: safeId(transfer.id, 'transfer id'),
+      idempotencyKey: safeId(
+        transfer.idempotencyKey,
+        'transfer idempotency key',
+      ),
+      postedAt: parseDate(transfer.postedAt, 'transfer.postedAt'),
+      fromAccountId,
+      toAccountId,
+      amountMinorUnits: positiveInt(
+        transfer.amountMinorUnits,
+        'transfer.amountMinorUnits',
+      ),
+      currency: stringValue(transfer.currency, 'transfer.currency'),
+      description: transfer.description == null
+        ? null
+        : stringValue(transfer.description, 'transfer.description'),
+    },
+  };
+}
+
+async function postAccountTransferInTransaction(
+  transaction,
+  userId,
+  command,
+) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberRef = storeRef.collection('members').doc(userId);
+  const transferRef = storeRef
+    .collection('account_transfers')
+    .doc(command.transfer.id);
+  const transferIdempotencyRef = storeRef
+    .collection('account_transfer_idempotency')
+    .doc(command.transfer.idempotencyKey);
+  const journalEntryId = command.transfer.id + '-journal';
+  const journalIdempotencyKey = command.transfer.idempotencyKey +
+    ':journal';
+  const journalRef = storeRef
+    .collection('journal_entries')
+    .doc(journalEntryId);
+  const journalIdempotencyRef = storeRef
+    .collection('idempotency_keys')
+    .doc(journalIdempotencyKey);
+
+  const membershipSnapshot = await transaction.get(memberRef);
+  assertMembership(
+    membershipSnapshot,
+    command.storeId,
+    'post account transfers',
+    PAYMENT_POSTING_ROLES,
+  );
+
+  const transferIdempotencySnapshot = await transaction.get(
+    transferIdempotencyRef,
+  );
+  if (transferIdempotencySnapshot.exists) {
+    const existingTransferId =
+      transferIdempotencySnapshot.data().transferId;
+    if (existingTransferId === command.transfer.id) {
+      return {
+        status: 'already_posted',
+        transferId: command.transfer.id,
+        journalEntryId,
+      };
+    }
+    conflict('The transfer idempotency key is already assigned.');
+  }
+
+  const existingTransferSnapshot = await transaction.get(transferRef);
+  if (existingTransferSnapshot.exists) {
+    conflict('The account transfer id already exists.');
+  }
+
+  const existingJournalSnapshot = await transaction.get(journalRef);
+  if (existingJournalSnapshot.exists) {
+    conflict('The transfer journal id already exists.');
+  }
+
+  const journalIdempotencySnapshot = await transaction.get(
+    journalIdempotencyRef,
+  );
+  if (journalIdempotencySnapshot.exists) {
+    conflict('The transfer journal idempotency key already exists.');
+  }
+
+  const accountIds = [
+    command.transfer.fromAccountId,
+    command.transfer.toAccountId,
+  ];
+  const accountRefs = new Map(
+    accountIds.map((accountId) => [
+      accountId,
+      storeRef.collection('accounts').doc(accountId),
+    ]),
+  );
+  const accountSnapshots = new Map();
+  for (const [accountId, accountRef] of accountRefs) {
+    accountSnapshots.set(
+      accountId,
+      await transaction.get(accountRef),
+    );
+  }
+
+  const balanceRefs = new Map(
+    accountIds.map((accountId) => [
+      accountId,
+      storeRef.collection('account_balances').doc(accountId),
+    ]),
+  );
+  const balanceSnapshots = new Map();
+  for (const [accountId, balanceRef] of balanceRefs) {
+    balanceSnapshots.set(
+      accountId,
+      await transaction.get(balanceRef),
+    );
+  }
+
+  assertTransferAccount(
+    accountSnapshots.get(command.transfer.fromAccountId),
+    command.transfer.fromAccountId,
+    command.storeId,
+    command.transfer.currency,
+  );
+  assertTransferAccount(
+    accountSnapshots.get(command.transfer.toAccountId),
+    command.transfer.toAccountId,
+    command.storeId,
+    command.transfer.currency,
+  );
+
+  const amount = command.transfer.amountMinorUnits;
+  const accountDeltas = new Map();
+  addDelta(
+    accountDeltas,
+    command.transfer.toAccountId,
+    amount,
+    0,
+  );
+  addDelta(
+    accountDeltas,
+    command.transfer.fromAccountId,
+    0,
+    amount,
+  );
+
+  const journalLines = [
+    {
+      id: command.transfer.id + '-destination',
+      storeId: command.storeId,
+      accountId: command.transfer.toAccountId,
+      description: 'Internal account transfer',
+      lineNumber: 1,
+      debitMinorUnits: amount,
+      creditMinorUnits: 0,
+    },
+    {
+      id: command.transfer.id + '-source',
+      storeId: command.storeId,
+      accountId: command.transfer.fromAccountId,
+      description: 'Internal account transfer',
+      lineNumber: 2,
+      debitMinorUnits: 0,
+      creditMinorUnits: amount,
+    },
+  ];
+
+  transaction.set(
+    transferRef,
+    {
+      storeId: command.storeId,
+      idempotencyKey: command.transfer.idempotencyKey,
+      postedAt: Timestamp.fromDate(command.transfer.postedAt),
+      fromAccountId: command.transfer.fromAccountId,
+      toAccountId: command.transfer.toAccountId,
+      amountMinorUnits: amount,
+      currency: command.transfer.currency,
+      description: command.transfer.description,
+      journalEntryId,
+      status: 'posted',
+      createdAt: FieldValue.serverTimestamp(),
+    },
+  );
+
+  transaction.set(
+    journalRef,
+    {
+      storeId: command.storeId,
+      idempotencyKey: journalIdempotencyKey,
+      sourceType: 'accountTransfer',
+      description: command.transfer.description,
+      status: 'posted',
+      currency: command.transfer.currency,
+      totalDebitMinorUnits: amount,
+      totalCreditMinorUnits: amount,
+      postedAt: Timestamp.fromDate(command.transfer.postedAt),
+    },
+  );
+  for (const line of journalLines) {
+    transaction.set(
+      journalRef.collection('lines').doc(line.id),
+      line,
+    );
+  }
+
+  for (const accountId of accountIds) {
+    const balanceSnapshot = balanceSnapshots.get(accountId);
+    const balance = balanceSnapshot.exists
+      ? balanceSnapshot.data()
+      : {};
+    const currentDebit = storedInt(balance.debitMinorUnits, 0);
+    const currentCredit = storedInt(balance.creditMinorUnits, 0);
+    const delta = accountDeltas.get(accountId) || {
+      debit: 0,
+      credit: 0,
+    };
+
+    transaction.set(
+      balanceRefs.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.transfer.currency,
+        debitMinorUnits: currentDebit + delta.debit,
+        creditMinorUnits: currentCredit + delta.credit,
+        balanceMinorUnits:
+          currentDebit + delta.debit - currentCredit - delta.credit,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  transaction.set(
+    transferIdempotencyRef,
+    {
+      storeId: command.storeId,
+      transferId: command.transfer.id,
+      idempotencyKey: command.transfer.idempotencyKey,
+      journalEntryId,
+      createdAt: FieldValue.serverTimestamp(),
+    },
+  );
+  transaction.set(
+    journalIdempotencyRef,
+    {
+      storeId: command.storeId,
+      entryId: journalEntryId,
+      idempotencyKey: journalIdempotencyKey,
+      createdAt: FieldValue.serverTimestamp(),
+    },
+  );
+
+  return {
+    status: 'posted',
+    transferId: command.transfer.id,
+    journalEntryId,
+  };
+}
+
 function parseExpenseCommand(rawCommand) {
   const command = asObject(rawCommand, 'command');
   const storeId = safeId(command.storeId, 'storeId');
