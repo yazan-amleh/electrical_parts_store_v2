@@ -4,7 +4,6 @@ import '../../../core/errors/failure.dart';
 import '../../../core/idempotency/idempotency_key.dart';
 import '../../../core/money/money.dart';
 import '../../../core/result/result.dart';
-import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../domain/entities/expense.dart';
@@ -100,7 +99,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
                             .map(
                               (entry) => DropdownMenuItem<String>(
                                 value: entry.key,
-                                child: Text(entry.key + ' — ' + entry.value),
+                                child: Text('${entry.key} — ${entry.value}'),
                               ),
                             )
                             .toList(growable: false),
@@ -289,8 +288,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
       return;
     }
 
-    final expenseId =
-        'expense-' + DateTime.now().microsecondsSinceEpoch.toString();
+    final expenseId = 'expense-${DateTime.now().microsecondsSinceEpoch}';
     final expense = Expense(
       id: expenseId,
       storeId: widget.membership.storeId,
