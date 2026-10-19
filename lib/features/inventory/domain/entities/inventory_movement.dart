@@ -11,11 +11,13 @@ class InventoryMovement {
     required this.type,
     required this.quantityDelta,
     required this.unitCost,
+    Money? totalCost,
     required IdempotencyKey idempotencyKey,
     this.sourceType = '',
     this.sourceId,
     DateTime? occurredAt,
-  })  : idempotencyKey = idempotencyKey.value,
+  })  : totalCost = totalCost ?? _defaultTotalCost(quantityDelta, unitCost),
+        idempotencyKey = idempotencyKey.value,
         occurredAt = (occurredAt ?? DateTime.now()).toUtc() {
     if (id.trim().isEmpty ||
         storeId.trim().isEmpty ||
@@ -25,8 +27,11 @@ class InventoryMovement {
     if (quantityDelta.isZero) {
       throw ArgumentError('Inventory movement quantity cannot be zero.');
     }
-    if (unitCost.isNegative) {
-      throw ArgumentError('Inventory movement unit cost cannot be negative.');
+    if (unitCost.isNegative || this.totalCost.isNegative) {
+      throw ArgumentError('Inventory movement costs cannot be negative.');
+    }
+    if (this.totalCost.currency != unitCost.currency) {
+      throw ArgumentError('Inventory movement costs must use one currency.');
     }
     if (this.idempotencyKey.trim().isEmpty) {
       throw ArgumentError('Inventory movement idempotency key is required.');
@@ -39,8 +44,15 @@ class InventoryMovement {
   final InventoryMovementType type;
   final Quantity quantityDelta;
   final Money unitCost;
+  final Money totalCost;
   final String idempotencyKey;
   final String sourceType;
   final String? sourceId;
   final DateTime occurredAt;
+
+  static Money _defaultTotalCost(Quantity quantity, Money unitCost) {
+    final numerator = quantity.milliUnits.abs() * unitCost.minorUnits;
+    final minorUnits = (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
+    return Money(minorUnits: minorUnits, currency: unitCost.currency);
+  }
 }
