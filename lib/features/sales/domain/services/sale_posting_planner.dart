@@ -108,6 +108,7 @@ class SalePostingPlanner {
                 -line.baseQuantity.milliUnits,
               ),
               unitCost: line.unitCost,
+              totalCost: line.costTotal,
               idempotencyKey: IdempotencyKey(
                 _lineScopeKey(sale.idempotencyKey.value, line.id),
               ),
