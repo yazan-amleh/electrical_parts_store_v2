@@ -2832,6 +2832,30 @@ function assertAccount(
   }
 }
 
+function assertTransferAccount(
+  snapshot,
+  accountId,
+  storeId,
+  currency,
+) {
+  assertAccount(
+    snapshot,
+    accountId,
+    storeId,
+    currency,
+    'asset',
+  );
+  const controlType = snapshot.data().controlType || 'none';
+  if (![
+    'cashBox',
+    'bank',
+    'cardReceivable',
+    'none',
+  ].includes(controlType)) {
+    invalid('Account cannot be used in an internal transfer: ' + accountId);
+  }
+}
+
 function paymentAccountControlType(paymentMethod) {
   switch (paymentMethod) {
     case 'cash':
