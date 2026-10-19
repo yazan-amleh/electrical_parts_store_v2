@@ -31,7 +31,7 @@ void main() {
     await repository.save(context: context, command: command());
     var calls = 0;
 
-    final result = await const CommandQueueProcessor(
+    final result = await CommandQueueProcessor(
       repository: repository,
     ).drain(
       context: context,
@@ -57,7 +57,7 @@ void main() {
     await repository.save(context: context, command: command());
 
     final now = DateTime.utc(2026, 1, 1, 0, 1);
-    final result = await const CommandQueueProcessor(
+    final result = await CommandQueueProcessor(
       repository: repository,
     ).drain(
       context: context,
@@ -82,7 +82,7 @@ void main() {
     final repository = InMemoryCommandQueueRepository();
     await repository.save(context: context, command: command());
 
-    final result = await const CommandQueueProcessor(
+    final result = await CommandQueueProcessor(
       repository: repository,
     ).drain(
       context: context,
