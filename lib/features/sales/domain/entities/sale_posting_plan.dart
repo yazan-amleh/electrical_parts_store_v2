@@ -1,27 +1,35 @@
 import '../../../../core/idempotency/idempotency_key.dart';
 import '../../../../core/money/money.dart';
 import '../../../../core/quantity/quantity.dart';
-import '../../../../features/accounting/domain/entities/journal_entry.dart';
-import '../../../../features/inventory/domain/entities/inventory_movement.dart';
+import '../../../accounting/domain/entities/journal_entry.dart';
+import '../../../inventory/domain/entities/inventory_movement.dart';
+import '../enums/sale_payment_method.dart';
 import 'sale.dart';
 
 class SalePostingAccounts {
   const SalePostingAccounts({
-    required this.settlementAccountId,
+    this.settlementAccountId,
+    this.customerReceivableAccountId,
     required this.salesAccountId,
     required this.inventoryAccountId,
     required this.costOfSalesAccountId,
     this.taxAccountId,
   });
 
-  final String settlementAccountId;
+  final String? settlementAccountId;
+  final String? customerReceivableAccountId;
   final String salesAccountId;
   final String inventoryAccountId;
   final String costOfSalesAccountId;
   final String? taxAccountId;
 
   Iterable<String> get allAccountIds sync* {
-    yield settlementAccountId;
+    if (settlementAccountId != null) {
+      yield settlementAccountId!;
+    }
+    if (customerReceivableAccountId != null) {
+      yield customerReceivableAccountId!;
+    }
     yield salesAccountId;
     yield inventoryAccountId;
     yield costOfSalesAccountId;
@@ -44,6 +52,26 @@ class SalePostingAccounts {
         throw ArgumentError('Sale posting account id cannot contain a slash.');
       }
     }
+  }
+
+  String accountFor(SalePaymentMethod paymentMethod) {
+    if (paymentMethod == SalePaymentMethod.credit) {
+      final accountId = customerReceivableAccountId;
+      if (accountId == null || accountId.trim().isEmpty) {
+        throw ArgumentError(
+          'A customer receivable account is required for credit sales.',
+        );
+      }
+      return accountId;
+    }
+
+    final accountId = settlementAccountId;
+    if (accountId == null || accountId.trim().isEmpty) {
+      throw ArgumentError(
+        'A settlement account is required for paid sales.',
+      );
+    }
+    return accountId;
   }
 }
 
