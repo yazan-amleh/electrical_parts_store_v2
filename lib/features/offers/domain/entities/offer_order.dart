@@ -35,11 +35,11 @@ class OfferOrder {
     if (lines.isEmpty) {
       throw ArgumentError('An offer order requires at least one line.');
     }
-    if (globalDiscount.isNegative ||
-        globalDiscount.currency != lines.first.currency) {
+    if (this.globalDiscount.isNegative ||
+        this.globalDiscount.currency != lines.first.currency) {
       throw ArgumentError('Offer order discount is invalid.');
     }
-    if (globalDiscount.minorUnits > lineFinalTotal.minorUnits) {
+    if (this.globalDiscount.minorUnits > lineFinalTotal.minorUnits) {
       throw ArgumentError('Offer order discount cannot exceed its total.');
     }
     if (status == OfferOrderStatus.confirmed &&

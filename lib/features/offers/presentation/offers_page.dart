@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/errors/failure.dart';
 import '../../../core/money/money.dart';
 import '../../../core/quantity/quantity.dart';
 import '../../../core/result/result.dart';
@@ -247,11 +246,7 @@ class _OffersPageState extends State<OffersPage> {
         ),
         title: Text(offer.name),
         subtitle: Text(
-          offer.offerNumber +
-              ' • ' +
-              offer.lines.length.toString() +
-              ' أصناف • ' +
-              offer.totalFinal.formatted,
+          '${offer.offerNumber} • ${offer.lines.length} أصناف • ${offer.totalFinal.formatted}',
         ),
         trailing: Chip(
           label: Text(status),
@@ -267,12 +262,7 @@ class _OffersPageState extends State<OffersPage> {
                   Text(offer.description!),
                 const SizedBox(height: 8),
                 Text(
-                  'الإجمالي قبل الخصم: ' +
-                      offer.originalTotal.formatted +
-                      ' | الخصم: ' +
-                      offer.totalDiscount.formatted +
-                      ' | النهائي: ' +
-                      offer.totalFinal.formatted,
+                  'الإجمالي قبل الخصم: ${offer.originalTotal.formatted} | الخصم: ${offer.totalDiscount.formatted} | النهائي: ${offer.totalFinal.formatted}',
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -332,13 +322,9 @@ class _OffersPageState extends State<OffersPage> {
     return Card(
       child: ListTile(
         leading: Icon(Icons.receipt_long_outlined, color: color),
-        title: Text(order.orderNumber + ' • ' + order.customerName),
+        title: Text('${order.orderNumber} • ${order.customerName}'),
         subtitle: Text(
-          order.offerNumber +
-              ' • ' +
-              order.total.formatted +
-              ' • ' +
-              order.status.arabicLabel,
+          '${order.offerNumber} • ${order.total.formatted} • ${order.status.arabicLabel}',
         ),
         isThreeLine: true,
         trailing: order.status == OfferOrderStatus.pending
@@ -660,7 +646,7 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
             draft.quantityController.text.replaceAll(',', '.'));
         lines.add(
           OfferLine(
-            id: 'offer-line-' + draft.product.id,
+            id: 'offer-line-${draft.product.id}',
             productId: draft.product.id,
             productName: draft.product.name,
             originalUnitPrice: draft.product.sellingPrice,
@@ -678,9 +664,9 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
           Money.zero(currency: _currency);
       final stamp = DateTime.now().microsecondsSinceEpoch;
       final offer = Offer(
-        id: 'offer-' + stamp.toString(),
+        id: 'offer-${stamp}',
         storeId: '',
-        offerNumber: 'OFFER-' + stamp.toString(),
+        offerNumber: 'OFFER-${stamp}',
         name: name,
         description: _descriptionController.text.trim().isEmpty
             ? null
@@ -746,10 +732,7 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
                   onChanged: (value) => _toggleProduct(product, value == true),
                   title: Text(product.name),
                   subtitle: Text(
-                    'بيع: ' +
-                        product.sellingPrice.formatted +
-                        ' • جملة: ' +
-                        product.wholesalePrice.formatted,
+                    'بيع: ${product.sellingPrice.formatted} • جملة: ${product.wholesalePrice.formatted}',
                   ),
                 ),
               if (_selected.isNotEmpty) ...[
@@ -863,7 +846,7 @@ class _OfferDraftEditor extends StatelessWidget {
                 controller: draft.priceController,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(labelText: 'السعر ' + currency),
+                decoration: InputDecoration(labelText: 'السعر $currency'),
                 onChanged: (_) => onChanged(),
               ),
             ),
@@ -929,9 +912,9 @@ class _CreateOfferOrderDialogState extends State<_CreateOfferOrderDialog> {
     }
     final stamp = DateTime.now().microsecondsSinceEpoch;
     final order = OfferOrder(
-      id: 'offer-order-' + stamp.toString(),
+      id: 'offer-order-${stamp}',
       storeId: widget.storeId,
-      orderNumber: 'OO-' + stamp.toString(),
+      orderNumber: 'OO-${stamp}',
       offerId: _offer.id,
       offerNumber: _offer.offerNumber,
       customerId: customer.id,
@@ -952,13 +935,13 @@ class _CreateOfferOrderDialogState extends State<_CreateOfferOrderDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           DropdownButtonFormField<Offer>(
-            value: _offer,
+            initialValue: _offer,
             decoration: const InputDecoration(labelText: 'العرض'),
             items: [
               for (final offer in widget.offers)
                 DropdownMenuItem(
                   value: offer,
-                  child: Text(offer.name + ' • ' + offer.totalFinal.formatted),
+                  child: Text('${offer.name} • ${offer.totalFinal.formatted}'),
                 ),
             ],
             onChanged: (value) {
@@ -968,7 +951,7 @@ class _CreateOfferOrderDialogState extends State<_CreateOfferOrderDialog> {
             },
           ),
           DropdownButtonFormField<Party>(
-            value: _customer,
+            initialValue: _customer,
             decoration: const InputDecoration(labelText: 'العميل'),
             items: [
               for (final customer in widget.customers)
@@ -980,7 +963,7 @@ class _CreateOfferOrderDialogState extends State<_CreateOfferOrderDialog> {
             onChanged: (value) => setState(() => _customer = value),
           ),
           const SizedBox(height: 8),
-          Text('الإجمالي: ' + _offer.totalFinal.formatted),
+          Text('الإجمالي: ${_offer.totalFinal.formatted}'),
           if (_errorMessage != null)
             Text(
               _errorMessage!,

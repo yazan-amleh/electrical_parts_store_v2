@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart' as firebase_functions;
 
 import '../../../../core/commands/command_queue_repository.dart';
-import '../../../../core/errors/failure.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
 import '../../../../infrastructure/firebase/firebase_paths.dart';
@@ -80,7 +79,7 @@ class FirestoreOfferRepository implements OfferRepository {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'offer-' + offer.id,
+        commandId: 'offer-${offer.id}',
         operation: 'createOffer',
         idempotencyKey: offer.id,
         payload: payload,
@@ -102,9 +101,9 @@ class FirestoreOfferRepository implements OfferRepository {
     final payload = OfferCommandMapper.updateOfferRequest(offer);
     return _callVoid(
       context: context,
-      commandId: 'update-offer-' + offer.id,
+      commandId: 'update-offer-${offer.id}',
       operation: 'updateOffer',
-      idempotencyKey: 'update-' + offer.id,
+      idempotencyKey: 'update-${offer.id}',
       payload: payload,
       functionName: 'updateOffer',
     );
@@ -123,7 +122,7 @@ class FirestoreOfferRepository implements OfferRepository {
     );
     return _callVoid(
       context: context,
-      commandId: 'offer-active-' + offerId + '-' + isActive.toString(),
+      commandId: 'offer-active-${offerId}-${isActive}',
       operation: 'setOfferActive',
       idempotencyKey: 'offer-active-' + offerId + '-' + isActive.toString(),
       payload: payload,
@@ -142,9 +141,9 @@ class FirestoreOfferRepository implements OfferRepository {
     );
     return _callVoid(
       context: context,
-      commandId: 'archive-offer-' + offerId,
+      commandId: 'archive-offer-${offerId}',
       operation: 'archiveOffer',
-      idempotencyKey: 'archive-' + offerId,
+      idempotencyKey: 'archive-${offerId}',
       payload: payload,
       functionName: 'archiveOffer',
     );
@@ -196,7 +195,7 @@ class FirestoreOfferRepository implements OfferRepository {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'offer-order-' + order.id,
+        commandId: 'offer-order-${order.id}',
         operation: 'createOfferOrder',
         idempotencyKey: order.idempotencyKey.value,
         payload: payload,
@@ -238,9 +237,9 @@ class FirestoreOfferRepository implements OfferRepository {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'confirm-offer-order-' + order.id,
+        commandId: 'confirm-offer-order-${order.id}',
         operation: 'confirmOfferOrder',
-        idempotencyKey: 'confirm-' + order.id,
+        idempotencyKey: 'confirm-${order.id}',
         payload: payload,
       );
       if (queued != null) {
@@ -265,9 +264,9 @@ class FirestoreOfferRepository implements OfferRepository {
     );
     return _callVoid(
       context: context,
-      commandId: 'cancel-offer-order-' + orderId,
+      commandId: 'cancel-offer-order-${orderId}',
       operation: 'cancelOfferOrder',
-      idempotencyKey: 'cancel-' + orderId,
+      idempotencyKey: 'cancel-${orderId}',
       payload: payload,
       functionName: 'cancelOfferOrder',
     );

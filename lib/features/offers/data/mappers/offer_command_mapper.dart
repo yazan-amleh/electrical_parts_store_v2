@@ -65,7 +65,7 @@ abstract final class OfferCommandMapper {
     return <String, dynamic>{
       'storeId': order.storeId,
       'orderId': order.id,
-      'idempotencyKey': 'confirm-' + order.id,
+      'idempotencyKey': 'confirm-${order.id}',
       'postedAt': DateTime.now().toUtc().toIso8601String(),
       'paymentMethod': paymentMethod.name,
       'postingAccounts': <String, dynamic>{

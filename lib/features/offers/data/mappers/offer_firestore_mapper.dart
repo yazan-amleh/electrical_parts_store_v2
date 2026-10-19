@@ -129,7 +129,7 @@ abstract final class OfferFirestoreMapper {
   }) {
     final productId = _string(data['productId']);
     return OfferLine(
-      id: _string(data['id'], productId + '-line'),
+      id: _string(data['id'], '$productId-line'),
       productId: productId,
       productName: _string(data['productName'], productId),
       originalUnitPrice: Money(
