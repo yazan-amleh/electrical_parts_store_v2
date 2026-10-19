@@ -147,5 +147,4 @@ class FirestoreProductRepository implements ProductRepository {
       );
     }
   }
-
 }
