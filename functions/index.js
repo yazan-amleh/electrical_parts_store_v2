@@ -183,14 +183,13 @@ function parsePurchaseCommand(rawCommand) {
     invalid('An input tax account is required when tax is present.');
   }
 
-  const accountIds = [
+  const providedAccountIds = [
+    accounts.settlementAccountId,
     accounts.inventoryAccountId,
-    paymentAccountId,
-  ];
-  if (taxMinorUnits > 0) {
-    accountIds.push(accounts.inputTaxAccountId);
-  }
-  if (new Set(accountIds).size !== accountIds.length) {
+    accounts.supplierPayableAccountId,
+    accounts.inputTaxAccountId,
+  ].filter(Boolean);
+  if (new Set(providedAccountIds).size !== providedAccountIds.length) {
     invalid('Purchase posting accounts must be distinct.');
   }
 
@@ -897,16 +896,15 @@ function parseCommand(rawCommand) {
     );
   }
 
-  const accountIds = [
-    paymentAccountId,
+  const providedAccountIds = [
+    accounts.settlementAccountId,
+    accounts.customerReceivableAccountId,
     accounts.salesAccountId,
     accounts.inventoryAccountId,
     accounts.costOfSalesAccountId,
-  ];
-  if (accounts.taxAccountId) {
-    accountIds.push(accounts.taxAccountId);
-  }
-  if (new Set(accountIds).size !== accountIds.length) {
+    accounts.taxAccountId,
+  ].filter(Boolean);
+  if (new Set(providedAccountIds).size !== providedAccountIds.length) {
     invalid('Sale posting accounts must be distinct.');
   }
 
