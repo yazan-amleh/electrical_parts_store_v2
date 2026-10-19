@@ -104,7 +104,7 @@ abstract final class ProductFirestoreMapper {
     }
 
     return raw
-        .whereType<Map>()
+        .whereType<Map<String, dynamic>>()
         .map(
           (value) => _unitFromMap(
             value.cast<String, dynamic>(),
@@ -123,7 +123,7 @@ abstract final class ProductFirestoreMapper {
     required String currency,
   }) {
     return ProductUnit(
-      id: _string(data['id'], productId + '-unit'),
+      id: _string(data['id'], '$productId-unit'),
       productId: productId,
       storeId: storeId,
       unitId: _string(data['unitId'], ''),
