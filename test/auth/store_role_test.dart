@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../lib/features/auth/domain/enums/store_role.dart';
+import 'package:electrical_parts_store_v2/features/auth/domain/enums/store_role.dart';
 
 void main() {
   test('owner and admin can manage the store', () {
