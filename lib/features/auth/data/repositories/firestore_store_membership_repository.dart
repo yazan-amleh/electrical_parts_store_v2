@@ -8,8 +8,7 @@ import '../../domain/entities/store_membership.dart';
 import '../../domain/repositories/store_membership_repository.dart';
 import '../mappers/store_membership_firestore_mapper.dart';
 
-class FirestoreStoreMembershipRepository
-    implements StoreMembershipRepository {
+class FirestoreStoreMembershipRepository implements StoreMembershipRepository {
   FirestoreStoreMembershipRepository({
     required FirebaseFirestore firestore,
   }) : _firestore = firestore;
