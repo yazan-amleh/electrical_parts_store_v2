@@ -1,0 +1,25 @@
+name: format-diff-probe
+
+on:
+  push:
+    branches:
+      - v2/foundation
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Show format diff
+        run: |
+          cp lib/features/dashboard/presentation/dashboard_page.dart /tmp/dashboard_before.dart
+          dart format lib/features/dashboard/presentation/dashboard_page.dart
+          diff -u /tmp/dashboard_before.dart lib/features/dashboard/presentation/dashboard_page.dart || true
+          echo FORMAT_DASHBOARD_BEGIN
+          cat lib/features/dashboard/presentation/dashboard_page.dart
+          echo FORMAT_DASHBOARD_END
