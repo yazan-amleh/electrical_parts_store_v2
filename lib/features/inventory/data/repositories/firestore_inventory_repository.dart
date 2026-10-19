@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/errors/failure.dart';
+import '../../../../core/money/money.dart';
 import '../../../../core/quantity/quantity.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
@@ -88,6 +89,14 @@ class FirestoreInventoryRepository implements InventoryRepository {
               ValidationFailure('Services cannot receive stock movements.'),
             );
           }
+          if (movement.unitCost.currency != product.inventoryValue.currency ||
+              movement.totalCost.currency != product.inventoryValue.currency) {
+            return const FailureResult<InventoryMovement>(
+              ValidationFailure(
+                'Inventory movement currency does not match the product.',
+              ),
+            );
+          }
 
           final nextQuantity = product.quantityOnHand + movement.quantityDelta;
           if (!allowNegativeStock && nextQuantity.isNegative) {
@@ -96,10 +105,22 @@ class FirestoreInventoryRepository implements InventoryRepository {
             );
           }
 
+          final nextInventoryValue = movement.quantityDelta.isNegative
+              ? product.inventoryValue - movement.totalCost
+              : product.inventoryValue + movement.totalCost;
+          if (nextInventoryValue.isNegative) {
+            return const FailureResult<InventoryMovement>(
+              ValidationFailure(
+                'The movement would create a negative inventory value.',
+              ),
+            );
+          }
+
           transaction.update(
             productReference,
             <String, dynamic>{
               'quantityOnHandMilliUnits': nextQuantity.milliUnits,
+              'inventoryValueMinorUnits': nextInventoryValue.minorUnits,
               'updatedAt': FieldValue.serverTimestamp(),
             },
           );
