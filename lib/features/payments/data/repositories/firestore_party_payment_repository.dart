@@ -1,5 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart' as firebase_functions;
 
+import '../../../../core/commands/command_queue_repository.dart';
 import '../../../../core/errors/failure.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
@@ -7,18 +8,22 @@ import '../../domain/entities/party_payment.dart';
 import '../../domain/entities/party_payment_posting_plan.dart';
 import '../../domain/repositories/party_payment_repository.dart';
 import '../../domain/services/party_payment_posting_planner.dart';
+import '../../../../infrastructure/queue/cloud_function_queue_fallback.dart';
 import '../mappers/party_payment_command_mapper.dart';
 
 class FirestorePartyPaymentRepository implements PartyPaymentRepository {
   FirestorePartyPaymentRepository({
     required firebase_functions.FirebaseFunctions functions,
+    CommandQueueRepository? commandQueue,
     PartyPaymentPostingPlanner planner =
         const PartyPaymentPostingPlanner(),
   })  : _functions = functions,
-        _planner = planner;
+        _planner = planner,
+        _commandQueue = commandQueue;
 
   final firebase_functions.FirebaseFunctions _functions;
   final PartyPaymentPostingPlanner _planner;
+  final CommandQueueRepository? _commandQueue;
 
   @override
   Future<Result<PartyPaymentPostingPlan>> postPartyPayment({
@@ -56,6 +61,27 @@ class FirestorePartyPaymentRepository implements PartyPaymentRepository {
 
       return Success<PartyPaymentPostingPlan>(plan);
     } on firebase_functions.FirebaseFunctionsException catch (error) {
+      if (_commandQueue != null &&
+          CloudFunctionQueueFallback.isTransient(error)) {
+        final commandId = 'payment-' + payment.id;
+        final queueFailure = await CloudFunctionQueueFallback.enqueue(
+          repository: _commandQueue!,
+          context: context,
+          commandId: commandId,
+          operation: 'postPartyPayment',
+          idempotencyKey: payment.idempotencyKey.value,
+          payload: PartyPaymentCommandMapper.toRequest(
+            payment: payment,
+            accounts: accounts,
+          ),
+        );
+        if (queueFailure != null) {
+          return FailureResult<PartyPaymentPostingPlan>(queueFailure);
+        }
+        return FailureResult<PartyPaymentPostingPlan>(
+          QueuedFailure(commandId: commandId),
+        );
+      }
       return FailureResult<PartyPaymentPostingPlan>(_mapFailure(error));
     } catch (error) {
       return FailureResult<PartyPaymentPostingPlan>(
