@@ -99,6 +99,12 @@ async function seedStore() {
       partyType: 'customer',
       partyId: 'customer-1',
     });
+    await setDoc(storeDoc(db, 'parties', 'customer-1'), {
+      storeId: STORE_ID,
+      partyType: 'customer',
+      name: 'Customer 1',
+      isActive: true,
+    });
     await setDoc(storeDoc(db, 'party_balances', 'customer-1'), {
       storeId: STORE_ID,
       partyType: 'customer',
@@ -210,6 +216,56 @@ describe('Firestore security rules', function () {
         storeId: STORE_ID,
         productId: 'product-1',
         quantityDeltaMilliUnits: 1000,
+      }),
+    );
+  });
+
+  it('protects party directory writes by role and tenant', async () => {
+    await assertSucceeds(
+      getDoc(storeDoc(accountantDb, 'parties', 'customer-1')),
+    );
+
+    await assertSucceeds(
+      setDoc(storeDoc(salesDb, 'parties', 'customer-2'), {
+        storeId: STORE_ID,
+        partyType: 'customer',
+        name: 'Customer 2',
+        isActive: true,
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(storeDoc(salesDb, 'parties', 'customer-2'), {
+        name: 'Renamed Customer',
+      }),
+    );
+    await assertFails(
+      updateDoc(storeDoc(salesDb, 'parties', 'customer-2'), {
+        partyType: 'supplier',
+      }),
+    );
+    await assertFails(
+      deleteDoc(storeDoc(salesDb, 'parties', 'customer-2')),
+    );
+    await assertFails(
+      setDoc(storeDoc(warehouseDb, 'parties', 'customer-3'), {
+        storeId: STORE_ID,
+        partyType: 'customer',
+        name: 'Warehouse Customer',
+      }),
+    );
+    await assertFails(
+      setDoc(storeDoc(salesDb, 'parties', 'foreign-party'), {
+        storeId: 'store-b',
+        partyType: 'customer',
+        name: 'Foreign Customer',
+      }),
+    );
+    await assertFails(
+      setDoc(storeDoc(accountantDb, 'party_balances', 'customer-2'), {
+        storeId: STORE_ID,
+        partyType: 'customer',
+        partyId: 'customer-2',
+        balanceMinorUnits: 100,
       }),
     );
   });
