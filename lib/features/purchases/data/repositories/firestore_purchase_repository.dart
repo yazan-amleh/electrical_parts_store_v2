@@ -1,5 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart' as firebase_functions;
 
+import '../../../../core/commands/command_queue_repository.dart';
 import '../../../../core/errors/failure.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
@@ -7,17 +8,21 @@ import '../../domain/entities/purchase.dart';
 import '../../domain/entities/purchase_posting_plan.dart';
 import '../../domain/repositories/purchase_repository.dart';
 import '../../domain/services/purchase_posting_planner.dart';
+import '../../../../infrastructure/queue/cloud_function_queue_fallback.dart';
 import '../mappers/purchase_command_mapper.dart';
 
 class FirestorePurchaseRepository implements PurchaseRepository {
   FirestorePurchaseRepository({
     required firebase_functions.FirebaseFunctions functions,
+    CommandQueueRepository? commandQueue,
     PurchasePostingPlanner planner = const PurchasePostingPlanner(),
   })  : _functions = functions,
-        _planner = planner;
+        _planner = planner,
+        _commandQueue = commandQueue;
 
   final firebase_functions.FirebaseFunctions _functions;
   final PurchasePostingPlanner _planner;
+  final CommandQueueRepository? _commandQueue;
 
   @override
   Future<Result<PurchasePostingPlan>> postPurchase({
@@ -55,6 +60,27 @@ class FirestorePurchaseRepository implements PurchaseRepository {
 
       return Success<PurchasePostingPlan>(plan);
     } on firebase_functions.FirebaseFunctionsException catch (error) {
+      if (_commandQueue != null &&
+          CloudFunctionQueueFallback.isTransient(error)) {
+        final commandId = 'purchase-' + purchase.id;
+        final queueFailure = await CloudFunctionQueueFallback.enqueue(
+          repository: _commandQueue!,
+          context: context,
+          commandId: commandId,
+          operation: 'postPurchase',
+          idempotencyKey: purchase.idempotencyKey.value,
+          payload: PurchaseCommandMapper.toRequest(
+            purchase: purchase,
+            accounts: accounts,
+          ),
+        );
+        if (queueFailure != null) {
+          return FailureResult<PurchasePostingPlan>(queueFailure);
+        }
+        return FailureResult<PurchasePostingPlan>(
+          QueuedFailure(commandId: commandId),
+        );
+      }
       return FailureResult<PurchasePostingPlan>(_mapFailure(error));
     } catch (error) {
       return FailureResult<PurchasePostingPlan>(
