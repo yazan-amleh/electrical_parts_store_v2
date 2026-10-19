@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: flutter-checks-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze-and-test:
     runs-on: ubuntu-latest
