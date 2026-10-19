@@ -37,7 +37,7 @@ abstract final class QueuedCommandFirestoreMapper {
       orElse: () => QueuedCommandStatus.pending,
     );
     final rawPayload = data['payload'];
-    final payload = rawPayload is Map
+    final payload = rawPayload is Map<String, dynamic>
         ? Map<String, dynamic>.from(rawPayload)
         : <String, dynamic>{};
 
