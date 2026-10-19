@@ -1,0 +1,28 @@
+name: electrical_parts_store_v2
+description: Clean, portable accounting and electrical parts store platform.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  firebase_core: ^3.15.0
+  cloud_firestore: ^5.6.7
+  firebase_auth: ^5.5.3
+  firebase_storage: ^12.4.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  test: ^1.25.8
+
+flutter:
+  uses-material-design: true
+  generate: true
