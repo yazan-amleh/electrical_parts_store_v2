@@ -40,7 +40,9 @@ class Quantity implements Comparable<Quantity> {
 
   String get formatted {
     final raw = value.toStringAsFixed(3);
-    return raw.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+    return raw
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
   }
 
   @override
