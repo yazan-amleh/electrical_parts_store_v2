@@ -225,9 +225,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
     }
     if (result is Success<void>) {
       _showMessage(
-        initialCategory == null
-            ? 'تمت إضافة التصنيف.'
-            : 'تم تحديث التصنيف.',
+        initialCategory == null ? 'تمت إضافة التصنيف.' : 'تم تحديث التصنيف.',
       );
       await _loadCategories();
     }
@@ -345,9 +343,7 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
 
     return AlertDialog(
       title: Text(
-        widget.initialCategory == null
-            ? 'إضافة تصنيف'
-            : 'تعديل التصنيف',
+        widget.initialCategory == null ? 'إضافة تصنيف' : 'تعديل التصنيف',
       ),
       content: SizedBox(
         width: 460,
@@ -381,7 +377,8 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
                 ),
               ],
               onChanged: (value) {
-                setState(() => _parentId = value?.isEmpty == true ? null : value);
+                setState(
+                    () => _parentId = value?.isEmpty == true ? null : value);
               },
             ),
             SwitchListTile(
