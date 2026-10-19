@@ -16,6 +16,9 @@ abstract final class QueuedCommandFirestoreMapper {
       'nextAttemptAt': command.nextAttemptAt == null
           ? null
           : Timestamp.fromDate(command.nextAttemptAt!),
+      'leaseUntil': command.leaseUntil == null
+          ? null
+          : Timestamp.fromDate(command.leaseUntil!),
       'lastError': command.lastError,
       'updatedAt': FieldValue.serverTimestamp(),
     };
@@ -49,6 +52,7 @@ abstract final class QueuedCommandFirestoreMapper {
       status: status,
       attemptCount: _int(data['attemptCount']),
       nextAttemptAt: _date(data['nextAttemptAt']),
+      leaseUntil: _date(data['leaseUntil']),
       lastError: data['lastError'] as String?,
     );
   }
