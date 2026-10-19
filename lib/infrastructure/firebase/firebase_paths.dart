@@ -36,6 +36,20 @@ abstract final class FirebasePaths {
     return store(firestore, storeId).collection('journal_entries');
   }
 
+  static CollectionReference<Map<String, dynamic>> inventoryMovements(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('inventory_movements');
+  }
+
+  static CollectionReference<Map<String, dynamic>> inventoryIdempotency(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('inventory_idempotency');
+  }
+
   static CollectionReference<Map<String, dynamic>> accountBalances(
     FirebaseFirestore firestore,
     String storeId,
