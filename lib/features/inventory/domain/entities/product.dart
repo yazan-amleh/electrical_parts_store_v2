@@ -42,7 +42,8 @@ class Product {
     }
     for (final unit in this.units) {
       if (unit.productId != id || unit.storeId != storeId) {
-        throw ArgumentError('Product unit belongs to another product or store.');
+        throw ArgumentError(
+            'Product unit belongs to another product or store.');
       }
       if (unit.retailPrice.currency != purchasePrice.currency ||
           unit.wholesalePrice.currency != purchasePrice.currency) {
