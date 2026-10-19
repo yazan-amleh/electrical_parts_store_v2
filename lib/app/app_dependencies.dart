@@ -1,5 +1,6 @@
 import '../core/config/app_runtime_config.dart';
 import '../features/accounting/domain/repositories/accounting_query_repository.dart';
+import '../features/offers/domain/repositories/offer_repository.dart;
 import '../features/accounting/domain/repositories/accounting_repository.dart';
 import '../features/categories/domain/repositories/category_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
@@ -25,6 +26,7 @@ class AppDependencies {
     this.saleRepository,
     this.purchaseRepository,
     this.purchaseOrderRepository,
+    this.offerRepository,
     this.expenseRepository,
     this.partyPaymentRepository,
     this.partyRepository,
@@ -41,6 +43,7 @@ class AppDependencies {
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
   final PurchaseOrderRepository? purchaseOrderRepository;
+  final OfferRepository? offerRepository;
   final ExpenseRepository? expenseRepository;
   final PartyPaymentRepository? partyPaymentRepository;
   final PartyRepository? partyRepository;

@@ -57,6 +57,44 @@ abstract final class FirebasePaths {
     return store(firestore, storeId).collection('sale_idempotency');
   }
 
+  static CollectionReference<Map<String, dynamic>> offers(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('offers');
+  }
+
+  static CollectionReference<Map<String, dynamic>> offerIdempotency(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('offer_idempotency');
+  }
+
+  static CollectionReference<Map<String, dynamic>> offerOrders(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('offer_orders');
+  }
+
+  static CollectionReference<Map<String, dynamic>> offerOrderIdempotency(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('offer_order_idempotency');
+  }
+
+  static CollectionReference<Map<String, dynamic>>
+      offerOrderConfirmationIdempotency(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection(
+      'offer_order_confirmation_idempotency',
+    );
+  }
+
   static CollectionReference<Map<String, dynamic>> purchases(
     FirebaseFirestore firestore,
     String storeId,
