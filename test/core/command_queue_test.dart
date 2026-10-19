@@ -99,4 +99,18 @@ void main() {
       QueuedCommandStatus.failed,
     );
   });
+  test('reclaims a processing command after its lease expires', () async {
+    final repository = InMemoryCommandQueueRepository();
+    final queued = command().processing(now: createdAt);
+    await repository.save(context: context, command: queued);
+
+    final due = await repository.getDue(
+      context: context,
+      now: createdAt.add(const Duration(minutes: 6)),
+    );
+
+    expect(due, isA<Success<List<QueuedCommand>>>());
+    expect((due as Success<List<QueuedCommand>>).value, hasLength(1));
+  });
+
 }
