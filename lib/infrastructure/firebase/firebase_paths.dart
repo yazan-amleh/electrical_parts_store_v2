@@ -57,6 +57,20 @@ abstract final class FirebasePaths {
     return store(firestore, storeId).collection('purchase_idempotency');
   }
 
+  static CollectionReference<Map<String, dynamic>> partyLedgerEntries(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('party_ledger_entries');
+  }
+
+  static CollectionReference<Map<String, dynamic>> partyBalances(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('party_balances');
+  }
+
   static CollectionReference<Map<String, dynamic>> journalEntries(
     FirebaseFirestore firestore,
     String storeId,
