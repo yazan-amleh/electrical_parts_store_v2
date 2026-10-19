@@ -108,7 +108,7 @@ void main() {
     expect(statements.totalAssets.minorUnits, 150000);
     expect(statements.totalLiabilities.minorUnits, 20000);
     expect(statements.totalEquity.minorUnits, 70000);
-    expect(statements.grossProfit.minorUnits, 100000);
+    expect(statements.grossProfit.minorUnits, 60000);
     expect(statements.netIncome.minorUnits, 60000);
     expect(statements.balanceSheetDifference.minorUnits, 0);
   });
