@@ -92,13 +92,51 @@ class FirestoreProductRepository implements ProductRepository {
         AuthorizationFailure('Product does not belong to the active store.'),
       );
     }
+    if (product.id.contains('/')) {
+      return const FailureResult<void>(
+        ValidationFailure('Product identifiers cannot contain a slash.'),
+      );
+    }
 
     try {
-      await FirebasePaths.products(
-        _firestore,
-        context.storeId,
-      ).doc(product.id).set(ProductFirestoreMapper.toMap(product));
-      return const Success<void>(null);
+      return await _firestore.runTransaction<Result<void>>(
+        (transaction) async {
+          final productReference = FirebasePaths.products(
+            _firestore,
+            context.storeId,
+          ).doc(product.id);
+          final existingSnapshot = await transaction.get(productReference);
+
+          if (existingSnapshot.exists) {
+            final existingProduct =
+                ProductFirestoreMapper.fromSnapshot(existingSnapshot);
+            if (existingProduct.storeId != context.storeId) {
+              return const FailureResult<void>(
+                AuthorizationFailure('Product belongs to another store.'),
+              );
+            }
+            if (existingProduct.quantityOnHand != product.quantityOnHand) {
+              return const FailureResult<void>(
+                ValidationFailure(
+                  'Stock changes must be posted as inventory movements.',
+                ),
+              );
+            }
+          } else if (!product.quantityOnHand.isZero) {
+            return const FailureResult<void>(
+              ValidationFailure(
+                'Opening stock must be posted as an inventory movement.',
+              ),
+            );
+          }
+
+          transaction.set(
+            productReference,
+            ProductFirestoreMapper.toMap(product),
+          );
+          return const Success<void>(null);
+        },
+      );
     } on FirebaseException catch (error) {
       return FailureResult<void>(
         InfrastructureFailure(error.message ?? error.code),
@@ -109,4 +147,5 @@ class FirestoreProductRepository implements ProductRepository {
       );
     }
   }
+
 }
