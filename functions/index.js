@@ -2515,7 +2515,7 @@ function assertAccount(
     invalid('Account is not postable: ' + accountId);
   }
   if (account.currency !== currency) {
-    invalid('Account currency does not match the sale.');
+    invalid('Account currency does not match the transaction.');
   }
   if (account.type !== expectedType) {
     invalid('Account type is invalid: ' + accountId);
