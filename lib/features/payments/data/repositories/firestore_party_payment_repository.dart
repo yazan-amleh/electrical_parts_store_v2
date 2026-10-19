@@ -62,9 +62,9 @@ class FirestorePartyPaymentRepository implements PartyPaymentRepository {
     } on firebase_functions.FirebaseFunctionsException catch (error) {
       if (_commandQueue != null &&
           CloudFunctionQueueFallback.isTransient(error)) {
-        final commandId = 'payment-' + payment.id;
+        final commandId = 'payment-${payment.id}';
         final queueFailure = await CloudFunctionQueueFallback.enqueue(
-          repository: _commandQueue!,
+          repository: _commandQueue,
           context: context,
           commandId: commandId,
           operation: 'postPartyPayment',

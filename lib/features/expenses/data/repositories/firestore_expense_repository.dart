@@ -61,9 +61,9 @@ class FirestoreExpenseRepository implements ExpenseRepository {
     } on firebase_functions.FirebaseFunctionsException catch (error) {
       if (_commandQueue != null &&
           CloudFunctionQueueFallback.isTransient(error)) {
-        final commandId = 'expense-' + expense.id;
+        final commandId = 'expense-${expense.id}';
         final queueFailure = await CloudFunctionQueueFallback.enqueue(
-          repository: _commandQueue!,
+          repository: _commandQueue,
           context: context,
           commandId: commandId,
           operation: 'postExpense',

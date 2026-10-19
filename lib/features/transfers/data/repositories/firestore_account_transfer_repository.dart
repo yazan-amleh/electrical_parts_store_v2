@@ -59,9 +59,9 @@ class FirestoreAccountTransferRepository implements AccountTransferRepository {
     } on firebase_functions.FirebaseFunctionsException catch (error) {
       if (_commandQueue != null &&
           CloudFunctionQueueFallback.isTransient(error)) {
-        final commandId = 'transfer-' + transfer.id;
+        final commandId = 'transfer-${transfer.id}';
         final queueFailure = await CloudFunctionQueueFallback.enqueue(
-          repository: _commandQueue!,
+          repository: _commandQueue,
           context: context,
           commandId: commandId,
           operation: 'postAccountTransfer',

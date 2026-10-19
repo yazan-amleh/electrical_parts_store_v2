@@ -111,10 +111,10 @@ class _ProductsPageState extends State<ProductsPage> {
               [
                 if (product.sku?.isNotEmpty == true) 'SKU: ' + product.sku!,
                 if (product.barcode?.isNotEmpty == true)
-                  'باركود: ' + product.barcode!,
+                  'باركود: ${product.barcode}',
                 product.isService
                     ? 'خدمة'
-                    : 'الرصيد: ' + product.quantityOnHand.formatted,
+                    : 'الرصيد: ${product.quantityOnHand.formatted}',
               ].join(' • '),
             ),
             trailing: Column(

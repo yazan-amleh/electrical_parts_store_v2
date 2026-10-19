@@ -8,6 +8,7 @@ import '../../../accounting/domain/entities/journal_line.dart';
 import '../../../parties/domain/entities/party_ledger_entry.dart';
 import '../../../parties/domain/enums/party_type.dart';
 import '../entities/expense.dart';
+import '../enums/expense_payment_method.dart';
 import '../entities/expense_posting_plan.dart';
 
 class ExpensePostingPlanner {

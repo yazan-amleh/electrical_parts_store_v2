@@ -130,7 +130,7 @@ class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
           credit.currency != account.currency) {
         return FailureResult<TrialBalance>(
           ValidationFailure(
-            'Balance currency does not match account ' + account.id + '.',
+            'Balance currency does not match account ${account.id}.',
           ),
         );
       }

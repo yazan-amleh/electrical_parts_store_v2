@@ -53,7 +53,8 @@ class QueuedCommand {
   bool isDue(DateTime now) {
     final currentTime = now.toUtc();
     if (status == QueuedCommandStatus.processing) {
-      return leaseUntil == null || !leaseUntil.isAfter(currentTime);
+      final lease = leaseUntil;
+      return lease == null || !lease.isAfter(currentTime);
     }
     if (status != QueuedCommandStatus.pending) {
       return false;
