@@ -217,8 +217,7 @@ class _AccountTransfersPageState extends State<AccountTransfersPage> {
       return;
     }
 
-    final transferId =
-        'transfer-\${DateTime.now().microsecondsSinceEpoch}';
+    final transferId = 'transfer-\${DateTime.now().microsecondsSinceEpoch}';
     final transfer = AccountTransfer(
       id: transferId,
       storeId: widget.membership.storeId,
