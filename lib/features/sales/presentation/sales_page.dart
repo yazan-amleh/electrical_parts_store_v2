@@ -299,7 +299,7 @@ class _SalesPageState extends State<SalesPage> {
           Row(
             children: [
               Text(
-                '${item.subtotal.formatted}',
+                item.subtotal.formatted,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const Spacer(),
@@ -328,7 +328,7 @@ class _SalesPageState extends State<SalesPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DropdownButtonFormField<SalePaymentMethod>(
-            value: _paymentMethod,
+            initialValue: _paymentMethod,
             decoration: const InputDecoration(
               labelText: 'طريقة الدفع',
               prefixIcon: Icon(Icons.payments_outlined),
@@ -496,7 +496,7 @@ class _SalesPageState extends State<SalesPage> {
       lines: _cart.values
           .map(
             (item) => SaleLine(
-              id: '${saleId}-${item.product.id}',
+              id: '$saleId-${item.product.id}',
               productId: item.product.id,
               description: item.product.name,
               quantity: item.quantity,
