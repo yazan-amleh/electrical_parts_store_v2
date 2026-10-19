@@ -1,0 +1,40 @@
+name: Offer format probe
+
+on:
+  push:
+    branches:
+      - v2/foundation
+
+jobs:
+  format-probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - name: Print formatted offer files
+        run: |
+          set -e
+          for file in \
+            lib/app/app_dependencies.dart \
+            lib/app/bootstrap.dart \
+            lib/infrastructure/firebase/firebase_paths.dart \
+            lib/features/shell/presentation/app_shell_page.dart \
+            lib/features/offers/domain/enums/offer_price_type.dart \
+            lib/features/offers/domain/enums/offer_order_status.dart \
+            lib/features/offers/domain/entities/offer_line.dart \
+            lib/features/offers/domain/entities/offer.dart \
+            lib/features/offers/domain/entities/offer_order.dart \
+            lib/features/offers/domain/entities/offer_order_confirmation.dart \
+            lib/features/offers/domain/repositories/offer_repository.dart \
+            lib/features/offers/data/mappers/offer_firestore_mapper.dart \
+            lib/features/offers/data/mappers/offer_command_mapper.dart \
+            lib/features/offers/data/repositories/firestore_offer_repository.dart \
+            lib/features/offers/presentation/offers_page.dart
+          do
+            echo "###BEGIN $file"
+            dart format --output=show "$file"
+            echo "###END $file"
+          done
