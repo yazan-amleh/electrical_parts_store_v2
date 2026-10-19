@@ -103,7 +103,8 @@ service cloud.firestore {
             'postSale',
             'postPurchase',
             'postPartyPayment',
-            'postExpense'
+            'postExpense',
+            'postAccountTransfer'
           ] &&
           request.resource.data.idempotencyKey is string;
         allow update: if canReadStore(storeId) &&
@@ -112,6 +113,15 @@ service cloud.firestore {
           request.resource.data.createdBy == request.auth.uid;
         allow delete: if canReadStore(storeId) &&
           resource.data.createdBy == request.auth.uid;
+      }
+
+      match /account_transfers/{transferId} {
+        allow read: if canReadStore(storeId);
+        allow create, update, delete: if false;
+      }
+
+      match /account_transfer_idempotency/{key} {
+        allow read, write: if false;
       }
 
       match /expenses/{expenseId} {
