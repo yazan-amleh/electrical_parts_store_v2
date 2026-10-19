@@ -1,23 +1,30 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart' as firebase_functions;
 
+import '../../../../core/commands/command_queue_repository.dart';
 import '../../../../core/errors/failure.dart';
 import '../../../../core/quantity/quantity.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
 import '../../../../infrastructure/firebase/firebase_paths.dart';
+import '../../../../infrastructure/queue/cloud_function_queue_fallback.dart';
 import '../../domain/entities/inventory_movement.dart';
 import '../../domain/repositories/inventory_repository.dart';
-import '../mappers/inventory_movement_firestore_mapper.dart';
+import '../mappers/inventory_movement_command_mapper.dart';
 import '../mappers/product_firestore_mapper.dart';
 
 class FirestoreInventoryRepository implements InventoryRepository {
   FirestoreInventoryRepository({
     required FirebaseFirestore firestore,
-    this.allowNegativeStock = false,
-  }) : _firestore = firestore;
+    required firebase_functions.FirebaseFunctions functions,
+    CommandQueueRepository? commandQueue,
+  })  : _firestore = firestore,
+        _functions = functions,
+        _commandQueue = commandQueue;
 
   final FirebaseFirestore _firestore;
-  final bool allowNegativeStock;
+  final firebase_functions.FirebaseFunctions _functions;
+  final CommandQueueRepository? _commandQueue;
 
   @override
   Future<Result<InventoryMovement>> postMovement({
@@ -39,111 +46,39 @@ class FirestoreInventoryRepository implements InventoryRepository {
       );
     }
 
+    final payload = InventoryMovementCommandMapper.toRequest(movement);
+
     try {
-      return await _firestore.runTransaction<Result<InventoryMovement>>(
-        (transaction) async {
-          final productReference = FirebasePaths.products(
-            _firestore,
-            context.storeId,
-          ).doc(movement.productId);
-          final movementReference = FirebasePaths.inventoryMovements(
-            _firestore,
-            context.storeId,
-          ).doc(movement.id);
-          final idempotencyReference = FirebasePaths.inventoryIdempotency(
-            _firestore,
-            context.storeId,
-          ).doc(movement.idempotencyKey);
-
-          final idempotencySnapshot =
-              await transaction.get(idempotencyReference);
-          if (idempotencySnapshot.exists) {
-            final existingMovementId =
-                idempotencySnapshot.data()?['movementId'] as String?;
-            if (existingMovementId == movement.id) {
-              return Success<InventoryMovement>(movement);
-            }
-            return const FailureResult<InventoryMovement>(
-              ConflictFailure(
-                'The inventory idempotency key is already assigned.',
-              ),
-            );
-          }
-
-          final productSnapshot = await transaction.get(productReference);
-          if (!productSnapshot.exists) {
-            return const FailureResult<InventoryMovement>(
-              ValidationFailure('Product was not found.'),
-            );
-          }
-
-          final product = ProductFirestoreMapper.fromSnapshot(productSnapshot);
-          if (product.storeId != context.storeId) {
-            return const FailureResult<InventoryMovement>(
-              AuthorizationFailure('Product belongs to another store.'),
-            );
-          }
-          if (product.isService) {
-            return const FailureResult<InventoryMovement>(
-              ValidationFailure('Services cannot receive stock movements.'),
-            );
-          }
-          if (movement.unitCost.currency != product.inventoryValue.currency ||
-              movement.totalCost.currency != product.inventoryValue.currency) {
-            return const FailureResult<InventoryMovement>(
-              ValidationFailure(
-                'Inventory movement currency does not match the product.',
-              ),
-            );
-          }
-
-          final nextQuantity = product.quantityOnHand + movement.quantityDelta;
-          if (!allowNegativeStock && nextQuantity.isNegative) {
-            return const FailureResult<InventoryMovement>(
-              ValidationFailure('The movement would create negative stock.'),
-            );
-          }
-
-          final nextInventoryValue = movement.quantityDelta.isNegative
-              ? product.inventoryValue - movement.totalCost
-              : product.inventoryValue + movement.totalCost;
-          if (nextInventoryValue.isNegative) {
-            return const FailureResult<InventoryMovement>(
-              ValidationFailure(
-                'The movement would create a negative inventory value.',
-              ),
-            );
-          }
-
-          transaction.update(
-            productReference,
-            <String, dynamic>{
-              'quantityOnHandMilliUnits': nextQuantity.milliUnits,
-              'inventoryValueMinorUnits': nextInventoryValue.minorUnits,
-              'updatedAt': FieldValue.serverTimestamp(),
-            },
-          );
-          transaction.set(
-            movementReference,
-            InventoryMovementFirestoreMapper.toMap(movement),
-          );
-          transaction.set(
-            idempotencyReference,
-            <String, dynamic>{
-              'storeId': context.storeId,
-              'movementId': movement.id,
-              'idempotencyKey': movement.idempotencyKey,
-              'createdAt': FieldValue.serverTimestamp(),
-            },
-          );
-
-          return Success<InventoryMovement>(movement);
-        },
-      );
-    } on FirebaseException catch (error) {
-      return FailureResult<InventoryMovement>(
-        InfrastructureFailure(error.message ?? error.code),
-      );
+      final callable = _functions.httpsCallable('postInventoryMovement');
+      final response = await callable.call<Map<String, dynamic>>(payload);
+      if (response.data['movementId'] != movement.id) {
+        return const FailureResult<InventoryMovement>(
+          InfrastructureFailure(
+            'The inventory service returned another movement id.',
+          ),
+        );
+      }
+      return Success<InventoryMovement>(movement);
+    } on firebase_functions.FirebaseFunctionsException catch (error) {
+      if (_commandQueue != null &&
+          CloudFunctionQueueFallback.isTransient(error)) {
+        final commandId = 'inventory-' + movement.id;
+        final queueFailure = await CloudFunctionQueueFallback.enqueue(
+          repository: _commandQueue!,
+          context: context,
+          commandId: commandId,
+          operation: 'postInventoryMovement',
+          idempotencyKey: movement.idempotencyKey,
+          payload: payload,
+        );
+        if (queueFailure != null) {
+          return FailureResult<InventoryMovement>(queueFailure);
+        }
+        return FailureResult<InventoryMovement>(
+          QueuedFailure(commandId: commandId),
+        );
+      }
+      return FailureResult<InventoryMovement>(_mapFailure(error));
     } catch (error) {
       return FailureResult<InventoryMovement>(
         InfrastructureFailure(error.toString()),
@@ -183,6 +118,30 @@ class FirestoreInventoryRepository implements InventoryRepository {
       return FailureResult<Quantity>(
         InfrastructureFailure(error.toString()),
       );
+    }
+  }
+
+  Failure _mapFailure(
+    firebase_functions.FirebaseFunctionsException error,
+  ) {
+    switch (error.code) {
+      case 'permission-denied':
+      case 'unauthenticated':
+        return AuthorizationFailure(
+          error.message ?? 'Inventory movement is not authorized.',
+        );
+      case 'invalid-argument':
+      case 'failed-precondition':
+        return ValidationFailure(
+          error.message ?? 'Inventory movement is invalid.',
+        );
+      case 'already-exists':
+      case 'aborted':
+        return ConflictFailure(
+          error.message ?? 'Inventory movement conflicts with existing data.',
+        );
+      default:
+        return InfrastructureFailure(error.message ?? error.code);
     }
   }
 }
