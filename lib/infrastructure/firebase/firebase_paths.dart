@@ -64,6 +64,22 @@ abstract final class FirebasePaths {
     return store(firestore, storeId).collection('command_outbox');
   }
 
+  static CollectionReference<Map<String, dynamic>> accountTransfers(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('account_transfers');
+  }
+
+  static CollectionReference<Map<String, dynamic>> accountTransferIdempotency(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection(
+      'account_transfer_idempotency',
+    );
+  }
+
   static CollectionReference<Map<String, dynamic>> expenses(
     FirebaseFirestore firestore,
     String storeId,
