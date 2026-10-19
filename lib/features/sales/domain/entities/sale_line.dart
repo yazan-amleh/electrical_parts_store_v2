@@ -65,8 +65,7 @@ class SaleLine {
 
   Quantity get baseQuantity {
     final numerator = quantity.milliUnits * unitFactorToBase.milliUnits;
-    final baseMilliUnits =
-        (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
+    final baseMilliUnits = (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
     return Quantity.fromMilliUnits(baseMilliUnits);
   }
 
