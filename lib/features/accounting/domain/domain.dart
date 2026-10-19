@@ -1,6 +1,10 @@
 export 'entities/account.dart';
+export 'entities/account_balance_snapshot.dart';
+export 'entities/account_ledger_line.dart';
 export 'entities/journal_entry.dart';
 export 'entities/journal_line.dart';
 export 'entities/posting_result.dart';
+export 'entities/trial_balance.dart';
 export 'enums/accounting_enums.dart';
+export 'repositories/accounting_query_repository.dart';
 export 'repositories/accounting_repository.dart';
