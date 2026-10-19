@@ -52,8 +52,7 @@ class InMemoryAccountingRepository implements AccountingRepository {
 
     for (final delta in result.deltas) {
       final account = _accounts[delta.accountId]!;
-      final previousDebit =
-          _debitTotals[delta.accountId] ??
+      final previousDebit = _debitTotals[delta.accountId] ??
           Money.zero(currency: account.currency);
       final previousCredit = _creditTotals[delta.accountId] ??
           Money.zero(currency: account.currency);
