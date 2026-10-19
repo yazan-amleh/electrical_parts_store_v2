@@ -18,6 +18,7 @@ const QUANTITY_SCALE = 1000;
 const MAX_LINES = 100;
 const POSTING_ROLES = new Set(['owner', 'admin', 'accountant', 'sales']);
 const PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
+const PURCHASE_PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
 
 exports.postSale = onCall(async (request) => {
   if (!request.auth) {
@@ -48,6 +49,665 @@ exports.postSale = onCall(async (request) => {
     );
   }
 });
+
+exports.postPurchase = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parsePurchaseCommand(request.data);
+
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return postPurchaseInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('postPurchase failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The purchase could not be posted.',
+    );
+  }
+});
+
+function parsePurchaseCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const purchase = asObject(command.purchase, 'purchase');
+  const postingAccounts = asObject(
+    command.postingAccounts,
+    'postingAccounts',
+  );
+  const lines = Array.isArray(purchase.lines) ? purchase.lines : [];
+
+  if (lines.length === 0 || lines.length > MAX_LINES) {
+    invalid('Purchase must contain between 1 and 100 lines.');
+  }
+
+  const paymentMethod = stringValue(
+    purchase.paymentMethod,
+    'purchase.paymentMethod',
+  );
+  if (!PURCHASE_PAYMENT_METHODS.has(paymentMethod)) {
+    invalid('Unsupported purchase payment method.');
+  }
+
+  const supplierId = optionalSafeId(purchase.supplierId, 'supplierId');
+  if (paymentMethod === 'credit' && !supplierId) {
+    invalid('A credit purchase requires a supplier.');
+  }
+
+  const currency = stringValue(purchase.currency, 'purchase.currency');
+  const taxMinorUnits = nonNegativeInt(
+    purchase.taxMinorUnits,
+    'purchase.taxMinorUnits',
+  );
+  const postedAt = parseDate(purchase.postedAt, 'purchase.postedAt');
+  const parsedLines = lines.map((rawLine, index) => {
+    const line = asObject(rawLine, 'purchase.lines[' + index + ']');
+    return {
+      id: safeId(line.id, 'purchase line id'),
+      productId: safeId(line.productId, 'product id'),
+      description: stringValue(
+        line.description,
+        'purchase line description',
+      ),
+      quantityMilliUnits: positiveInt(
+        line.quantityMilliUnits,
+        'quantityMilliUnits',
+      ),
+      unitFactorToBaseMilliUnits: positiveInt(
+        line.unitFactorToBaseMilliUnits,
+        'unitFactorToBaseMilliUnits',
+      ),
+      unitCostMinorUnits: nonNegativeInt(
+        line.unitCostMinorUnits,
+        'unitCostMinorUnits',
+      ),
+      discountMinorUnits: nonNegativeInt(
+        line.discountMinorUnits,
+        'discountMinorUnits',
+      ),
+      unitId: optionalSafeId(line.unitId, 'unitId'),
+      unitName: line.unitName == null
+        ? null
+        : stringValue(line.unitName, 'unitName'),
+    };
+  });
+
+  const lineIds = new Set(parsedLines.map((line) => line.id));
+  if (lineIds.size !== parsedLines.length) {
+    invalid('Purchase line ids must be unique.');
+  }
+
+  const accounts = {
+    settlementAccountId: optionalSafeId(
+      postingAccounts.settlementAccountId,
+      'settlementAccountId',
+    ),
+    inventoryAccountId: safeId(
+      postingAccounts.inventoryAccountId,
+      'inventoryAccountId',
+    ),
+    supplierPayableAccountId: optionalSafeId(
+      postingAccounts.supplierPayableAccountId,
+      'supplierPayableAccountId',
+    ),
+    inputTaxAccountId: optionalSafeId(
+      postingAccounts.inputTaxAccountId,
+      'inputTaxAccountId',
+    ),
+  };
+
+  const paymentAccountId = paymentMethod === 'credit'
+    ? accounts.supplierPayableAccountId
+    : accounts.settlementAccountId;
+  if (!paymentAccountId) {
+    invalid(
+      paymentMethod === 'credit'
+        ? 'A supplier payable account is required for credit purchases.'
+        : 'A settlement account is required for paid purchases.',
+    );
+  }
+  if (taxMinorUnits > 0 && !accounts.inputTaxAccountId) {
+    invalid('An input tax account is required when tax is present.');
+  }
+
+  const accountIds = [
+    accounts.inventoryAccountId,
+    paymentAccountId,
+  ];
+  if (taxMinorUnits > 0) {
+    accountIds.push(accounts.inputTaxAccountId);
+  }
+  if (new Set(accountIds).size !== accountIds.length) {
+    invalid('Purchase posting accounts must be distinct.');
+  }
+
+  return {
+    storeId,
+    purchase: {
+      id: safeId(purchase.id, 'purchase id'),
+      idempotencyKey: safeId(
+        purchase.idempotencyKey,
+        'purchase idempotency key',
+      ),
+      postedAt,
+      paymentMethod,
+      supplierId,
+      description: purchase.description == null
+        ? null
+        : stringValue(purchase.description, 'purchase.description'),
+      currency,
+      taxMinorUnits,
+      lines: parsedLines,
+    },
+    accounts,
+  };
+}
+
+async function postPurchaseInTransaction(transaction, userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberRef = storeRef.collection('members').doc(userId);
+  const purchaseRef = storeRef
+    .collection('purchases')
+    .doc(command.purchase.id);
+  const purchaseIdempotencyRef = storeRef
+    .collection('purchase_idempotency')
+    .doc(command.purchase.idempotencyKey);
+  const journalEntryId = command.purchase.id + '-journal';
+  const journalIdempotencyKey = command.purchase.idempotencyKey +
+    ':journal';
+  const journalRef = storeRef
+    .collection('journal_entries')
+    .doc(journalEntryId);
+  const journalIdempotencyRef = storeRef
+    .collection('idempotency_keys')
+    .doc(journalIdempotencyKey);
+
+  const membershipSnapshot = await transaction.get(memberRef);
+  assertMembership(
+    membershipSnapshot,
+    command.storeId,
+    'post purchases',
+  );
+
+  const purchaseIdempotencySnapshot = await transaction.get(
+    purchaseIdempotencyRef,
+  );
+  if (purchaseIdempotencySnapshot.exists) {
+    const existingPurchaseId = purchaseIdempotencySnapshot.data().purchaseId;
+    if (existingPurchaseId === command.purchase.id) {
+      return {
+        status: 'already_posted',
+        purchaseId: command.purchase.id,
+        journalEntryId,
+      };
+    }
+    conflict('The purchase idempotency key is already assigned.');
+  }
+
+  const existingPurchaseSnapshot = await transaction.get(purchaseRef);
+  if (existingPurchaseSnapshot.exists) {
+    conflict('The purchase id already exists.');
+  }
+
+  const existingJournalSnapshot = await transaction.get(journalRef);
+  if (existingJournalSnapshot.exists) {
+    conflict('The purchase journal id already exists.');
+  }
+
+  const journalIdempotencySnapshot = await transaction.get(
+    journalIdempotencyRef,
+  );
+  if (journalIdempotencySnapshot.exists) {
+    conflict('The journal idempotency key already exists.');
+  }
+
+  const productIds = [...new Set(
+    command.purchase.lines.map((line) => line.productId),
+  )];
+  const productRefs = new Map(
+    productIds.map((productId) => [
+      productId,
+      storeRef.collection('products').doc(productId),
+    ]),
+  );
+  const productSnapshots = new Map();
+  for (const [productId, productRef] of productRefs) {
+    productSnapshots.set(
+      productId,
+      await transaction.get(productRef),
+    );
+  }
+
+  const paymentAccountId = command.purchase.paymentMethod === 'credit'
+    ? command.accounts.supplierPayableAccountId
+    : command.accounts.settlementAccountId;
+  if (!paymentAccountId) {
+    invalid('The purchase payment account is required.');
+  }
+
+  const accountIds = [
+    command.accounts.inventoryAccountId,
+    paymentAccountId,
+  ];
+  if (command.purchase.taxMinorUnits > 0) {
+    accountIds.push(command.accounts.inputTaxAccountId);
+  }
+  const accountRefs = new Map(
+    accountIds.map((accountId) => [
+      accountId,
+      storeRef.collection('accounts').doc(accountId),
+    ]),
+  );
+  const accountSnapshots = new Map();
+  for (const [accountId, accountRef] of accountRefs) {
+    accountSnapshots.set(
+      accountId,
+      await transaction.get(accountRef),
+    );
+  }
+
+  const balanceRefs = new Map(
+    accountIds.map((accountId) => [
+      accountId,
+      storeRef.collection('account_balances').doc(accountId),
+    ]),
+  );
+  const balanceSnapshots = new Map();
+  for (const [accountId, balanceRef] of balanceRefs) {
+    balanceSnapshots.set(
+      accountId,
+      await transaction.get(balanceRef),
+    );
+  }
+
+  const movementRefs = command.purchase.lines.map((line) => ({
+    line,
+    movementId: command.purchase.id + '-inventory-' + line.id,
+    movementKey: command.purchase.idempotencyKey +
+      ':inventory:' + line.id,
+    ref: storeRef.collection('inventory_movements').doc(
+      command.purchase.id + '-inventory-' + line.id,
+    ),
+    idempotencyRef: storeRef.collection('inventory_idempotency').doc(
+      command.purchase.idempotencyKey + ':inventory:' + line.id,
+    ),
+  }));
+  const movementSnapshots = [];
+  for (const movement of movementRefs) {
+    movementSnapshots.push({
+      movement,
+      snapshot: await transaction.get(movement.ref),
+      idempotencySnapshot: await transaction.get(
+        movement.idempotencyRef,
+      ),
+    });
+  }
+  for (const item of movementSnapshots) {
+    if (item.snapshot.exists || item.idempotencySnapshot.exists) {
+      conflict('An inventory movement for this purchase already exists.');
+    }
+  }
+
+  assertAccount(
+    accountSnapshots.get(command.accounts.inventoryAccountId),
+    command.accounts.inventoryAccountId,
+    command.storeId,
+    command.purchase.currency,
+    'asset',
+  );
+  if (command.purchase.paymentMethod === 'credit') {
+    assertAccount(
+      accountSnapshots.get(command.accounts.supplierPayableAccountId),
+      command.accounts.supplierPayableAccountId,
+      command.storeId,
+      command.purchase.currency,
+      'liability',
+    );
+  } else {
+    assertAccount(
+      accountSnapshots.get(command.accounts.settlementAccountId),
+      command.accounts.settlementAccountId,
+      command.storeId,
+      command.purchase.currency,
+      'asset',
+    );
+  }
+  if (command.purchase.taxMinorUnits > 0) {
+    assertAccount(
+      accountSnapshots.get(command.accounts.inputTaxAccountId),
+      command.accounts.inputTaxAccountId,
+      command.storeId,
+      command.purchase.currency,
+      'asset',
+    );
+  }
+
+  const receivedByProduct = new Map();
+  const storedLines = [];
+  let subtotalMinorUnits = 0;
+
+  for (const line of command.purchase.lines) {
+    const productSnapshot = productSnapshots.get(line.productId);
+    if (!productSnapshot || !productSnapshot.exists) {
+      invalid('Product was not found: ' + line.productId);
+    }
+    const product = productSnapshot.data();
+    if (product.storeId !== command.storeId) {
+      deny('Product belongs to another store.');
+    }
+    if (product.isActive === false) {
+      invalid('Inactive products cannot receive stock.');
+    }
+    if (product.isService === true) {
+      invalid('Services cannot receive inventory purchases.');
+    }
+
+    const productCurrency = product.currency || 'ILS';
+    if (productCurrency !== command.purchase.currency) {
+      invalid('Product currency does not match the purchase currency.');
+    }
+
+    const expectedFactor = expectedUnitFactor(product, line.unitId);
+    if (expectedFactor !== line.unitFactorToBaseMilliUnits) {
+      invalid('Product unit changed. Refresh the purchase and try again.');
+    }
+
+    const baseQuantityMilliUnits = multiplyAndRound(
+      line.quantityMilliUnits,
+      line.unitFactorToBaseMilliUnits,
+    );
+    if (baseQuantityMilliUnits <= 0) {
+      invalid('Purchase line base quantity must be positive.');
+    }
+
+    const grossMinorUnits = multiplyAndRound(
+      line.unitCostMinorUnits,
+      baseQuantityMilliUnits,
+    );
+    if (line.discountMinorUnits > grossMinorUnits) {
+      invalid('Purchase line discount exceeds its gross total.');
+    }
+    const totalMinorUnits = grossMinorUnits - line.discountMinorUnits;
+    subtotalMinorUnits += totalMinorUnits;
+
+    const previous = receivedByProduct.get(line.productId) || {
+      quantity: 0,
+      cost: 0,
+    };
+    receivedByProduct.set(line.productId, {
+      quantity: previous.quantity + baseQuantityMilliUnits,
+      cost: previous.cost + totalMinorUnits,
+    });
+
+    storedLines.push({
+      storeId: command.storeId,
+      id: line.id,
+      productId: line.productId,
+      description: line.description,
+      quantityMilliUnits: line.quantityMilliUnits,
+      unitFactorToBaseMilliUnits: line.unitFactorToBaseMilliUnits,
+      baseQuantityMilliUnits,
+      unitCostMinorUnits: line.unitCostMinorUnits,
+      discountMinorUnits: line.discountMinorUnits,
+      grossTotalMinorUnits: grossMinorUnits,
+      totalMinorUnits,
+      unitId: line.unitId,
+      unitName: line.unitName,
+    });
+  }
+
+  if (subtotalMinorUnits <= 0) {
+    invalid('A purchase total must be greater than zero.');
+  }
+
+  const grandTotalMinorUnits =
+    subtotalMinorUnits + command.purchase.taxMinorUnits;
+  if (grandTotalMinorUnits <= 0) {
+    invalid('A purchase total must be greater than zero.');
+  }
+
+  const nextProducts = new Map();
+  for (const [productId, receipt] of receivedByProduct) {
+    const product = productSnapshots.get(productId).data();
+    const currentQuantity = storedInt(
+      product.quantityOnHandMilliUnits,
+      0,
+    );
+    const currentUnitCost = storedInt(
+      product.purchasePriceMinorUnits,
+      0,
+    );
+    const currentTotalCost = currentQuantity > 0
+      ? multiplyAndRound(currentUnitCost, currentQuantity)
+      : 0;
+    const nextQuantity = currentQuantity + receipt.quantity;
+    const nextTotalCost = currentTotalCost + receipt.cost;
+    const nextUnitCost = divideAndRound(
+      nextTotalCost,
+      nextQuantity,
+    );
+    nextProducts.set(productId, {
+      quantity: nextQuantity,
+      unitCost: nextUnitCost,
+    });
+  }
+
+  const accountDeltas = new Map();
+  addDelta(
+    accountDeltas,
+    command.accounts.inventoryAccountId,
+    subtotalMinorUnits,
+    0,
+  );
+  if (command.purchase.taxMinorUnits > 0) {
+    addDelta(
+      accountDeltas,
+      command.accounts.inputTaxAccountId,
+      command.purchase.taxMinorUnits,
+      0,
+    );
+  }
+  addDelta(
+    accountDeltas,
+    paymentAccountId,
+    0,
+    grandTotalMinorUnits,
+  );
+
+  const totalDebitMinorUnits = subtotalMinorUnits +
+    command.purchase.taxMinorUnits;
+  const totalCreditMinorUnits = grandTotalMinorUnits;
+  if (totalDebitMinorUnits !== totalCreditMinorUnits) {
+    throw new HttpsError(
+      'internal',
+      'The generated purchase journal is not balanced.',
+    );
+  }
+
+  const journalLines = [
+    {
+      id: command.purchase.id + '-inventory',
+      storeId: command.storeId,
+      accountId: command.accounts.inventoryAccountId,
+      description: 'Inventory receipt',
+      lineNumber: 1,
+      debitMinorUnits: subtotalMinorUnits,
+      creditMinorUnits: 0,
+    },
+  ];
+  if (command.purchase.taxMinorUnits > 0) {
+    journalLines.push({
+      id: command.purchase.id + '-input-tax',
+      storeId: command.storeId,
+      accountId: command.accounts.inputTaxAccountId,
+      description: 'Input tax',
+      lineNumber: journalLines.length + 1,
+      debitMinorUnits: command.purchase.taxMinorUnits,
+      creditMinorUnits: 0,
+    });
+  }
+  journalLines.push({
+    id: command.purchase.id + '-settlement',
+    storeId: command.storeId,
+    accountId: paymentAccountId,
+    description: command.purchase.paymentMethod,
+    lineNumber: journalLines.length + 1,
+    debitMinorUnits: 0,
+    creditMinorUnits: grandTotalMinorUnits,
+  });
+
+  const purchaseData = {
+    storeId: command.storeId,
+    idempotencyKey: command.purchase.idempotencyKey,
+    postedAt: Timestamp.fromDate(command.purchase.postedAt),
+    paymentMethod: command.purchase.paymentMethod,
+    supplierId: command.purchase.supplierId,
+    description: command.purchase.description,
+    currency: command.purchase.currency,
+    subtotalMinorUnits,
+    taxMinorUnits: command.purchase.taxMinorUnits,
+    totalMinorUnits: grandTotalMinorUnits,
+    journalEntryId,
+    status: 'posted',
+    createdAt: FieldValue.serverTimestamp(),
+  };
+  transaction.set(purchaseRef, purchaseData);
+
+  for (const line of storedLines) {
+    transaction.set(
+      purchaseRef.collection('lines').doc(line.id),
+      line,
+    );
+  }
+
+  for (const [productId, nextProduct] of nextProducts) {
+    transaction.update(
+      productRefs.get(productId),
+      {
+        quantityOnHandMilliUnits: nextProduct.quantity,
+        purchasePriceMinorUnits: nextProduct.unitCost,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  for (const item of movementRefs) {
+    const line = storedLines.find(
+      (storedLine) => storedLine.id === item.line.id,
+    );
+    const movementData = {
+      storeId: command.storeId,
+      productId: line.productId,
+      type: 'purchaseReceipt',
+      quantityDeltaMilliUnits: line.baseQuantityMilliUnits,
+      unitCostMinorUnits: line.unitCostMinorUnits,
+      totalCostMinorUnits: line.totalMinorUnits,
+      currency: command.purchase.currency,
+      idempotencyKey: item.movementKey,
+      sourceType: 'purchase',
+      sourceId: command.purchase.id,
+      occurredAt: Timestamp.fromDate(command.purchase.postedAt),
+    };
+    transaction.set(item.ref, movementData);
+    transaction.set(
+      item.idempotencyRef,
+      {
+        storeId: command.storeId,
+        movementId: item.movementId,
+        idempotencyKey: item.movementKey,
+        createdAt: FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  transaction.set(
+    journalRef,
+    {
+      storeId: command.storeId,
+      idempotencyKey: journalIdempotencyKey,
+      sourceType: 'purchase',
+      description: command.purchase.description,
+      status: 'posted',
+      currency: command.purchase.currency,
+      totalDebitMinorUnits,
+      totalCreditMinorUnits,
+      postedAt: Timestamp.fromDate(command.purchase.postedAt),
+    },
+  );
+  for (const line of journalLines) {
+    transaction.set(
+      journalRef.collection('lines').doc(line.id),
+      line,
+    );
+  }
+
+  for (const accountId of accountIds) {
+    const balanceSnapshot = balanceSnapshots.get(accountId);
+    const balance = balanceSnapshot.exists
+      ? balanceSnapshot.data()
+      : {};
+    const currentDebit = storedInt(balance.debitMinorUnits, 0);
+    const currentCredit = storedInt(balance.creditMinorUnits, 0);
+    const delta = accountDeltas.get(accountId) || {
+      debit: 0,
+      credit: 0,
+    };
+    const nextDebit = currentDebit + delta.debit;
+    const nextCredit = currentCredit + delta.credit;
+
+    transaction.set(
+      balanceRefs.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.purchase.currency,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextDebit - nextCredit,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  transaction.set(
+    purchaseIdempotencyRef,
+    {
+      storeId: command.storeId,
+      purchaseId: command.purchase.id,
+      idempotencyKey: command.purchase.idempotencyKey,
+      journalEntryId,
+      createdAt: FieldValue.serverTimestamp(),
+    },
+  );
+  transaction.set(
+    journalIdempotencyRef,
+    {
+      storeId: command.storeId,
+      entryId: journalEntryId,
+      idempotencyKey: journalIdempotencyKey,
+      createdAt: FieldValue.serverTimestamp(),
+    },
+  );
+
+  return {
+    status: 'posted',
+    purchaseId: command.purchase.id,
+    journalEntryId,
+  };
+}
 
 function parseCommand(rawCommand) {
   const command = asObject(rawCommand, 'command');
@@ -204,7 +864,7 @@ async function postSaleInTransaction(transaction, userId, command) {
     .doc(journalIdempotencyKey);
 
   const membershipSnapshot = await transaction.get(memberRef);
-  assertMembership(membershipSnapshot, command.storeId);
+  assertMembership(membershipSnapshot, command.storeId, 'post sales');
 
   const saleIdempotencySnapshot = await transaction.get(
     saleIdempotencyRef,
@@ -636,6 +1296,7 @@ async function postSaleInTransaction(transaction, userId, command) {
       type: 'saleIssue',
       quantityDeltaMilliUnits: -line.baseQuantityMilliUnits,
       unitCostMinorUnits: line.unitCostMinorUnits,
+      totalCostMinorUnits: line.costTotalMinorUnits,
       currency: command.sale.currency,
       idempotencyKey: item.movementKey,
       sourceType: 'sale',
@@ -730,7 +1391,7 @@ async function postSaleInTransaction(transaction, userId, command) {
   };
 }
 
-function assertMembership(snapshot, storeId) {
+function assertMembership(snapshot, storeId, action = 'post transactions') {
   if (!snapshot.exists) {
     deny('The user is not a member of this store.');
   }
@@ -739,7 +1400,7 @@ function assertMembership(snapshot, storeId) {
     deny('The membership belongs to another store.');
   }
   if (member.isActive !== true || !POSTING_ROLES.has(member.role)) {
-    deny('The user cannot post sales in this store.');
+    deny('The user cannot ' + action + ' in this store.');
   }
 }
 
@@ -800,6 +1461,19 @@ function multiplyAndRound(first, second) {
     invalid('Sale amount is too large.');
   }
   return Math.floor((product + QUANTITY_SCALE / 2) / QUANTITY_SCALE);
+}
+
+function divideAndRound(numerator, denominator) {
+  if (!Number.isSafeInteger(numerator) ||
+      !Number.isSafeInteger(denominator) ||
+      denominator <= 0) {
+    invalid('Amount is too large.');
+  }
+  const scaled = numerator * QUANTITY_SCALE;
+  if (!Number.isSafeInteger(scaled)) {
+    invalid('Amount is too large.');
+  }
+  return Math.floor((scaled + denominator / 2) / denominator);
 }
 
 function storedInt(value, fallback) {
