@@ -17,6 +17,8 @@ const Timestamp = admin.firestore.Timestamp;
 const QUANTITY_SCALE = 1000;
 const MAX_LINES = 100;
 const POSTING_ROLES = new Set(['owner', 'admin', 'accountant', 'sales']);
+const PARTY_PAYMENT_METHODS = new Set(['cash', 'bank', 'card']);
+const PAYMENT_POSTING_ROLES = new Set(['owner', 'admin', 'accountant']);
 const PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
 const PURCHASE_PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
 
@@ -79,6 +81,427 @@ exports.postPurchase = onCall(async (request) => {
     );
   }
 });
+
+exports.postPartyPayment = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parsePartyPaymentCommand(request.data);
+
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return postPartyPaymentInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('postPartyPayment failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The party payment could not be posted.',
+    );
+  }
+});
+
+function parsePartyPaymentCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const payment = asObject(command.payment, 'payment');
+  const postingAccounts = asObject(
+    command.postingAccounts,
+    'postingAccounts',
+  );
+
+  const partyType = stringValue(
+    payment.partyType,
+    'payment.partyType',
+  );
+  if (partyType !== 'customer' && partyType !== 'supplier') {
+    invalid('Unsupported party type.');
+  }
+
+  const paymentMethod = stringValue(
+    payment.paymentMethod,
+    'payment.paymentMethod',
+  );
+  if (!PARTY_PAYMENT_METHODS.has(paymentMethod)) {
+    invalid('Unsupported party payment method.');
+  }
+
+  const accounts = {
+    settlementAccountId: safeId(
+      postingAccounts.settlementAccountId,
+      'settlementAccountId',
+    ),
+    partyAccountId: safeId(
+      postingAccounts.partyAccountId,
+      'partyAccountId',
+    ),
+  };
+  if (accounts.settlementAccountId === accounts.partyAccountId) {
+    invalid('Party payment accounts must be distinct.');
+  }
+
+  return {
+    storeId,
+    payment: {
+      id: safeId(payment.id, 'payment id'),
+      idempotencyKey: safeId(
+        payment.idempotencyKey,
+        'payment idempotency key',
+      ),
+      postedAt: parseDate(payment.postedAt, 'payment.postedAt'),
+      partyType,
+      partyId: safeId(payment.partyId, 'partyId'),
+      paymentMethod,
+      amountMinorUnits: positiveInt(
+        payment.amountMinorUnits,
+        'payment.amountMinorUnits',
+      ),
+      currency: stringValue(payment.currency, 'payment.currency'),
+      description: payment.description == null
+        ? null
+        : stringValue(payment.description, 'payment.description'),
+    },
+    accounts,
+  };
+}
+
+async function postPartyPaymentInTransaction(
+  transaction,
+  userId,
+  command,
+) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberRef = storeRef.collection('members').doc(userId);
+  const paymentRef = storeRef
+    .collection('party_payments')
+    .doc(command.payment.id);
+  const paymentIdempotencyRef = storeRef
+    .collection('party_payment_idempotency')
+    .doc(command.payment.idempotencyKey);
+  const journalEntryId = command.payment.id + '-journal';
+  const journalIdempotencyKey = command.payment.idempotencyKey +
+    ':journal';
+  const journalRef = storeRef
+    .collection('journal_entries')
+    .doc(journalEntryId);
+  const journalIdempotencyRef = storeRef
+    .collection('idempotency_keys')
+    .doc(journalIdempotencyKey);
+  const partyLedgerId = command.payment.id + '-' +
+    command.payment.partyType;
+  const partyLedgerRef = storeRef
+    .collection('party_ledger_entries')
+    .doc(partyLedgerId);
+  const partyBalanceId = command.payment.partyType + '-' +
+    command.payment.partyId;
+  const partyBalanceRef = storeRef
+    .collection('party_balances')
+    .doc(partyBalanceId);
+
+  const membershipSnapshot = await transaction.get(memberRef);
+  assertMembership(
+    membershipSnapshot,
+    command.storeId,
+    'post party payments',
+    PAYMENT_POSTING_ROLES,
+  );
+
+  const paymentIdempotencySnapshot = await transaction.get(
+    paymentIdempotencyRef,
+  );
+  if (paymentIdempotencySnapshot.exists) {
+    const existingPaymentId =
+      paymentIdempotencySnapshot.data().paymentId;
+    if (existingPaymentId === command.payment.id) {
+      return {
+        status: 'already_posted',
+        paymentId: command.payment.id,
+        journalEntryId,
+      };
+    }
+    conflict('The payment idempotency key is already assigned.');
+  }
+
+  const existingPaymentSnapshot = await transaction.get(paymentRef);
+  if (existingPaymentSnapshot.exists) {
+    conflict('The party payment id already exists.');
+  }
+
+  const existingJournalSnapshot = await transaction.get(journalRef);
+  if (existingJournalSnapshot.exists) {
+    conflict('The payment journal id already exists.');
+  }
+
+  const journalIdempotencySnapshot = await transaction.get(
+    journalIdempotencyRef,
+  );
+  if (journalIdempotencySnapshot.exists) {
+    conflict('The payment journal idempotency key already exists.');
+  }
+
+  const existingPartyLedgerSnapshot = await transaction.get(
+    partyLedgerRef,
+  );
+  if (existingPartyLedgerSnapshot.exists) {
+    conflict('A party ledger entry for this payment already exists.');
+  }
+
+  const accountIds = [
+    command.accounts.settlementAccountId,
+    command.accounts.partyAccountId,
+  ];
+  const accountRefs = new Map(
+    accountIds.map((accountId) => [
+      accountId,
+      storeRef.collection('accounts').doc(accountId),
+    ]),
+  );
+  const accountSnapshots = new Map();
+  for (const [accountId, accountRef] of accountRefs) {
+    accountSnapshots.set(
+      accountId,
+      await transaction.get(accountRef),
+    );
+  }
+
+  const balanceRefs = new Map(
+    accountIds.map((accountId) => [
+      accountId,
+      storeRef.collection('account_balances').doc(accountId),
+    ]),
+  );
+  const balanceSnapshots = new Map();
+  for (const [accountId, balanceRef] of balanceRefs) {
+    balanceSnapshots.set(
+      accountId,
+      await transaction.get(balanceRef),
+    );
+  }
+
+  const partyBalanceSnapshot = await transaction.get(partyBalanceRef);
+
+  assertAccount(
+    accountSnapshots.get(command.accounts.settlementAccountId),
+    command.accounts.settlementAccountId,
+    command.storeId,
+    command.payment.currency,
+    'asset',
+    paymentAccountControlType(command.payment.paymentMethod),
+  );
+  const isCustomerPayment = command.payment.partyType === 'customer';
+  assertAccount(
+    accountSnapshots.get(command.accounts.partyAccountId),
+    command.accounts.partyAccountId,
+    command.storeId,
+    command.payment.currency,
+    isCustomerPayment ? 'asset' : 'liability',
+    isCustomerPayment ? 'customerReceivable' : 'supplierPayable',
+  );
+
+  const amount = command.payment.amountMinorUnits;
+  const accountDeltas = new Map();
+  if (isCustomerPayment) {
+    addDelta(
+      accountDeltas,
+      command.accounts.settlementAccountId,
+      amount,
+      0,
+    );
+    addDelta(
+      accountDeltas,
+      command.accounts.partyAccountId,
+      0,
+      amount,
+    );
+  } else {
+    addDelta(
+      accountDeltas,
+      command.accounts.partyAccountId,
+      amount,
+      0,
+    );
+    addDelta(
+      accountDeltas,
+      command.accounts.settlementAccountId,
+      0,
+      amount,
+    );
+  }
+
+  const journalLines = [
+    {
+      id: command.payment.id + '-settlement',
+      storeId: command.storeId,
+      accountId: command.accounts.settlementAccountId,
+      description: command.payment.paymentMethod,
+      lineNumber: 1,
+      debitMinorUnits: isCustomerPayment ? amount : 0,
+      creditMinorUnits: isCustomerPayment ? 0 : amount,
+    },
+    {
+      id: command.payment.id + '-party',
+      storeId: command.storeId,
+      accountId: command.accounts.partyAccountId,
+      description: command.payment.partyType === 'customer'
+        ? 'Customer receivable settlement'
+        : 'Supplier payable settlement',
+      lineNumber: 2,
+      debitMinorUnits: isCustomerPayment ? 0 : amount,
+      creditMinorUnits: isCustomerPayment ? amount : 0,
+    },
+  ];
+
+  const paymentData = {
+    storeId: command.storeId,
+    idempotencyKey: command.payment.idempotencyKey,
+    postedAt: Timestamp.fromDate(command.payment.postedAt),
+    partyType: command.payment.partyType,
+    partyId: command.payment.partyId,
+    paymentMethod: command.payment.paymentMethod,
+    amountMinorUnits: amount,
+    currency: command.payment.currency,
+    description: command.payment.description,
+    journalEntryId,
+    status: 'posted',
+    createdAt: FieldValue.serverTimestamp(),
+  };
+  transaction.set(paymentRef, paymentData);
+
+  transaction.set(
+    partyLedgerRef,
+    {
+      storeId: command.storeId,
+      partyType: command.payment.partyType,
+      partyId: command.payment.partyId,
+      sourceType: command.payment.partyType === 'customer'
+        ? 'customerReceipt'
+        : 'supplierPayment',
+      sourceId: command.payment.id,
+      currency: command.payment.currency,
+      debitMinorUnits: isCustomerPayment ? 0 : amount,
+      creditMinorUnits: isCustomerPayment ? amount : 0,
+      description: command.payment.description,
+      postedAt: Timestamp.fromDate(command.payment.postedAt),
+    },
+  );
+
+  const partyBalance = partyBalanceSnapshot.exists
+    ? partyBalanceSnapshot.data()
+    : {};
+  const currentPartyDebit = storedInt(
+    partyBalance.debitMinorUnits,
+    0,
+  );
+  const currentPartyCredit = storedInt(
+    partyBalance.creditMinorUnits,
+    0,
+  );
+  const nextPartyDebit = currentPartyDebit +
+    (isCustomerPayment ? 0 : amount);
+  const nextPartyCredit = currentPartyCredit +
+    (isCustomerPayment ? amount : 0);
+  transaction.set(
+    partyBalanceRef,
+    {
+      storeId: command.storeId,
+      partyType: command.payment.partyType,
+      partyId: command.payment.partyId,
+      currency: command.payment.currency,
+      debitMinorUnits: nextPartyDebit,
+      creditMinorUnits: nextPartyCredit,
+      balanceMinorUnits: nextPartyDebit - nextPartyCredit,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+  );
+
+  transaction.set(
+    journalRef,
+    {
+      storeId: command.storeId,
+      idempotencyKey: journalIdempotencyKey,
+      sourceType: command.payment.partyType === 'customer'
+        ? 'customerReceipt'
+        : 'supplierPayment',
+      description: command.payment.description,
+      status: 'posted',
+      currency: command.payment.currency,
+      totalDebitMinorUnits: amount,
+      totalCreditMinorUnits: amount,
+      postedAt: Timestamp.fromDate(command.payment.postedAt),
+    },
+  );
+  for (const line of journalLines) {
+    transaction.set(
+      journalRef.collection('lines').doc(line.id),
+      line,
+    );
+  }
+
+  for (const accountId of accountIds) {
+    const balanceSnapshot = balanceSnapshots.get(accountId);
+    const balance = balanceSnapshot.exists
+      ? balanceSnapshot.data()
+      : {};
+    const currentDebit = storedInt(balance.debitMinorUnits, 0);
+    const currentCredit = storedInt(balance.creditMinorUnits, 0);
+    const delta = accountDeltas.get(accountId) || {
+      debit: 0,
+      credit: 0,
+    };
+    const nextDebit = currentDebit + delta.debit;
+    const nextCredit = currentCredit + delta.credit;
+
+    transaction.set(
+      balanceRefs.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.payment.currency,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextDebit - nextCredit,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  transaction.set(
+    paymentIdempotencyRef,
+    {
+      storeId: command.storeId,
+      paymentId: command.payment.id,
+      idempotencyKey: command.payment.idempotencyKey,
+      journalEntryId,
+      createdAt: FieldValue.serverTimestamp(),
+    },
+  );
+  transaction.set(
+    journalIdempotencyRef,
+    {
+      storeId: command.storeId,
+      entryId: journalEntryId,
+      idempotencyKey: journalIdempotencyKey,
+      createdAt: FieldValue.serverTimestamp(),
+    },
+  );
+
+  return {
+    status: 'posted',
+    paymentId: command.payment.id,
+    journalEntryId,
+  };
+}
 
 function parsePurchaseCommand(rawCommand) {
   const command = asObject(rawCommand, 'command');
@@ -1581,7 +2004,12 @@ async function postSaleInTransaction(transaction, userId, command) {
   };
 }
 
-function assertMembership(snapshot, storeId, action = 'post transactions') {
+function assertMembership(
+  snapshot,
+  storeId,
+  action = 'post transactions',
+  roles = POSTING_ROLES,
+) {
   if (!snapshot.exists) {
     deny('The user is not a member of this store.');
   }
@@ -1589,7 +2017,7 @@ function assertMembership(snapshot, storeId, action = 'post transactions') {
   if (member.storeId && member.storeId !== storeId) {
     deny('The membership belongs to another store.');
   }
-  if (member.isActive !== true || !POSTING_ROLES.has(member.role)) {
+  if (member.isActive !== true || !roles.has(member.role)) {
     deny('The user cannot ' + action + ' in this store.');
   }
 }
