@@ -17,10 +17,12 @@ class QueuedCommand {
     this.status = QueuedCommandStatus.pending,
     this.attemptCount = 0,
     DateTime? nextAttemptAt,
+    DateTime? leaseUntil,
     this.lastError,
   })  : payload = Map.unmodifiable(Map<String, dynamic>.from(payload)),
         createdAt = createdAt.toUtc(),
-        nextAttemptAt = nextAttemptAt?.toUtc() {
+        nextAttemptAt = nextAttemptAt?.toUtc(),
+        leaseUntil = leaseUntil?.toUtc() {
     _ensureSafeIdentifier(id, 'Queued command id');
     _ensureSafeIdentifier(storeId, 'Queued command store id');
     _ensureSafeIdentifier(createdBy, 'Queued command creator');
@@ -45,21 +47,29 @@ class QueuedCommand {
   final QueuedCommandStatus status;
   final int attemptCount;
   final DateTime? nextAttemptAt;
+  final DateTime? leaseUntil;
   final String? lastError;
 
   bool isDue(DateTime now) {
+    final currentTime = now.toUtc();
+    if (status == QueuedCommandStatus.processing) {
+      return leaseUntil == null || !leaseUntil.isAfter(currentTime);
+    }
     if (status != QueuedCommandStatus.pending) {
       return false;
     }
     final retryAt = nextAttemptAt;
-    return retryAt == null || !retryAt.isAfter(now.toUtc());
+    return retryAt == null || !retryAt.isAfter(currentTime);
   }
 
-  QueuedCommand processing() {
+  QueuedCommand processing({DateTime? now}) {
     return _copy(
       status: QueuedCommandStatus.processing,
       attemptCount: attemptCount + 1,
       nextAttemptAt: null,
+      leaseUntil: (now ?? DateTime.now()).toUtc().add(
+        const Duration(minutes: 5),
+      ),
       lastError: null,
     );
   }
@@ -68,6 +78,7 @@ class QueuedCommand {
     return _copy(
       status: QueuedCommandStatus.completed,
       nextAttemptAt: null,
+      leaseUntil: null,
       lastError: null,
     );
   }
@@ -76,6 +87,7 @@ class QueuedCommand {
     return _copy(
       status: QueuedCommandStatus.pending,
       nextAttemptAt: retryAt,
+      leaseUntil: null,
       lastError: error,
     );
   }
@@ -84,6 +96,7 @@ class QueuedCommand {
     return _copy(
       status: QueuedCommandStatus.failed,
       nextAttemptAt: null,
+      leaseUntil: null,
       lastError: error,
     );
   }
@@ -92,6 +105,7 @@ class QueuedCommand {
     required QueuedCommandStatus status,
     int? attemptCount,
     DateTime? nextAttemptAt,
+    DateTime? leaseUntil,
     String? lastError,
   }) {
     return QueuedCommand(
@@ -105,6 +119,7 @@ class QueuedCommand {
       status: status,
       attemptCount: attemptCount ?? this.attemptCount,
       nextAttemptAt: nextAttemptAt,
+      leaseUntil: leaseUntil,
       lastError: lastError,
     );
   }
