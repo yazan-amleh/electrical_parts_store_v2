@@ -9,7 +9,7 @@ class Sale {
     required this.id,
     required this.storeId,
     required this.idempotencyKey,
-    required this.postedAt,
+    required DateTime postedAt,
     required this.paymentMethod,
     required List<SaleLine> lines,
     required this.tax,
