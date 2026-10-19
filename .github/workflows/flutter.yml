@@ -28,6 +28,13 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Print formatter diff
+        run: |
+          dart format lib test
+          git diff -- lib/features/accounting/domain/services/default_chart_of_accounts.dart
+          git diff -- test/accounting/default_chart_of_accounts_test.dart
+          git diff --exit-code -- lib test
+
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed lib test
 
