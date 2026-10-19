@@ -51,8 +51,15 @@ class PurchaseOrderLine {
 
   Quantity get remainingQuantity => quantity - receivedQuantity;
 
+  Quantity get baseQuantity {
+    final numerator = quantity.milliUnits * unitFactorToBase.milliUnits;
+    final baseMilliUnits =
+        (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
+    return Quantity.fromMilliUnits(baseMilliUnits);
+  }
+
   Money get total {
-    final numerator = unitCost.minorUnits * quantity.milliUnits;
+    final numerator = unitCost.minorUnits * baseQuantity.milliUnits;
     return Money(
       minorUnits: (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale,
       currency: unitCost.currency,

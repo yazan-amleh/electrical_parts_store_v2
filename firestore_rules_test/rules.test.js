@@ -82,6 +82,12 @@ async function seedStore() {
       storeId: STORE_ID,
       status: 'posted',
     });
+    await setDoc(storeDoc(db, 'purchase_orders', 'order-1'), {
+      storeId: STORE_ID,
+      status: 'pending',
+      supplierId: 'supplier-1',
+      lines: [],
+    });
     await setDoc(storeDoc(db, 'journal_entries', 'journal-1'), {
       storeId: STORE_ID,
       status: 'posted',
@@ -168,6 +174,9 @@ describe('Firestore security rules', function () {
   it('keeps store data tenant-scoped', async () => {
     await assertSucceeds(getDoc(storeDoc(salesDb, 'products', 'product-1')));
     await assertSucceeds(getDoc(storeDoc(salesDb, 'sales', 'sale-1')));
+    await assertSucceeds(
+      getDoc(storeDoc(salesDb, 'purchase_orders', 'order-1')),
+    );
 
     await assertFails(
       getDoc(doc(outsiderDb, 'stores', 'store-b', 'accounts', '1110')),
@@ -319,6 +328,7 @@ describe('Firestore security rules', function () {
       ['expenses', 'expense-1'],
       ['party_payments', 'payment-1'],
       ['account_transfers', 'transfer-1'],
+      ['purchase_orders', 'order-2'],
     ];
 
     for (const [collection, id] of forbiddenWrites) {
@@ -384,6 +394,7 @@ describe('Firestore security rules', function () {
       'expense_idempotency',
       'party_payment_idempotency',
       'account_transfer_idempotency',
+      'purchase_order_receipt_idempotency',
     ];
 
     for (const collection of idempotencyCollections) {

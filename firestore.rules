@@ -125,6 +125,15 @@ service cloud.firestore {
         }
       }
 
+      match /purchase_orders/{orderId} {
+        allow read: if canReadStore(storeId);
+        allow create, update, delete: if false;
+      }
+
+      match /purchase_order_receipt_idempotency/{key} {
+        allow read, write: if false;
+      }
+
       match /purchase_idempotency/{key} {
         allow read, write: if false;
       }
@@ -143,7 +152,10 @@ service cloud.firestore {
             'postExpense',
             'postAccountTransfer',
             'postJournalEntry',
-            'postInventoryMovement'
+            'postInventoryMovement',
+            'createPurchaseOrder',
+            'cancelPurchaseOrder',
+            'receivePurchaseOrder'
           ] &&
           request.resource.data.idempotencyKey is string;
         allow update: if canReadStore(storeId) &&

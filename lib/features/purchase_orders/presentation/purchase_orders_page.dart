@@ -16,6 +16,7 @@ import '../../purchases/domain/entities/purchase_posting_plan.dart';
 import '../../purchases/domain/enums/purchase_payment_method.dart';
 import '../domain/entities/purchase_order.dart';
 import '../domain/entities/purchase_order_line.dart';
+import '../domain/entities/purchase_order_receipt.dart';
 import '../domain/enums/purchase_order_status.dart';
 import '../domain/repositories/purchase_order_repository.dart';
 

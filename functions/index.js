@@ -22,6 +22,12 @@ const EXPENSE_PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
 const PAYMENT_POSTING_ROLES = new Set(['owner', 'admin', 'accountant']);
 const PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
 const PURCHASE_PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
+const PURCHASE_ORDER_ROLES = new Set([
+  'owner',
+  'admin',
+  'accountant',
+  'warehouse',
+]);
 const INVENTORY_MOVEMENT_TYPES = new Set([
   'openingBalance',
   'adjustment',
@@ -146,6 +152,94 @@ exports.postPurchase = onCall(async (request) => {
     throw new HttpsError(
       'internal',
       'The purchase could not be posted.',
+    );
+  }
+});
+
+
+exports.createPurchaseOrder = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parsePurchaseOrderCreateCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return createPurchaseOrderInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('createPurchaseOrder failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The purchase order could not be created.',
+    );
+  }
+});
+
+exports.cancelPurchaseOrder = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parsePurchaseOrderCancelCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return cancelPurchaseOrderInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('cancelPurchaseOrder failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The purchase order could not be cancelled.',
+    );
+  }
+});
+
+exports.receivePurchaseOrder = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parsePurchaseOrderReceiveCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return receivePurchaseOrderInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('receivePurchaseOrder failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The purchase order could not be received.',
     );
   }
 });
@@ -1907,7 +2001,12 @@ function parsePurchaseCommand(rawCommand) {
   };
 }
 
-async function postPurchaseInTransaction(transaction, userId, command) {
+async function postPurchaseInTransaction(
+  transaction,
+  userId,
+  command,
+  allowedRoles = POSTING_ROLES,
+) {
   const storeRef = db.collection('stores').doc(command.storeId);
   const memberRef = storeRef.collection('members').doc(userId);
   const purchaseRef = storeRef
@@ -1946,6 +2045,7 @@ async function postPurchaseInTransaction(transaction, userId, command) {
     membershipSnapshot,
     command.storeId,
     'post purchases',
+    allowedRoles,
   );
 
   const purchaseIdempotencySnapshot = await transaction.get(
@@ -2471,6 +2571,461 @@ async function postPurchaseInTransaction(transaction, userId, command) {
     status: 'posted',
     purchaseId: command.purchase.id,
     journalEntryId,
+  };
+}
+
+
+function parsePurchaseOrderCreateCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const rawOrder = asObject(command.order, 'order');
+  const rawLines = Array.isArray(rawOrder.lines) ? rawOrder.lines : [];
+  if (rawLines.length === 0 || rawLines.length > MAX_LINES) {
+    invalid('A purchase order must contain between 1 and 100 lines.');
+  }
+
+  const currency = stringValue(rawOrder.currency, 'order.currency');
+  const lines = rawLines.map((rawLine, index) => {
+    const line = asObject(rawLine, 'order.lines[' + index + ']');
+    return {
+      id: safeId(line.id, 'order line id'),
+      productId: safeId(line.productId, 'order product id'),
+      productName: stringValue(line.productName, 'order product name'),
+      quantityMilliUnits: positiveInt(
+        line.quantityMilliUnits,
+        'order quantityMilliUnits',
+      ),
+      unitFactorToBaseMilliUnits: positiveInt(
+        line.unitFactorToBaseMilliUnits,
+        'order unitFactorToBaseMilliUnits',
+      ),
+      unitCostMinorUnits: nonNegativeInt(
+        line.unitCostMinorUnits,
+        'order unitCostMinorUnits',
+      ),
+      currency: line.currency == null
+        ? currency
+        : stringValue(line.currency, 'order line currency'),
+      unitId: optionalSafeId(line.unitId, 'order unitId'),
+      unitName: line.unitName == null
+        ? null
+        : stringValue(line.unitName, 'order unitName'),
+    };
+  });
+
+  const lineIds = new Set(lines.map((line) => line.id));
+  if (lineIds.size !== lines.length) {
+    invalid('Purchase order line ids must be unique.');
+  }
+
+  return {
+    storeId,
+    order: {
+      id: safeId(rawOrder.id, 'order id'),
+      orderNumber: safeId(rawOrder.orderNumber, 'order number'),
+      supplierId: safeId(rawOrder.supplierId, 'supplier id'),
+      supplierName: stringValue(rawOrder.supplierName, 'supplier name'),
+      currency,
+      orderedAt: parseDate(rawOrder.orderedAt, 'order.orderedAt'),
+      notes: optionalText(rawOrder.notes, 'order.notes'),
+      lines,
+    },
+  };
+}
+
+function parsePurchaseOrderCancelCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  return {
+    storeId: safeId(command.storeId, 'storeId'),
+    orderId: safeId(command.orderId, 'orderId'),
+  };
+}
+
+function parsePurchaseOrderReceiveCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const paymentMethod = stringValue(
+    command.paymentMethod,
+    'paymentMethod',
+  );
+  if (!PURCHASE_PAYMENT_METHODS.has(paymentMethod)) {
+    invalid('Unsupported purchase payment method.');
+  }
+
+  const postingAccounts = asObject(
+    command.postingAccounts,
+    'postingAccounts',
+  );
+  const accounts = {
+    settlementAccountId: optionalSafeId(
+      postingAccounts.settlementAccountId,
+      'settlementAccountId',
+    ),
+    inventoryAccountId: safeId(
+      postingAccounts.inventoryAccountId,
+      'inventoryAccountId',
+    ),
+    supplierPayableAccountId: optionalSafeId(
+      postingAccounts.supplierPayableAccountId,
+      'supplierPayableAccountId',
+    ),
+    inputTaxAccountId: optionalSafeId(
+      postingAccounts.inputTaxAccountId,
+      'inputTaxAccountId',
+    ),
+  };
+  const paymentAccountId = paymentMethod === 'credit'
+    ? accounts.supplierPayableAccountId
+    : accounts.settlementAccountId;
+  if (!paymentAccountId) {
+    invalid('The purchase payment account is required.');
+  }
+
+  const taxMinorUnits = nonNegativeInt(
+    command.taxMinorUnits,
+    'taxMinorUnits',
+  );
+  if (taxMinorUnits > 0 && !accounts.inputTaxAccountId) {
+    invalid('An input tax account is required when tax is present.');
+  }
+
+  return {
+    storeId,
+    orderId: safeId(command.orderId, 'orderId'),
+    receiptId: safeId(command.receiptId, 'receiptId'),
+    idempotencyKey: safeId(command.idempotencyKey, 'idempotencyKey'),
+    postedAt: parseDate(command.postedAt, 'postedAt'),
+    paymentMethod,
+    currency: stringValue(command.currency, 'currency'),
+    taxMinorUnits,
+    accounts,
+  };
+}
+
+async function createPurchaseOrderInTransaction(
+  transaction,
+  userId,
+  command,
+) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberRef = storeRef.collection('members').doc(userId);
+  const orderRef = storeRef
+    .collection('purchase_orders')
+    .doc(command.order.id);
+  const supplierRef = storeRef
+    .collection('parties')
+    .doc(command.order.supplierId);
+
+  const membershipSnapshot = await transaction.get(memberRef);
+  assertMembership(
+    membershipSnapshot,
+    command.storeId,
+    'create purchase orders',
+    PURCHASE_ORDER_ROLES,
+  );
+
+  const existingOrderSnapshot = await transaction.get(orderRef);
+  if (existingOrderSnapshot.exists) {
+    conflict('The purchase order id already exists.');
+  }
+
+  const supplierSnapshot = await transaction.get(supplierRef);
+  if (!supplierSnapshot.exists) {
+    invalid('Supplier was not found.');
+  }
+  const supplier = supplierSnapshot.data();
+  if (supplier.storeId !== command.storeId) {
+    deny('Supplier belongs to another store.');
+  }
+  if (supplier.partyType !== 'supplier') {
+    invalid('The selected party is not a supplier.');
+  }
+  if (supplier.isActive === false) {
+    invalid('Inactive suppliers cannot receive purchase orders.');
+  }
+
+  const productIds = [...new Set(
+    command.order.lines.map((line) => line.productId),
+  )];
+  const productRefs = new Map(
+    productIds.map((productId) => [
+      productId,
+      storeRef.collection('products').doc(productId),
+    ]),
+  );
+  const productSnapshots = new Map();
+  for (const [productId, productRef] of productRefs) {
+    productSnapshots.set(productId, await transaction.get(productRef));
+  }
+
+  let totalMinorUnits = 0;
+  const storedLines = [];
+  for (const line of command.order.lines) {
+    const productSnapshot = productSnapshots.get(line.productId);
+    if (!productSnapshot || !productSnapshot.exists) {
+      invalid('Product was not found: ' + line.productId);
+    }
+    const product = productSnapshot.data();
+    if (product.storeId !== command.storeId) {
+      deny('Product belongs to another store.');
+    }
+    if (product.isActive === false) {
+      invalid('Inactive products cannot be ordered.');
+    }
+    if (product.isService === true) {
+      invalid('Services cannot be ordered as stock.');
+    }
+    const productCurrency = product.currency || 'ILS';
+    if (productCurrency !== command.order.currency ||
+        line.currency !== command.order.currency) {
+      invalid('Product currency does not match the purchase order.');
+    }
+    const expectedFactor = expectedUnitFactor(product, line.unitId);
+    if (expectedFactor !== line.unitFactorToBaseMilliUnits) {
+      invalid('Product unit changed. Refresh the purchase order and try again.');
+    }
+
+    const baseQuantityMilliUnits = multiplyAndRound(
+      line.quantityMilliUnits,
+      line.unitFactorToBaseMilliUnits,
+    );
+    const lineTotalMinorUnits = multiplyAndRound(
+      line.unitCostMinorUnits,
+      baseQuantityMilliUnits,
+    );
+    totalMinorUnits += lineTotalMinorUnits;
+    storedLines.push({
+      id: line.id,
+      productId: line.productId,
+      productName: line.productName,
+      quantityMilliUnits: line.quantityMilliUnits,
+      unitFactorToBaseMilliUnits: line.unitFactorToBaseMilliUnits,
+      unitCostMinorUnits: line.unitCostMinorUnits,
+      currency: line.currency,
+      unitId: line.unitId,
+      unitName: line.unitName,
+      receivedQuantityMilliUnits: 0,
+      totalMinorUnits: lineTotalMinorUnits,
+    });
+  }
+  if (totalMinorUnits <= 0) {
+    invalid('A purchase order total must be greater than zero.');
+  }
+
+  transaction.set(orderRef, {
+    storeId: command.storeId,
+    orderNumber: command.order.orderNumber,
+    supplierId: command.order.supplierId,
+    supplierName: supplier.name || command.order.supplierName,
+    currency: command.order.currency,
+    orderedAt: Timestamp.fromDate(command.order.orderedAt),
+    status: 'pending',
+    notes: command.order.notes,
+    totalMinorUnits,
+    lines: storedLines,
+    createdBy: userId,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    status: 'created',
+    orderId: command.order.id,
+  };
+}
+
+async function cancelPurchaseOrderInTransaction(
+  transaction,
+  userId,
+  command,
+) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberRef = storeRef.collection('members').doc(userId);
+  const orderRef = storeRef
+    .collection('purchase_orders')
+    .doc(command.orderId);
+
+  const membershipSnapshot = await transaction.get(memberRef);
+  assertMembership(
+    membershipSnapshot,
+    command.storeId,
+    'cancel purchase orders',
+    PURCHASE_ORDER_ROLES,
+  );
+  const orderSnapshot = await transaction.get(orderRef);
+  if (!orderSnapshot.exists) {
+    invalid('Purchase order was not found.');
+  }
+  const order = orderSnapshot.data();
+  if (order.storeId !== command.storeId) {
+    deny('Purchase order belongs to another store.');
+  }
+  if (order.status === 'cancelled') {
+    return {
+      status: 'already_cancelled',
+      orderId: command.orderId,
+    };
+  }
+  if (order.status !== 'pending') {
+    conflict('Only pending purchase orders can be cancelled.');
+  }
+
+  transaction.update(orderRef, {
+    status: 'cancelled',
+    cancelledAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return {
+    status: 'cancelled',
+    orderId: command.orderId,
+  };
+}
+
+async function receivePurchaseOrderInTransaction(
+  transaction,
+  userId,
+  command,
+) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberRef = storeRef.collection('members').doc(userId);
+  const orderRef = storeRef
+    .collection('purchase_orders')
+    .doc(command.orderId);
+  const receiptIdempotencyRef = storeRef
+    .collection('purchase_order_receipt_idempotency')
+    .doc(command.idempotencyKey);
+
+  const membershipSnapshot = await transaction.get(memberRef);
+  assertMembership(
+    membershipSnapshot,
+    command.storeId,
+    'receive purchase orders',
+    PURCHASE_ORDER_ROLES,
+  );
+
+  const idempotencySnapshot = await transaction.get(receiptIdempotencyRef);
+  if (idempotencySnapshot.exists) {
+    const previous = idempotencySnapshot.data();
+    if (previous.orderId === command.orderId) {
+      return {
+        status: 'already_received',
+        orderId: command.orderId,
+        purchaseId: previous.purchaseId,
+        journalEntryId: previous.journalEntryId,
+      };
+    }
+    conflict('The purchase order receipt key is already assigned.');
+  }
+
+  const orderSnapshot = await transaction.get(orderRef);
+  if (!orderSnapshot.exists) {
+    invalid('Purchase order was not found.');
+  }
+  const order = orderSnapshot.data();
+  if (order.storeId !== command.storeId) {
+    deny('Purchase order belongs to another store.');
+  }
+  if (order.status === 'completed' && order.receiptId === command.receiptId) {
+    return {
+      status: 'already_received',
+      orderId: command.orderId,
+      purchaseId: command.receiptId,
+      journalEntryId: order.journalEntryId || '',
+    };
+  }
+  if (order.status !== 'pending') {
+    conflict('Only pending purchase orders can be received.');
+  }
+  if (command.currency !== order.currency) {
+    invalid('Receipt currency does not match the purchase order.');
+  }
+
+  const rawLines = Array.isArray(order.lines) ? order.lines : [];
+  if (rawLines.length === 0 || rawLines.length > MAX_LINES) {
+    invalid('The purchase order has no receivable lines.');
+  }
+  const purchaseLines = rawLines.map((rawLine, index) => {
+    const line = asObject(rawLine, 'stored order line ' + index);
+    const receivedQuantity = storedInt(
+      line.receivedQuantityMilliUnits,
+      0,
+    );
+    if (receivedQuantity !== 0) {
+      invalid('Partial purchase order receipts are not supported yet.');
+    }
+    return {
+      id: safeId(line.id, 'stored order line id'),
+      productId: safeId(line.productId, 'stored order product id'),
+      description: stringValue(line.productName, 'stored product name'),
+      quantityMilliUnits: positiveInt(
+        line.quantityMilliUnits,
+        'stored order quantityMilliUnits',
+      ),
+      unitFactorToBaseMilliUnits: positiveInt(
+        line.unitFactorToBaseMilliUnits,
+        'stored order unitFactorToBaseMilliUnits',
+      ),
+      unitCostMinorUnits: nonNegativeInt(
+        line.unitCostMinorUnits,
+        'stored order unitCostMinorUnits',
+      ),
+      discountMinorUnits: 0,
+      unitId: optionalSafeId(line.unitId, 'stored order unitId'),
+      unitName: line.unitName == null
+        ? null
+        : stringValue(line.unitName, 'stored order unitName'),
+    };
+  });
+
+  const purchaseCommand = {
+    storeId: command.storeId,
+    purchase: {
+      id: command.receiptId,
+      idempotencyKey: command.idempotencyKey,
+      postedAt: command.postedAt,
+      paymentMethod: command.paymentMethod,
+      supplierId: safeId(order.supplierId, 'order supplier id'),
+      description: 'Receipt for purchase order ' + order.orderNumber,
+      currency: command.currency,
+      taxMinorUnits: command.taxMinorUnits,
+      lines: purchaseLines,
+    },
+    accounts: command.accounts,
+  };
+  const result = await postPurchaseInTransaction(
+    transaction,
+    userId,
+    purchaseCommand,
+    PURCHASE_ORDER_ROLES,
+  );
+
+  const completedLines = rawLines.map((rawLine) => ({
+    ...rawLine,
+    receivedQuantityMilliUnits: rawLine.quantityMilliUnits,
+  }));
+  transaction.update(orderRef, {
+    status: 'completed',
+    receiptId: command.receiptId,
+    journalEntryId: result.journalEntryId,
+    completedAt: Timestamp.fromDate(command.postedAt),
+    lines: completedLines,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  transaction.set(receiptIdempotencyRef, {
+    storeId: command.storeId,
+    orderId: command.orderId,
+    receiptId: command.receiptId,
+    idempotencyKey: command.idempotencyKey,
+    purchaseId: result.purchaseId,
+    journalEntryId: result.journalEntryId,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    status: result.status === 'already_posted' ? 'already_received' : 'received',
+    orderId: command.orderId,
+    purchaseId: result.purchaseId,
+    journalEntryId: result.journalEntryId,
   };
 }
 
