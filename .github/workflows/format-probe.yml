@@ -1,0 +1,23 @@
+name: format-probe
+
+on:
+  push:
+    branches:
+      - v2/foundation
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Format target
+        run: |
+          dart format lib/features/dashboard/presentation/dashboard_page.dart
+          echo FORMAT_DASHBOARD_BEGIN
+          cat lib/features/dashboard/presentation/dashboard_page.dart
+          echo FORMAT_DASHBOARD_END
