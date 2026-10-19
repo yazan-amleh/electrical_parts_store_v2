@@ -5,6 +5,7 @@ import '../features/inventory/domain/repositories/inventory_repository.dart';
 import '../features/inventory/domain/repositories/product_repository.dart';
 import '../features/sales/domain/repositories/sale_repository.dart';
 import '../features/purchases/domain/repositories/purchase_repository.dart';
+import '../features/expenses/domain/repositories/expense_repository.dart';
 
 class AppDependencies {
   const AppDependencies({
@@ -15,6 +16,7 @@ class AppDependencies {
     this.productRepository,
     this.saleRepository,
     this.purchaseRepository,
+    this.expenseRepository,
   });
 
   final AppRuntimeConfig runtime;
@@ -24,6 +26,7 @@ class AppDependencies {
   final ProductRepository? productRepository;
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
+  final ExpenseRepository? expenseRepository;
 
   bool get hasFirebaseSession => authSession != null;
 }

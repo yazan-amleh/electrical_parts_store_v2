@@ -12,6 +12,8 @@ import '../../sales/domain/repositories/sale_repository.dart';
 import '../../sales/presentation/sales_page.dart';
 import '../../purchases/domain/repositories/purchase_repository.dart';
 import '../../purchases/presentation/purchases_page.dart';
+import '../../expenses/domain/repositories/expense_repository.dart';
+import '../../expenses/presentation/expenses_page.dart';
 
 class AppShellPage extends StatefulWidget {
   const AppShellPage({
@@ -288,6 +290,7 @@ class _AppShellPageState extends State<AppShellPage> {
           productRepository: widget.dependencies.productRepository,
           saleRepository: widget.dependencies.saleRepository,
           purchaseRepository: widget.dependencies.purchaseRepository,
+          expenseRepository: widget.dependencies.expenseRepository,
           accountingQueryRepository:
               widget.dependencies.accountingQueryRepository,
           membership: widget.membership,
@@ -393,6 +396,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.productRepository,
     required this.saleRepository,
     required this.purchaseRepository,
+    required this.expenseRepository,
     required this.accountingQueryRepository,
     required this.membership,
   });
@@ -402,6 +406,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final ProductRepository? productRepository;
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
+  final ExpenseRepository? expenseRepository;
   final AccountingQueryRepository? accountingQueryRepository;
   final StoreMembership membership;
 
@@ -419,6 +424,13 @@ class _ModuleLandingPage extends StatelessWidget {
       return PurchasesPage(
         repository: purchaseRepository,
         productRepository: productRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'expenses') {
+      return ExpensesPage(
+        repository: expenseRepository,
         user: user,
         membership: membership,
       );
