@@ -1,0 +1,4 @@
+enum PartyType {
+  customer,
+  supplier,
+}
