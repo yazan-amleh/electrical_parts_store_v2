@@ -21,7 +21,10 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Format and print diff
+      - name: Format and print encoded diff
         run: |
           dart format lib test
-          git diff --no-ext-diff -- lib test
+          echo BASE64_DIFF_BEGIN
+          git diff --no-ext-diff -- lib test | base64 -w0
+          echo
+          echo BASE64_DIFF_END
