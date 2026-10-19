@@ -111,7 +111,7 @@ class _AppShellPageState extends State<AppShellPage> {
           icon: Icons.playlist_add_check_outlined,
           description: 'إدارة طلبات الشراء قبل اعتماد الفاتورة.',
           capabilities: ['إنشاء طلب', 'اعتماد', 'تحويل إلى شراء'],
-          foundationReady: false,
+          foundationReady: true,
         ),
       ],
     ),
