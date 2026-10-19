@@ -8,6 +8,7 @@ void main() {
 
     expect(quantity.milliUnits, 1375);
     expect(quantity.formatted, '1.375');
+    expect(Quantity.fromDouble(1.5).formatted, '1.5');
   });
 
   test('supports exact addition and subtraction', () {
