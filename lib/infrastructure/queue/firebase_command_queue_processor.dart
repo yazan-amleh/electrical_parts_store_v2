@@ -1,8 +1,8 @@
 import 'package:cloud_functions/cloud_functions.dart' as firebase_functions;
 
 import '../../core/commands/command_queue_processor.dart';
-import '../../core/errors/failure.dart';
 import '../../core/commands/command_queue_repository.dart';
+import '../../core/errors/failure.dart';
 import '../../core/result/result.dart';
 import '../../core/tenancy/store_context.dart';
 
