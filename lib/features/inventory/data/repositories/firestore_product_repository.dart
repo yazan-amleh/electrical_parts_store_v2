@@ -115,17 +115,21 @@ class FirestoreProductRepository implements ProductRepository {
                 AuthorizationFailure('Product belongs to another store.'),
               );
             }
-            if (existingProduct.quantityOnHand != product.quantityOnHand) {
+            if (existingProduct.quantityOnHand != product.quantityOnHand ||
+                existingProduct.inventoryValue != product.inventoryValue) {
               return const FailureResult<void>(
                 ValidationFailure(
-                  'Stock changes must be posted as inventory movements.',
+                  'Stock and inventory value changes must be posted as '
+                  'inventory movements.',
                 ),
               );
             }
-          } else if (!product.quantityOnHand.isZero) {
+          } else if (!product.quantityOnHand.isZero ||
+              !product.inventoryValue.isZero) {
             return const FailureResult<void>(
               ValidationFailure(
-                'Opening stock must be posted as an inventory movement.',
+                'Opening stock and value must be posted as an inventory '
+                'movement.',
               ),
             );
           }
