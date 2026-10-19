@@ -89,8 +89,7 @@ class FirestoreInventoryRepository implements InventoryRepository {
             );
           }
 
-          final nextQuantity =
-              product.quantityOnHand + movement.quantityDelta;
+          final nextQuantity = product.quantityOnHand + movement.quantityDelta;
           if (!allowNegativeStock && nextQuantity.isNegative) {
             return const FailureResult<InventoryMovement>(
               ValidationFailure('The movement would create negative stock.'),
