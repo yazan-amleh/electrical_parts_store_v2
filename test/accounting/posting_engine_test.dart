@@ -7,6 +7,7 @@ import 'package:electrical_parts_store_v2/features/accounting/data/repositories/
 import 'package:electrical_parts_store_v2/features/accounting/domain/entities/account.dart';
 import 'package:electrical_parts_store_v2/features/accounting/domain/entities/journal_entry.dart';
 import 'package:electrical_parts_store_v2/features/accounting/domain/entities/journal_line.dart';
+import 'package:electrical_parts_store_v2/features/accounting/domain/entities/posting_result.dart';
 import 'package:electrical_parts_store_v2/features/accounting/domain/enums/accounting_enums.dart';
 import 'package:electrical_parts_store_v2/features/accounting/domain/services/journal_posting_engine.dart';
 
@@ -88,14 +89,14 @@ void main() {
         context: context,
         entry: entry,
       )),
-      isA<Success>(),
+      isA<Success<JournalEntry>>(),
     );
 
     final balance = await repository.getAccountBalance(
       context: context,
       accountId: 'cash',
     );
-    expect((balance as Success).value, const Money(minorUnits: 1000));
+    expect((balance as Success<Money>).value, const Money(minorUnits: 1000));
   });
 
   test('rejects an account from another store', () {
