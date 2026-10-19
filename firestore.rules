@@ -59,8 +59,16 @@ service cloud.firestore {
 
       match /products/{productId} {
         allow read: if canReadStore(storeId);
-        allow create, update: if canManageInventory(storeId) &&
-          request.resource.data.storeId == storeId;
+        allow create: if canManageInventory(storeId) &&
+          request.resource.data.storeId == storeId &&
+          request.resource.data.quantityOnHandMilliUnits == 0 &&
+          request.resource.data.inventoryValueMinorUnits == 0;
+        allow update: if canManageInventory(storeId) &&
+          request.resource.data.storeId == storeId &&
+          request.resource.data.quantityOnHandMilliUnits ==
+            resource.data.quantityOnHandMilliUnits &&
+          request.resource.data.inventoryValueMinorUnits ==
+            resource.data.inventoryValueMinorUnits;
         allow delete: if false;
       }
 
@@ -105,7 +113,8 @@ service cloud.firestore {
             'postPartyPayment',
             'postExpense',
             'postAccountTransfer',
-            'postJournalEntry'
+            'postJournalEntry',
+            'postInventoryMovement'
           ] &&
           request.resource.data.idempotencyKey is string;
         allow update: if canReadStore(storeId) &&
@@ -155,17 +164,11 @@ service cloud.firestore {
 
       match /inventory_movements/{movementId} {
         allow read: if canReadStore(storeId);
-        allow create: if canManageInventory(storeId) &&
-          request.resource.data.storeId == storeId &&
-          request.resource.data.productId is string;
-        allow update, delete: if false;
+        allow create, update, delete: if false;
       }
 
       match /inventory_idempotency/{key} {
-        allow read: if canManageInventory(storeId);
-        allow create: if canManageInventory(storeId) &&
-          request.resource.data.storeId == storeId;
-        allow update, delete: if false;
+        allow read, write: if false;
       }
 
       match /journal_entries/{entryId} {
