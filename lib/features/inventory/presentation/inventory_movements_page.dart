@@ -342,7 +342,8 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
                       : Theme.of(context).colorScheme.primary,
                 ),
                 title: Text(_movementTypeLabel(movement.type)),
-                subtitle: Text("${_dateLabel(movement.occurredAt)} • ${movement.sourceType.isEmpty ? 'حركة يدوية' : movement.sourceType}"),
+                subtitle: Text(
+                    "${_dateLabel(movement.occurredAt)} • ${movement.sourceType.isEmpty ? 'حركة يدوية' : movement.sourceType}"),
                 trailing: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
