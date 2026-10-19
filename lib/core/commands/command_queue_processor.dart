@@ -99,7 +99,7 @@ class CommandQueueProcessor {
       return command.processing().failed(failure.message);
     }
 
-    final delaySeconds = (attempt * 15).clamp(15, 300);
+    final delaySeconds = (attempt * 15).clamp(15, 300).toInt();
     return command.processing().retryAt(
           now.add(Duration(seconds: delaySeconds)),
           failure.message,
