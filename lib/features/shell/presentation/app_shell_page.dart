@@ -510,9 +510,7 @@ class _DashboardOverview extends StatelessWidget {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 4),
-              Text(
-                'المتجر: ${membership.storeId} — لوحة V2 الأساسية',
-              ),
+              Text('المتجر: ${membership.storeId} — لوحة V2 الأساسية'),
               const SizedBox(height: 24),
               GridView.builder(
                 shrinkWrap: true,

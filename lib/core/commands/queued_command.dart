@@ -67,9 +67,9 @@ class QueuedCommand {
       status: QueuedCommandStatus.processing,
       attemptCount: attemptCount + 1,
       nextAttemptAt: null,
-      leaseUntil: (now ?? DateTime.now()).toUtc().add(
-        const Duration(minutes: 5),
-      ),
+      leaseUntil: (now ?? DateTime.now())
+          .toUtc()
+          .add(const Duration(minutes: 5)),
       lastError: null,
     );
   }

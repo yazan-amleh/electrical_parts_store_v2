@@ -88,9 +88,7 @@ class _ProductsPageState extends State<ProductsPage> {
       );
     }
     if (products.isEmpty) {
-      return const Center(
-        child: Text('لا توجد أصناف مطابقة للبحث.'),
-      );
+      return const Center(child: Text('لا توجد أصناف مطابقة للبحث.'));
     }
 
     return ListView.separated(

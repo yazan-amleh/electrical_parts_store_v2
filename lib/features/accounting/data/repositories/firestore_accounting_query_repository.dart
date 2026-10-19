@@ -127,8 +127,7 @@ class FirestoreAccountingQueryRepository
     for (final account in accounts.where((account) => !account.isHeader)) {
       final balance = balances[account.id];
       final debit = balance?.debit ?? Money.zero(currency: account.currency);
-      final credit =
-          balance?.credit ?? Money.zero(currency: account.currency);
+      final credit = balance?.credit ?? Money.zero(currency: account.currency);
 
       if (debit.currency != account.currency ||
           credit.currency != account.currency) {
@@ -219,8 +218,8 @@ class FirestoreAccountingQueryRepository
       for (final document in snapshot.docs) {
         final data = document.data();
         final postedAt = _date(data['postedAt']);
-        final entryId =
-            _string(data['entryId']) ?? document.reference.parent.parent?.id;
+        final entryId = _string(data['entryId']) ??
+            document.reference.parent.parent?.id;
         if (postedAt == null || entryId == null || entryId.isEmpty) {
           continue;
         }

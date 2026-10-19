@@ -39,7 +39,8 @@ class FirestoreAccountTransferRepository
       return FailureResult<AccountTransferPostingPlan>(prepared.failure);
     }
 
-    final plan = (prepared as Success<AccountTransferPostingPlan>).value;
+    final plan =
+        (prepared as Success<AccountTransferPostingPlan>).value;
     final payload = AccountTransferCommandMapper.toRequest(
       transfer: transfer,
     );
