@@ -35,10 +35,7 @@ class _ManualJournalPageState extends State<ManualJournalPage> {
   static const _currency = 'ILS';
 
   final _descriptionController = TextEditingController();
-  final _lines = <_JournalLineDraft>[
-    _JournalLineDraft(),
-    _JournalLineDraft(),
-  ];
+  final _lines = <_JournalLineDraft>[_JournalLineDraft(), _JournalLineDraft()];
 
   List<Account> _accounts = const <Account>[];
   DateTime _postedAt = DateTime.now();
@@ -46,13 +43,9 @@ class _ManualJournalPageState extends State<ManualJournalPage> {
   bool _isPosting = false;
   String? _errorMessage;
 
-  Money get _totalDebit => _sum(
-        (line) => line.debitController.text,
-      );
+  Money get _totalDebit => _sum((line) => line.debitController.text);
 
-  Money get _totalCredit => _sum(
-        (line) => line.creditController.text,
-      );
+  Money get _totalCredit => _sum((line) => line.creditController.text);
 
   Money get _difference => (_totalDebit - _totalCredit).absolute;
 
@@ -65,9 +58,7 @@ class _ManualJournalPageState extends State<ManualJournalPage> {
   @override
   Widget build(BuildContext context) {
     if (widget.repository == null || widget.queryRepository == null) {
-      return const Center(
-        child: Text('مستودع القيود غير موصول بهذه البيئة.'),
-      );
+      return const Center(child: Text('مستودع القيود غير موصول بهذه البيئة.'));
     }
     if (_isLoadingAccounts) {
       return const Center(child: CircularProgressIndicator());
@@ -346,11 +337,7 @@ class _ManualJournalPageState extends State<ManualJournalPage> {
       return;
     }
     setState(() {
-      _postedAt = DateTime(
-        selected.year,
-        selected.month,
-        selected.day,
-      );
+      _postedAt = DateTime(selected.year, selected.month, selected.day);
     });
   }
 
@@ -396,9 +383,7 @@ class _ManualJournalPageState extends State<ManualJournalPage> {
       final hasDebit = !debit.isZero;
       final hasCredit = !credit.isZero;
       if (hasDebit == hasCredit) {
-        _showMessage(
-          'يجب إدخال قيمة في جهة واحدة فقط للسطر ${index + 1}.',
-        );
+        _showMessage('يجب إدخال قيمة في جهة واحدة فقط للسطر ${index + 1}.');
         return;
       }
 
@@ -433,8 +418,7 @@ class _ManualJournalPageState extends State<ManualJournalPage> {
       return;
     }
 
-    final entryId =
-        'manual-journal-${DateTime.now().microsecondsSinceEpoch}';
+    final entryId = 'manual-journal-${DateTime.now().microsecondsSinceEpoch}';
     final description = _descriptionController.text.trim();
     late final JournalEntry entry;
     try {
@@ -524,10 +508,7 @@ class _ManualJournalPageState extends State<ManualJournalPage> {
     final fraction = parts.length == 1 || parts[1].isEmpty
         ? 0
         : int.parse(parts[1].padRight(2, '0'));
-    return Money(
-      minorUnits: major * 100 + fraction,
-      currency: _currency,
-    );
+    return Money(minorUnits: major * 100 + fraction, currency: _currency);
   }
 
   String _formatDate(DateTime date) {
