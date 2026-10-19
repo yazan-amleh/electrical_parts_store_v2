@@ -20,6 +20,7 @@ enum ControlType {
   inventory,
   fixedAsset,
   tax,
+  inputTax,
 }
 
 enum StatementSection {
