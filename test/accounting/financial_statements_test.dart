@@ -7,7 +7,8 @@ import 'package:electrical_parts_store_v2/features/accounting/domain/entities/tr
 import 'package:electrical_parts_store_v2/features/accounting/domain/enums/accounting_enums.dart';
 
 void main() {
-  test('calculates income statement and balance sheet from one trial balance', () {
+  test('calculates income statement and balance sheet from one trial balance',
+      () {
     const cash = Account(
       id: '1110',
       storeId: 'store-1',

@@ -90,7 +90,8 @@ class _FinancialStatementsPageState extends State<FinancialStatementsPage> {
             const SizedBox(height: 12),
             switch (_selectedView) {
               _StatementView.trialBalance => _buildTrialBalance(trialBalance),
-              _StatementView.incomeStatement => _buildIncomeStatement(statements),
+              _StatementView.incomeStatement =>
+                _buildIncomeStatement(statements),
               _StatementView.balanceSheet => _buildBalanceSheet(statements),
             },
           ],
