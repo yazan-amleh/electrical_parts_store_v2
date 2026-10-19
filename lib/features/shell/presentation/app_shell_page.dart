@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
 import '../../accounting/domain/repositories/accounting_query_repository.dart';
-import '../../accounting/presentation/trial_balance_page.dart';
+import '../../accounting/presentation/financial_statements_page.dart';
 import '../../accounting/presentation/ledger_page.dart';
 import '../../accounting/presentation/chart_of_accounts_page.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
@@ -507,7 +507,7 @@ class _ModuleLandingPage extends StatelessWidget {
       );
     }
     if (module.id == 'financial-statements') {
-      return TrialBalancePage(
+      return FinancialStatementsPage(
         repository: accountingQueryRepository,
         user: user,
         membership: membership,
