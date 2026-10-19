@@ -38,14 +38,14 @@ class SalePostingPlanner {
       final zero = Money.zero(currency: sale.currency);
       final journalLines = <JournalLine>[
         JournalLine(
-          id: sale.id + '-settlement',
+          id: _lineId(sale.id, 'settlement'),
           accountId: accounts.settlementAccountId,
           debit: sale.grandTotal,
           credit: zero,
           description: sale.paymentMethod.name,
         ),
         JournalLine(
-          id: sale.id + '-sales',
+          id: _lineId(sale.id, 'sales'),
           accountId: accounts.salesAccountId,
           debit: zero,
           credit: sale.subtotal,
@@ -56,7 +56,7 @@ class SalePostingPlanner {
       if (!sale.tax.isZero) {
         journalLines.add(
           JournalLine(
-            id: sale.id + '-tax',
+            id: _lineId(sale.id, 'tax'),
             accountId: accounts.taxAccountId!,
             debit: zero,
             credit: sale.tax,
@@ -69,14 +69,14 @@ class SalePostingPlanner {
         journalLines.addAll(
           <JournalLine>[
             JournalLine(
-              id: sale.id + '-cost',
+              id: _lineId(sale.id, 'cost'),
               accountId: accounts.costOfSalesAccountId,
               debit: sale.costTotal,
               credit: zero,
               description: 'Cost of sales',
             ),
             JournalLine(
-              id: sale.id + '-inventory',
+              id: _lineId(sale.id, 'inventory'),
               accountId: accounts.inventoryAccountId,
               debit: zero,
               credit: sale.costTotal,
@@ -87,9 +87,9 @@ class SalePostingPlanner {
       }
 
       final entry = JournalEntry(
-        id: sale.id + '-journal',
+        id: _lineId(sale.id, 'journal'),
         storeId: sale.storeId,
-        idempotencyKey: sale.idempotencyKey.value + ':journal',
+        idempotencyKey: _scopeKey(sale.idempotencyKey.value, 'journal'),
         postedAt: sale.postedAt,
         sourceType: 'sale',
         description: sale.description,
@@ -100,7 +100,7 @@ class SalePostingPlanner {
           .where((line) => !line.isService)
           .map(
             (line) => InventoryMovement(
-              id: sale.id + '-inventory-' + line.id,
+              id: _movementId(sale.id, line.id),
               storeId: sale.storeId,
               productId: line.productId,
               type: InventoryMovementType.saleIssue,
@@ -109,7 +109,7 @@ class SalePostingPlanner {
               ),
               unitCost: line.unitCost,
               idempotencyKey: IdempotencyKey(
-                sale.idempotencyKey.value + ':inventory:' + line.id,
+                _lineScopeKey(sale.idempotencyKey.value, line.id),
               ),
               sourceType: 'sale',
               sourceId: sale.id,
@@ -126,9 +126,25 @@ class SalePostingPlanner {
         ),
       );
     } on ArgumentError catch (error) {
-      return FailureResult< SalePostingPlan>(
+      return FailureResult<SalePostingPlan>(
         ValidationFailure(error.message.toString()),
       );
     }
+  }
+
+  static String _lineId(String saleId, String suffix) {
+    return '$saleId-$suffix';
+  }
+
+  static String _movementId(String saleId, String lineId) {
+    return '$saleId-inventory-$lineId';
+  }
+
+  static String _scopeKey(String key, String scope) {
+    return '$key:$scope';
+  }
+
+  static String _lineScopeKey(String key, String lineId) {
+    return '$key:inventory:$lineId';
   }
 }
