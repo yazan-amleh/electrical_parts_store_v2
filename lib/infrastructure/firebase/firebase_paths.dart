@@ -22,6 +22,13 @@ abstract final class FirebasePaths {
     return store(firestore, storeId).collection('accounts');
   }
 
+  static CollectionReference<Map<String, dynamic>> products(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('products');
+  }
+
   static CollectionReference<Map<String, dynamic>> journalEntries(
     FirebaseFirestore firestore,
     String storeId,
