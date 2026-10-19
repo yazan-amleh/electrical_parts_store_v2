@@ -5,6 +5,6 @@ import 'app/bootstrap.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await AppBootstrap.initialize();
-  runApp(const V2App());
+  final dependencies = await AppBootstrap.initialize();
+  runApp(V2App(dependencies: dependencies));
 }
