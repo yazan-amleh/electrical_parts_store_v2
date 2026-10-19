@@ -294,6 +294,7 @@ class _AppShellPageState extends State<AppShellPage> {
     var moduleOffset = 0;
 
     for (final section in _sections) {
+      final sectionOffset = moduleOffset;
       navigationItems.add(
         Padding(
           padding: const EdgeInsetsDirectional.fromSTEB(
@@ -319,10 +320,10 @@ class _AppShellPageState extends State<AppShellPage> {
           ListTile(
             leading: Icon(section.modules[localIndex].icon),
             title: Text(section.modules[localIndex].label),
-            selected: selectedIndex == moduleOffset + localIndex,
+            selected: selectedIndex == sectionOffset + localIndex,
             onTap: () {
               setState(() {
-                selectedIndex = moduleOffset + localIndex;
+                selectedIndex = sectionOffset + localIndex;
               });
               Navigator.of(context).pop();
             },
