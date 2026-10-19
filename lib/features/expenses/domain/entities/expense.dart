@@ -1,7 +1,6 @@
 import '../../../../core/idempotency/idempotency_key.dart';
 import '../../../../core/money/money.dart';
 import '../../../../core/tenancy/store_context.dart';
-import '../../../parties/domain/enums/party_type.dart';
 import '../enums/expense_payment_method.dart';
 
 class Expense {
