@@ -68,12 +68,11 @@ class _DashboardPageState extends State<DashboardPage> {
 
     final metrics = _buildMetrics();
     final lowStockProducts =
-        _products.where((product) => product.isLowStock).toList()
-          ..sort(
-            (left, right) => left.quantityOnHand.milliUnits.compareTo(
-              right.quantityOnHand.milliUnits,
-            ),
-          );
+        _products.where((product) => product.isLowStock).toList()..sort(
+          (left, right) => left.quantityOnHand.milliUnits.compareTo(
+            right.quantityOnHand.milliUnits,
+          ),
+        );
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -163,8 +162,7 @@ class _DashboardPageState extends State<DashboardPage> {
         title: 'ذمم العملاء',
         subtitle: 'الرصيد المدين',
         value: _sumWhere(
-          (account) =>
-              account.controlType == ControlType.customerReceivable,
+          (account) => account.controlType == ControlType.customerReceivable,
         ),
         icon: Icons.people_outline,
       ),
@@ -179,17 +177,13 @@ class _DashboardPageState extends State<DashboardPage> {
       _DashboardMetric(
         title: 'المبيعات',
         subtitle: 'تراكمي من القيود',
-        value: _sumWhere(
-          (account) => account.type == AccountType.revenue,
-        ),
+        value: _sumWhere((account) => account.type == AccountType.revenue),
         icon: Icons.point_of_sale_outlined,
       ),
       _DashboardMetric(
         title: 'المصاريف',
         subtitle: 'تراكمي من القيود',
-        value: _sumWhere(
-          (account) => account.type == AccountType.expense,
-        ),
+        value: _sumWhere((account) => account.type == AccountType.expense),
         icon: Icons.receipt_long_outlined,
       ),
       _DashboardMetric(
@@ -205,10 +199,7 @@ class _DashboardPageState extends State<DashboardPage> {
     ];
   }
 
-  Widget _buildMetricCard(
-    BuildContext context,
-    _DashboardMetric metric,
-  ) {
+  Widget _buildMetricCard(BuildContext context, _DashboardMetric metric) {
     final colorScheme = Theme.of(context).colorScheme;
     return Card(
       child: Padding(
@@ -276,10 +267,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   isBalanced
                       ? 'ميزان المراجعة متوازن'
                       : 'تنبيه: ميزان المراجعة غير متوازن',
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(color: color, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -294,10 +282,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildLowStockCard(
-    BuildContext context,
-    List<Product> products,
-  ) {
+  Widget _buildLowStockCard(BuildContext context, List<Product> products) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
@@ -352,10 +337,7 @@ class _DashboardPageState extends State<DashboardPage> {
       final raw = line.debit - line.credit;
       final normalized = line.account.normalSide == NormalSide.debit
           ? raw
-          : Money(
-              minorUnits: -raw.minorUnits,
-              currency: raw.currency,
-            );
+          : Money(minorUnits: -raw.minorUnits, currency: raw.currency);
       if (normalized.currency == _currency) {
         total += normalized;
       }
