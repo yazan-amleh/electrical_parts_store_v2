@@ -28,9 +28,6 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Format probe
-        run: dart format --output=show lib/features/auth/data/repositories/firebase_auth_repository.dart lib/features/auth/data/repositories/firestore_store_membership_repository.dart
-
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed lib test
 
