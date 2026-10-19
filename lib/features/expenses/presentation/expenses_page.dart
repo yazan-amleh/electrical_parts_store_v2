@@ -1,3 +1,9 @@
+[36;1mdart format --output=show lib/features/expenses/presentation/expenses_page.dart[0m
+shell: /usr/bin/bash -e {0}
+env:
+  FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.47.7-x64/flutter
+  PUB_CACHE: /home/runner/.pub-cache
+##[endgroup]
 import 'package:flutter/material.dart';
 
 import '../../../core/errors/failure.dart';
@@ -145,12 +151,13 @@ class _ExpensesPageState extends State<ExpensesPage> {
                         initialValue: _paymentMethod,
                         decoration: const InputDecoration(
                           labelText: 'طريقة الدفع',
-                          prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                          prefixIcon:
+                              Icon(Icons.account_balance_wallet_outlined),
                         ),
                         items: ExpensePaymentMethod.values
                             .map(
-                              (method) => DropdownMenuItem<
-                                  ExpensePaymentMethod>(
+                              (method) =>
+                                  DropdownMenuItem<ExpensePaymentMethod>(
                                 value: method,
                                 child: Text(method.arabicLabel),
                               ),
@@ -288,7 +295,8 @@ class _ExpensesPageState extends State<ExpensesPage> {
       return;
     }
 
-    final expenseId = 'expense-' + DateTime.now().microsecondsSinceEpoch.toString();
+    final expenseId =
+        'expense-' + DateTime.now().microsecondsSinceEpoch.toString();
     final expense = Expense(
       id: expenseId,
       storeId: widget.membership.storeId,
