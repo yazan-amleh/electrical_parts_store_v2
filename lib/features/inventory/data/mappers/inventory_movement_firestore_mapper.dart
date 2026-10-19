@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/idempotency/idempotency_key.dart';
-
 import '../../../../core/money/money.dart';
 import '../../../../core/quantity/quantity.dart';
 import '../../domain/entities/inventory_movement.dart';
@@ -15,6 +14,7 @@ abstract final class InventoryMovementFirestoreMapper {
       'type': movement.type.name,
       'quantityDeltaMilliUnits': movement.quantityDelta.milliUnits,
       'unitCostMinorUnits': movement.unitCost.minorUnits,
+      'totalCostMinorUnits': movement.totalCost.minorUnits,
       'currency': movement.unitCost.currency,
       'idempotencyKey': movement.idempotencyKey,
       'sourceType': movement.sourceType,
@@ -46,6 +46,16 @@ abstract final class InventoryMovementFirestoreMapper {
         minorUnits: _int(data['unitCostMinorUnits']),
         currency: currency,
       ),
+      totalCost: Money(
+        minorUnits: _int(
+          data['totalCostMinorUnits'],
+          _defaultTotalCost(
+            data['quantityDeltaMilliUnits'],
+            data['unitCostMinorUnits'],
+          ),
+        ),
+        currency: currency,
+      ),
       idempotencyKey: IdempotencyKey(
         _string(data['idempotencyKey'], snapshot.id),
       ),
@@ -53,6 +63,13 @@ abstract final class InventoryMovementFirestoreMapper {
       sourceId: data['sourceId'] as String?,
       occurredAt: _date(data['occurredAt']) ?? DateTime.now().toUtc(),
     );
+  }
+
+  static int _defaultTotalCost(Object? quantity, Object? unitCost) {
+    final quantityMilliUnits = _int(quantity).abs();
+    final unitCostMinorUnits = _int(unitCost);
+    final numerator = quantityMilliUnits * unitCostMinorUnits;
+    return (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
   }
 
   static DateTime? _date(Object? value) {
