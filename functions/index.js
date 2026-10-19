@@ -83,6 +83,36 @@ exports.postPurchase = onCall(async (request) => {
   }
 });
 
+exports.postExpense = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parseExpenseCommand(request.data);
+
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return postExpenseInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('postExpense failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The expense could not be posted.',
+    );
+  }
+});
+
 exports.postPartyPayment = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
