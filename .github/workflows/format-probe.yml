@@ -1,0 +1,34 @@
+name: Financial statements format probe
+
+on:
+  push:
+    branches:
+      - "v2/**"
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format lib/features/accounting/domain/entities/financial_statements.dart lib/features/accounting/presentation/financial_statements_page.dart test/accounting/financial_statements_test.dart lib/features/shell/presentation/app_shell_page.dart
+      - run: |
+          echo FORMAT_0_BEGIN
+          cat lib/features/accounting/domain/entities/financial_statements.dart
+          echo FORMAT_0_END
+          echo FORMAT_1_BEGIN
+          cat lib/features/accounting/presentation/financial_statements_page.dart
+          echo FORMAT_1_END
+          echo FORMAT_2_BEGIN
+          cat test/accounting/financial_statements_test.dart
+          echo FORMAT_2_END
+          echo FORMAT_3_BEGIN
+          cat lib/features/shell/presentation/app_shell_page.dart
+          echo FORMAT_3_END
