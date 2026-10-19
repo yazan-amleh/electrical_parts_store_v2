@@ -41,6 +41,7 @@ class AuthGate extends StatelessWidget {
               );
             }
             return AppShellPage(
+              dependencies: dependencies,
               user: user,
               membership: membership,
               onSignOut: controller.signOut,
