@@ -280,7 +280,47 @@ class _AppShellPageState extends State<AppShellPage> {
   }
 
   Widget _buildDrawer(BuildContext context, List<_Module> modules) {
+    final navigationItems = <Widget>[];
     var moduleOffset = 0;
+
+    for (final section in _sections) {
+      navigationItems.add(
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(
+            20,
+            12,
+            20,
+            4,
+          ),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              section.title,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+          ),
+        ),
+      );
+
+      for (var localIndex = 0;
+          localIndex < section.modules.length;
+          localIndex++) {
+        navigationItems.add(
+          ListTile(
+            leading: Icon(section.modules[localIndex].icon),
+            title: Text(section.modules[localIndex].label),
+            selected: selectedIndex == moduleOffset + localIndex,
+            onTap: () {
+              setState(() {
+                selectedIndex = moduleOffset + localIndex;
+              });
+              Navigator.of(context).pop();
+            },
+          ),
+        );
+      }
+      moduleOffset += section.modules.length;
+    }
 
     return Drawer(
       child: SafeArea(
@@ -309,40 +349,7 @@ class _AppShellPageState extends State<AppShellPage> {
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                children: [
-                  for (final section in _sections) ...[
-                    Padding(
-                      padding: const EdgeInsetsDirectional.fromSTEB(
-                        20,
-                        12,
-                        20,
-                        4,
-                      ),
-                      child: Align(
-                        alignment: AlignmentDirectional.centerStart,
-                        child: Text(
-                          section.title,
-                          style: Theme.of(context).textTheme.labelLarge,
-                        ),
-                      ),
-                    ),
-                    for (var localIndex = 0;
-                        localIndex < section.modules.length;
-                        localIndex++)
-                      ListTile(
-                        leading: Icon(section.modules[localIndex].icon),
-                        title: Text(section.modules[localIndex].label),
-                        selected: selectedIndex == moduleOffset + localIndex,
-                        onTap: () {
-                          setState(() {
-                            selectedIndex = moduleOffset + localIndex;
-                          });
-                          Navigator.of(context).pop();
-                        },
-                      ),
-                    moduleOffset += section.modules.length,
-                  ],
-                ],
+                children: navigationItems,
               ),
             ),
             const Divider(height: 1),
