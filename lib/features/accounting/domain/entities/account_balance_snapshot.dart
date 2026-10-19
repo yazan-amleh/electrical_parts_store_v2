@@ -15,13 +15,10 @@ class AccountBalanceSnapshot {
   Money get debitCreditBalance => debit - credit;
 
   Money normalizedBalance(NormalSide normalSide) {
-    return normalSide == NormalSide.debit
-        ? debitCreditBalance
-        : -debitCreditBalance.minorUnits == 0
-            ? Money.zero(currency: debit.currency)
-            : Money(
-                minorUnits: -debitCreditBalance.minorUnits,
-                currency: debit.currency,
-              );
+    final rawBalance = debitCreditBalance.minorUnits;
+    return Money(
+      minorUnits: normalSide == NormalSide.debit ? rawBalance : -rawBalance,
+      currency: debit.currency,
+    );
   }
 }
