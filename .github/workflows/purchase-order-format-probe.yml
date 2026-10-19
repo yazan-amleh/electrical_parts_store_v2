@@ -1,0 +1,45 @@
+name: Purchase order format probe
+
+on:
+  push:
+    branches:
+      - v2/foundation
+  workflow_dispatch:
+
+jobs:
+  format-probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.2'
+          channel: stable
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Print formatted purchase-order files
+        shell: bash
+        run: |
+          set -e
+          files=(
+            lib/app/app_dependencies.dart
+            lib/app/bootstrap.dart
+            lib/infrastructure/firebase/firebase_paths.dart
+            lib/features/shell/presentation/app_shell_page.dart
+            lib/features/purchase_orders/domain/enums/purchase_order_status.dart
+            lib/features/purchase_orders/domain/entities/purchase_order_line.dart
+            lib/features/purchase_orders/domain/entities/purchase_order.dart
+            lib/features/purchase_orders/domain/entities/purchase_order_receipt.dart
+            lib/features/purchase_orders/domain/repositories/purchase_order_repository.dart
+            lib/features/purchase_orders/data/mappers/purchase_order_firestore_mapper.dart
+            lib/features/purchase_orders/data/mappers/purchase_order_command_mapper.dart
+            lib/features/purchase_orders/data/repositories/firestore_purchase_order_repository.dart
+            lib/features/purchase_orders/presentation/purchase_orders_page.dart
+          )
+          for file in "${files[@]}"; do
+            echo "PROBE_FILE_START:${file}"
+            dart format --output=show "${file}"
+            echo "PROBE_FILE_END:${file}"
+          done
