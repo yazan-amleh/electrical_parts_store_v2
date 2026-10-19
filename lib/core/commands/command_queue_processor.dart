@@ -50,7 +50,7 @@ class CommandQueueProcessor {
     for (final command in commands) {
       final processingResult = await _repository.save(
         context: context,
-        command: command.processing(),
+        command: command.processing(now: currentTime),
       );
       if (processingResult is FailureResult<QueuedCommand>) {
         return FailureResult<int>(processingResult.failure);
@@ -60,7 +60,7 @@ class CommandQueueProcessor {
       if (execution is Success<void>) {
         final completedResult = await _repository.save(
           context: context,
-          command: command.processing().completed(),
+          command: command.processing(now: currentTime).completed(),
         );
         if (completedResult is FailureResult<QueuedCommand>) {
           return FailureResult<int>(completedResult.failure);
@@ -96,11 +96,11 @@ class CommandQueueProcessor {
     final retryable = failure is InfrastructureFailure &&
         attempt < maxAttempts;
     if (!retryable) {
-      return command.processing().failed(failure.message);
+      return command.processing(now: now).failed(failure.message);
     }
 
     final delaySeconds = (attempt * 15).clamp(15, 300).toInt();
-    return command.processing().retryAt(
+    return command.processing(now: now).retryAt(
           now.add(Duration(seconds: delaySeconds)),
           failure.message,
         );
