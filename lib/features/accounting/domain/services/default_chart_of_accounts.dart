@@ -233,8 +233,7 @@ abstract final class DefaultChartOfAccounts {
     ControlType controlType = ControlType.none,
     NormalSide? normalSide,
   }) {
-    final resolvedSide =
-        normalSide ?? _normalSideFor(_accountTypeFor(section));
+    final resolvedSide = normalSide ?? _normalSideFor(_accountTypeFor(section));
 
     return Account(
       id: id,
