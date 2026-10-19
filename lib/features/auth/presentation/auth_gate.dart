@@ -23,7 +23,7 @@ class AuthGate extends StatelessWidget {
 
     return AnimatedBuilder(
       animation: controller,
-      builder: (context, child) {
+      builder: (context, _) {
         switch (controller.status) {
           case AuthSessionStatus.signedOut:
           case AuthSessionStatus.signingIn:
