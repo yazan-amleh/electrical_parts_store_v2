@@ -1,0 +1,55 @@
+name: Party directory format probe
+
+on:
+  push:
+    branches:
+      - "v2/**"
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format lib/features/parties/domain/entities/party.dart lib/features/parties/domain/entities/party_balance.dart lib/features/parties/domain/repositories/party_repository.dart lib/features/parties/data/mappers/party_firestore_mapper.dart lib/features/parties/data/repositories/firestore_party_repository.dart lib/features/parties/presentation/party_directory_page.dart lib/features/payments/presentation/party_payments_page.dart lib/app/app_dependencies.dart lib/app/bootstrap.dart lib/infrastructure/firebase/firebase_paths.dart lib/features/shell/presentation/app_shell_page.dart
+      - run: |
+          echo FORMAT_0_BEGIN
+          cat lib/features/parties/domain/entities/party.dart
+          echo FORMAT_0_END
+          echo FORMAT_1_BEGIN
+          cat lib/features/parties/domain/entities/party_balance.dart
+          echo FORMAT_1_END
+          echo FORMAT_2_BEGIN
+          cat lib/features/parties/domain/repositories/party_repository.dart
+          echo FORMAT_2_END
+          echo FORMAT_3_BEGIN
+          cat lib/features/parties/data/mappers/party_firestore_mapper.dart
+          echo FORMAT_3_END
+          echo FORMAT_4_BEGIN
+          cat lib/features/parties/data/repositories/firestore_party_repository.dart
+          echo FORMAT_4_END
+          echo FORMAT_5_BEGIN
+          cat lib/features/parties/presentation/party_directory_page.dart
+          echo FORMAT_5_END
+          echo FORMAT_6_BEGIN
+          cat lib/features/payments/presentation/party_payments_page.dart
+          echo FORMAT_6_END
+          echo FORMAT_7_BEGIN
+          cat lib/app/app_dependencies.dart
+          echo FORMAT_7_END
+          echo FORMAT_8_BEGIN
+          cat lib/app/bootstrap.dart
+          echo FORMAT_8_END
+          echo FORMAT_9_BEGIN
+          cat lib/infrastructure/firebase/firebase_paths.dart
+          echo FORMAT_9_END
+          echo FORMAT_10_BEGIN
+          cat lib/features/shell/presentation/app_shell_page.dart
+          echo FORMAT_10_END
