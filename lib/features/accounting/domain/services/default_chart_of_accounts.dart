@@ -72,6 +72,16 @@ abstract final class DefaultChartOfAccounts {
         section: StatementSection.currentAsset,
         sortOrder: 160,
       ),
+      _posting(
+        storeId: storeId,
+        id: '1170',
+        code: '1170',
+        name: 'ضريبة المدخلات',
+        parentId: '1100',
+        controlType: ControlType.inputTax,
+        section: StatementSection.currentAsset,
+        sortOrder: 170,
+      ),
       _header(
         storeId: storeId,
         id: '1200',
