@@ -54,13 +54,27 @@ class _ProductsPageState extends State<ProductsPage> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'ابحث بالاسم أو SKU أو الباركود',
-                prefixIcon: Icon(Icons.search),
-              ),
-              onChanged: (_) => setState(() {}),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: const InputDecoration(
+                      hintText: 'ابحث بالاسم أو SKU أو الباركود',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: widget.repository == null
+                      ? null
+                      : () => _openEditor(),
+                  icon: const Icon(Icons.add),
+                  label: const Text('إضافة صنف'),
+                ),
+              ],
             ),
           ),
           Expanded(child: _buildBody(context, filtered)),
@@ -99,6 +113,7 @@ class _ProductsPageState extends State<ProductsPage> {
         final product = products[index];
         return Card(
           child: ListTile(
+            onTap: () => _openEditor(product),
             leading: CircleAvatar(
               child: Icon(
                 product.isService
@@ -177,6 +192,53 @@ class _ProductsPageState extends State<ProductsPage> {
         _products = result.value;
       });
     }
+  }
+
+  Future<void> _openEditor([Product? initialProduct]) async {
+    final repository = widget.repository;
+    if (repository == null) {
+      _showMessage('مستودع الأصناف غير موصول بهذه البيئة.');
+      return;
+    }
+
+    final product = await showDialog<Product>(
+      context: context,
+      builder: (_) => ProductEditorDialog(
+        storeId: widget.membership.storeId,
+        initialProduct: initialProduct,
+      ),
+    );
+    if (!mounted || product == null) {
+      return;
+    }
+
+    final result = await repository.saveProduct(
+      context: StoreContext(
+        storeId: widget.membership.storeId,
+        userId: widget.user.id,
+      ),
+      product: product,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    if (result is FailureResult<void>) {
+      _showMessage(result.failure.message);
+      return;
+    }
+    if (result is Success<void>) {
+      _showMessage(
+        initialProduct == null ? 'تمت إضافة الصنف.' : 'تم تحديث الصنف.',
+      );
+      await _loadProducts();
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
