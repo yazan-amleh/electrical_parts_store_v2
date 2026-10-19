@@ -656,7 +656,11 @@ async function postAccountTransferInTransaction(
   for (const line of journalLines) {
     transaction.set(
       journalRef.collection('lines').doc(line.id),
-      line,
+      {
+        ...line,
+        entryId: journalEntryId,
+        postedAt: Timestamp.fromDate(command.transfer.postedAt),
+      },
     );
   }
 
@@ -1059,7 +1063,11 @@ async function postExpenseInTransaction(transaction, userId, command) {
   for (const line of journalLines) {
     transaction.set(
       journalRef.collection('lines').doc(line.id),
-      line,
+      {
+        ...line,
+        entryId: journalEntryId,
+        postedAt: Timestamp.fromDate(command.expense.postedAt),
+      },
     );
   }
 
@@ -1489,7 +1497,11 @@ async function postPartyPaymentInTransaction(
   for (const line of journalLines) {
     transaction.set(
       journalRef.collection('lines').doc(line.id),
-      line,
+      {
+        ...line,
+        entryId: journalEntryId,
+        postedAt: Timestamp.fromDate(command.payment.postedAt),
+      },
     );
   }
 
@@ -2148,7 +2160,11 @@ async function postPurchaseInTransaction(transaction, userId, command) {
   for (const line of journalLines) {
     transaction.set(
       journalRef.collection('lines').doc(line.id),
-      line,
+      {
+        ...line,
+        entryId: journalEntryId,
+        postedAt: Timestamp.fromDate(command.purchase.postedAt),
+      },
     );
   }
 
@@ -2951,7 +2967,11 @@ async function postSaleInTransaction(transaction, userId, command) {
   for (const line of journalLines) {
     transaction.set(
       journalRef.collection('lines').doc(line.id),
-      line,
+      {
+        ...line,
+        entryId: journalEntryId,
+        postedAt: Timestamp.fromDate(command.sale.postedAt),
+      },
     );
   }
 
