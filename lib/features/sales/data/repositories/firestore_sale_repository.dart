@@ -1,4 +1,4 @@
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:cloud_functions/cloud_functions.dart' as firebase_functions;
 
 import '../../../../core/errors/failure.dart';
 import '../../../../core/result/result.dart';
@@ -11,12 +11,12 @@ import '../mappers/sale_command_mapper.dart';
 
 class FirestoreSaleRepository implements SaleRepository {
   FirestoreSaleRepository({
-    required FirebaseFunctions functions,
+    required firebase_functions.FirebaseFunctions functions,
     SalePostingPlanner planner = const SalePostingPlanner(),
   })  : _functions = functions,
         _planner = planner;
 
-  final FirebaseFunctions _functions;
+  final firebase_functions.FirebaseFunctions _functions;
   final SalePostingPlanner _planner;
 
   @override
@@ -38,7 +38,7 @@ class FirestoreSaleRepository implements SaleRepository {
 
     try {
       final callable = _functions.httpsCallable('postSale');
-      final response = await callable.call(
+      final response = await callable.call<Map<String, dynamic>>(
         SaleCommandMapper.toRequest(
           sale: sale,
           accounts: accounts,
@@ -63,7 +63,7 @@ class FirestoreSaleRepository implements SaleRepository {
       }
 
       return Success<SalePostingPlan>(plan);
-    } on FirebaseFunctionsException catch (error) {
+    } on firebase_functions.FirebaseFunctionsException catch (error) {
       return FailureResult<SalePostingPlan>(_mapFailure(error));
     } catch (error) {
       return FailureResult<SalePostingPlan>(
@@ -72,7 +72,9 @@ class FirestoreSaleRepository implements SaleRepository {
     }
   }
 
-  Failure _mapFailure(FirebaseFunctionsException error) {
+  Failure _mapFailure(
+    firebase_functions.FirebaseFunctionsException error,
+  ) {
     switch (error.code) {
       case 'permission-denied':
       case 'unauthenticated':
