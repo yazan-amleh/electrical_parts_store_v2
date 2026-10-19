@@ -78,6 +78,20 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      match /purchases/{purchaseId} {
+        allow read: if canReadStore(storeId);
+        allow create, update, delete: if false;
+
+        match /lines/{lineId} {
+          allow read: if canReadStore(storeId);
+          allow create, update, delete: if false;
+        }
+      }
+
+      match /purchase_idempotency/{key} {
+        allow read, write: if false;
+      }
+
       match /inventory_movements/{movementId} {
         allow read: if canReadStore(storeId);
         allow create: if canManageInventory(storeId) &&
