@@ -47,9 +47,9 @@ class JournalPostingEngine {
           ),
         );
       }
-      if (!account.isActive) {
+      if (!account.canPost) {
         return FailureResult(
-          ValidationFailure('Account is inactive: ${line.accountId}.'),
+          ValidationFailure('Account is not postable: ${line.accountId}.'),
         );
       }
       if (account.currency != line.debit.currency ||
