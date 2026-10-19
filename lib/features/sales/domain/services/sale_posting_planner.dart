@@ -27,6 +27,7 @@ class SalePostingPlanner {
 
     try {
       accounts.validate();
+      final settlementAccountId = accounts.accountFor(sale.paymentMethod);
       if (!sale.tax.isZero &&
           (accounts.taxAccountId == null ||
               accounts.taxAccountId!.trim().isEmpty)) {
@@ -39,7 +40,7 @@ class SalePostingPlanner {
       final journalLines = <JournalLine>[
         JournalLine(
           id: _lineId(sale.id, 'settlement'),
-          accountId: accounts.settlementAccountId,
+          accountId: settlementAccountId,
           debit: sale.grandTotal,
           credit: zero,
           description: sale.paymentMethod.name,
