@@ -7,38 +7,21 @@ import '../../domain/entities/inventory_movement.dart';
 import '../../domain/enums/inventory_movement_type.dart';
 
 abstract final class InventoryMovementFirestoreMapper {
-  static Map<String, dynamic> toMap(InventoryMovement movement) {
-    return <String, dynamic>{
-      'storeId': movement.storeId,
-      'productId': movement.productId,
-      'type': movement.type.name,
-      'quantityDeltaMilliUnits': movement.quantityDelta.milliUnits,
-      'unitCostMinorUnits': movement.unitCost.minorUnits,
-      'totalCostMinorUnits': movement.totalCost.minorUnits,
-      'currency': movement.unitCost.currency,
-      'idempotencyKey': movement.idempotencyKey,
-      'sourceType': movement.sourceType,
-      'sourceId': movement.sourceId,
-      'occurredAt': Timestamp.fromDate(movement.occurredAt),
-    };
-  }
-
   static InventoryMovement fromSnapshot(
     DocumentSnapshot<Map<String, dynamic>> snapshot,
   ) {
     final data = snapshot.data() ?? const <String, dynamic>{};
-    final typeName = data['type'] is String ? data['type'] as String : '';
-    final movementType = InventoryMovementType.values.firstWhere(
-      (type) => type.name == typeName,
+    final currency = _string(data['currency'], 'ILS');
+    final type = InventoryMovementType.values.firstWhere(
+      (value) => value.name == _string(data['type'], ''),
       orElse: () => InventoryMovementType.adjustment,
     );
-    final currency = _string(data['currency'], 'ILS');
 
     return InventoryMovement(
       id: snapshot.id,
       storeId: _string(data['storeId'], ''),
       productId: _string(data['productId'], ''),
-      type: movementType,
+      type: type,
       quantityDelta: Quantity.fromMilliUnits(
         _int(data['quantityDeltaMilliUnits']),
       ),
@@ -47,13 +30,7 @@ abstract final class InventoryMovementFirestoreMapper {
         currency: currency,
       ),
       totalCost: Money(
-        minorUnits: _int(
-          data['totalCostMinorUnits'],
-          _defaultTotalCost(
-            data['quantityDeltaMilliUnits'],
-            data['unitCostMinorUnits'],
-          ),
-        ),
+        minorUnits: _int(data['totalCostMinorUnits']),
         currency: currency,
       ),
       idempotencyKey: IdempotencyKey(
@@ -61,15 +38,8 @@ abstract final class InventoryMovementFirestoreMapper {
       ),
       sourceType: _string(data['sourceType'], ''),
       sourceId: data['sourceId'] as String?,
-      occurredAt: _date(data['occurredAt']) ?? DateTime.now().toUtc(),
+      occurredAt: _date(data['occurredAt']) ?? DateTime.fromMillisecondsSinceEpoch(0),
     );
-  }
-
-  static int _defaultTotalCost(Object? quantity, Object? unitCost) {
-    final quantityMilliUnits = _int(quantity).abs();
-    final unitCostMinorUnits = _int(unitCost);
-    final numerator = quantityMilliUnits * unitCostMinorUnits;
-    return (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
   }
 
   static DateTime? _date(Object? value) {

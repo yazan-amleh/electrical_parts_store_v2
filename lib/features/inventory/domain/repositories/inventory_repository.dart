@@ -13,4 +13,10 @@ abstract interface class InventoryRepository {
     required StoreContext context,
     required String productId,
   });
+
+  Future<Result<List<InventoryMovement>>> getMovements({
+    required StoreContext context,
+    String? productId,
+    int limit = 100,
+  });
 }

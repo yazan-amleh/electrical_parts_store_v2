@@ -12,6 +12,7 @@ import '../../domain/entities/inventory_movement.dart';
 import '../../domain/repositories/inventory_repository.dart';
 import '../mappers/inventory_movement_command_mapper.dart';
 import '../mappers/product_firestore_mapper.dart';
+import '../mappers/inventory_movement_firestore_mapper.dart';
 
 class FirestoreInventoryRepository implements InventoryRepository {
   FirestoreInventoryRepository({
@@ -116,6 +117,46 @@ class FirestoreInventoryRepository implements InventoryRepository {
       );
     } catch (error) {
       return FailureResult<Quantity>(
+        InfrastructureFailure(error.toString()),
+      );
+    }
+  }
+
+  @override
+  Future<Result<List<InventoryMovement>>> getMovements({
+    required StoreContext context,
+    String? productId,
+    int limit = 100,
+  }) async {
+    if (limit <= 0 || limit > 500) {
+      return const FailureResult<List<InventoryMovement>>(
+        ValidationFailure('Inventory movement limit must be between 1 and 500.'),
+      );
+    }
+
+    try {
+      Query<Map<String, dynamic>> query = FirebasePaths.inventoryMovements(
+        _firestore,
+        context.storeId,
+      );
+      if (productId != null) {
+        query = query.where('productId', isEqualTo: productId);
+      }
+      final snapshot = await query
+          .orderBy('occurredAt', descending: true)
+          .limit(limit)
+          .get();
+      final movements = snapshot.docs
+          .map(InventoryMovementFirestoreMapper.fromSnapshot)
+          .where((movement) => movement.storeId == context.storeId)
+          .toList(growable: false);
+      return Success<List<InventoryMovement>>(movements);
+    } on FirebaseException catch (error) {
+      return FailureResult<List<InventoryMovement>>(
+        InfrastructureFailure(error.message ?? error.code),
+      );
+    } catch (error) {
+      return FailureResult<List<InventoryMovement>>(
         InfrastructureFailure(error.toString()),
       );
     }

@@ -11,6 +11,8 @@ import '../../auth/domain/enums/store_role.dart';
 import '../../parties/domain/enums/party_type.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
 import '../../inventory/presentation/products_page.dart';
+import '../../inventory/domain/repositories/inventory_repository.dart';
+import '../../inventory/presentation/inventory_movements_page.dart';
 import '../../sales/domain/repositories/sale_repository.dart';
 import '../../sales/presentation/sales_page.dart';
 import '../../purchases/domain/repositories/purchase_repository.dart';
@@ -295,6 +297,7 @@ class _AppShellPageState extends State<AppShellPage> {
           module: selected,
           user: widget.user,
           productRepository: widget.dependencies.productRepository,
+          inventoryRepository: widget.dependencies.inventoryRepository,
           saleRepository: widget.dependencies.saleRepository,
           purchaseRepository: widget.dependencies.purchaseRepository,
           expenseRepository: widget.dependencies.expenseRepository,
@@ -404,6 +407,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.module,
     required this.user,
     required this.productRepository,
+    required this.inventoryRepository,
     required this.saleRepository,
     required this.purchaseRepository,
     required this.expenseRepository,
@@ -416,6 +420,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final _Module module;
   final AuthenticatedUser user;
   final ProductRepository? productRepository;
+  final InventoryRepository? inventoryRepository;
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
   final ExpenseRepository? expenseRepository;
@@ -475,6 +480,14 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'products') {
       return ProductsPage(
         repository: productRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'inventory') {
+      return InventoryMovementsPage(
+        repository: inventoryRepository,
+        productRepository: productRepository,
         user: user,
         membership: membership,
       );
