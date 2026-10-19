@@ -19,3 +19,11 @@ final class ConflictFailure extends Failure {
 final class InfrastructureFailure extends Failure {
   const InfrastructureFailure(super.message);
 }
+
+final class QueuedFailure extends Failure {
+  const QueuedFailure({
+    required this.commandId,
+  }) : super('The command was queued for later processing.');
+
+  final String commandId;
+}
