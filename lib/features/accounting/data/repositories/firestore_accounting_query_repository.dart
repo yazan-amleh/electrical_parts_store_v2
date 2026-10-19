@@ -12,8 +12,7 @@ import '../../domain/entities/trial_balance.dart';
 import '../../domain/repositories/accounting_query_repository.dart';
 import '../mappers/account_firestore_mapper.dart';
 
-class FirestoreAccountingQueryRepository
-    implements AccountingQueryRepository {
+class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
   FirestoreAccountingQueryRepository({
     required FirebaseFirestore firestore,
   }) : _firestore = firestore;
@@ -38,9 +37,7 @@ class FirestoreAccountingQueryRepository
           .toList()
         ..sort((left, right) {
           final sortOrder = left.sortOrder.compareTo(right.sortOrder);
-          return sortOrder == 0
-              ? left.code.compareTo(right.code)
-              : sortOrder;
+          return sortOrder == 0 ? left.code.compareTo(right.code) : sortOrder;
         });
 
       return Success<List<Account>>(accounts);
@@ -118,7 +115,7 @@ class FirestoreAccountingQueryRepository
     }
 
     final accounts = (accountsResult as Success<List<Account>>).value;
-    final balances = (balancesResult as Success<List<AccountBalanceSnapshot>)
+    final balances = (balancesResult as Success<List<AccountBalanceSnapshot>>)
         .value
         .asMap()
         .map((_, value) => MapEntry(value.accountId, value));
@@ -133,9 +130,7 @@ class FirestoreAccountingQueryRepository
           credit.currency != account.currency) {
         return FailureResult<TrialBalance>(
           ValidationFailure(
-            'Balance currency does not match account ' +
-                account.id +
-                '.',
+            'Balance currency does not match account ' + account.id + '.',
           ),
         );
       }
@@ -218,8 +213,8 @@ class FirestoreAccountingQueryRepository
       for (final document in snapshot.docs) {
         final data = document.data();
         final postedAt = _date(data['postedAt']);
-        final entryId = _string(data['entryId']) ??
-            document.reference.parent.parent?.id;
+        final entryId =
+            _string(data['entryId']) ?? document.reference.parent.parent?.id;
         if (postedAt == null || entryId == null || entryId.isEmpty) {
           continue;
         }
@@ -267,7 +262,11 @@ class FirestoreAccountingQueryRepository
   }
 
   static int _int(Object? value) {
-    return value is int ? value : value is num ? value.toInt() : 0;
+    return value is int
+        ? value
+        : value is num
+            ? value.toInt()
+            : 0;
   }
 
   static String? _string(Object? value, {String? fallback}) {

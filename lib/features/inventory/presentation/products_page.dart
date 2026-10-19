@@ -54,14 +54,14 @@ class _ProductsPageState extends State<ProductsPage> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: TextField(
-                controller: _searchController,
-                decoration: const InputDecoration(
-                  hintText: 'ابحث بالاسم أو SKU أو الباركود',
-                  prefixIcon: Icon(Icons.search),
-                ),
-                onChanged: (_) => setState(() {}),
+            child: TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                hintText: 'ابحث بالاسم أو SKU أو الباركود',
+                prefixIcon: Icon(Icons.search),
               ),
+              onChanged: (_) => setState(() {}),
+            ),
           ),
           Expanded(child: _buildBody(context, filtered)),
         ],
@@ -109,8 +109,7 @@ class _ProductsPageState extends State<ProductsPage> {
             title: Text(product.name),
             subtitle: Text(
               [
-                if (product.sku?.isNotEmpty == true)
-                  'SKU: ' + product.sku!,
+                if (product.sku?.isNotEmpty == true) 'SKU: ' + product.sku!,
                 if (product.barcode?.isNotEmpty == true)
                   'باركود: ' + product.barcode!,
                 product.isService

@@ -11,8 +11,7 @@ import '../../domain/repositories/account_transfer_repository.dart';
 import '../../domain/services/account_transfer_posting_planner.dart';
 import '../mappers/account_transfer_command_mapper.dart';
 
-class FirestoreAccountTransferRepository
-    implements AccountTransferRepository {
+class FirestoreAccountTransferRepository implements AccountTransferRepository {
   FirestoreAccountTransferRepository({
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
@@ -39,8 +38,7 @@ class FirestoreAccountTransferRepository
       return FailureResult<AccountTransferPostingPlan>(prepared.failure);
     }
 
-    final plan =
-        (prepared as Success<AccountTransferPostingPlan>).value;
+    final plan = (prepared as Success<AccountTransferPostingPlan>).value;
     final payload = AccountTransferCommandMapper.toRequest(
       transfer: transfer,
     );

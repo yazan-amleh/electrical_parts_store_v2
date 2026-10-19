@@ -22,8 +22,7 @@ class InMemoryCommandQueueRepository implements CommandQueueRepository {
     }
 
     final existing = _commands[command.id];
-    if (existing != null &&
-        existing.idempotencyKey != command.idempotencyKey) {
+    if (existing != null && existing.idempotencyKey != command.idempotencyKey) {
       return const FailureResult<QueuedCommand>(
         ConflictFailure('Queued command id is already assigned.'),
       );
