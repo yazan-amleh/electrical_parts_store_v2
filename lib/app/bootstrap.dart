@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 
 import '../core/config/app_runtime_config.dart';
 import '../features/accounting/data/repositories/firestore_accounting_query_repository.dart';
+import '../features/accounting/data/repositories/firestore_accounting_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
 import '../features/auth/data/repositories/firebase_auth_repository.dart';
 import '../features/auth/data/repositories/firestore_store_membership_repository.dart';
@@ -54,6 +55,11 @@ abstract final class AppBootstrap {
     return AppDependencies(
       runtime: runtime,
       authSession: session,
+      accountingRepository: FirestoreAccountingRepository(
+        firestore: firestore,
+        functions: functions,
+        commandQueue: commandQueue,
+      ),
       accountingQueryRepository:
           FirestoreAccountingQueryRepository(firestore: firestore),
       inventoryRepository: FirestoreInventoryRepository(

@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
 import '../../accounting/domain/repositories/accounting_query_repository.dart';
+import '../../accounting/domain/repositories/accounting_repository.dart';
 import '../../accounting/presentation/financial_statements_page.dart';
 import '../../accounting/presentation/ledger_page.dart';
+import '../../accounting/presentation/manual_journal_page.dart';
 import '../../accounting/presentation/chart_of_accounts_page.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
@@ -302,6 +304,7 @@ class _AppShellPageState extends State<AppShellPage> {
           saleRepository: widget.dependencies.saleRepository,
           purchaseRepository: widget.dependencies.purchaseRepository,
           expenseRepository: widget.dependencies.expenseRepository,
+          accountingRepository: widget.dependencies.accountingRepository,
           partyPaymentRepository: widget.dependencies.partyPaymentRepository,
           partyRepository: widget.dependencies.partyRepository,
           accountTransferRepository:
@@ -413,6 +416,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.saleRepository,
     required this.purchaseRepository,
     required this.expenseRepository,
+    required this.accountingRepository,
     required this.partyPaymentRepository,
     required this.partyRepository,
     required this.accountTransferRepository,
@@ -427,6 +431,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
   final ExpenseRepository? expenseRepository;
+  final AccountingRepository? accountingRepository;
   final PartyPaymentRepository? partyPaymentRepository;
   final PartyRepository? partyRepository;
   final AccountTransferRepository? accountTransferRepository;
@@ -501,6 +506,14 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'chart-of-accounts') {
       return ChartOfAccountsPage(
         repository: accountingQueryRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'journal') {
+      return ManualJournalPage(
+        repository: accountingRepository,
+        queryRepository: accountingQueryRepository,
         user: user,
         membership: membership,
       );
