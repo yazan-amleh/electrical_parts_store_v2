@@ -10,14 +10,13 @@ class FirebaseCommandQueueProcessor {
   FirebaseCommandQueueProcessor({
     required firebase_functions.FirebaseFunctions functions,
     required CommandQueueRepository repository,
-    CommandQueueProcessor processor = const CommandQueueProcessor,
+    CommandQueueProcessor? processor,
   })  : _functions = functions,
-        _processor = processor,
-        _repository = repository;
+        _processor = processor ??
+            CommandQueueProcessor(repository: repository);
 
   final firebase_functions.FirebaseFunctions _functions;
   final CommandQueueProcessor _processor;
-  final CommandQueueRepository _repository;
 
   Future<Result<int>> drain({
     required StoreContext context,
