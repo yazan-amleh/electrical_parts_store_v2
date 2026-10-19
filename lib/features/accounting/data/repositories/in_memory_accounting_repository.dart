@@ -3,7 +3,6 @@ import '../../../../core/money/money.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
 import '../../domain/domain.dart';
-import '../../domain/repositories/accounting_repository.dart';
 import '../../domain/services/journal_posting_engine.dart';
 
 class InMemoryAccountingRepository implements AccountingRepository {
