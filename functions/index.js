@@ -502,6 +502,7 @@ async function postPurchaseInTransaction(transaction, userId, command) {
     nextProducts.set(productId, {
       quantity: nextQuantity,
       unitCost: nextUnitCost,
+      inventoryValue: nextTotalCost,
     });
   }
 
@@ -599,6 +600,7 @@ async function postPurchaseInTransaction(transaction, userId, command) {
       {
         quantityOnHandMilliUnits: nextProduct.quantity,
         purchasePriceMinorUnits: nextProduct.unitCost,
+        inventoryValueMinorUnits: nextProduct.inventoryValue,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -1093,11 +1095,14 @@ async function postSaleInTransaction(transaction, userId, command) {
     costTotalMinorUnits += costMinorUnits;
 
     if (!line.isService) {
-      issuedByProduct.set(
-        line.productId,
-        (issuedByProduct.get(line.productId) || 0) +
-          baseQuantityMilliUnits,
-      );
+      const previousIssued = issuedByProduct.get(line.productId) || {
+        quantity: 0,
+        cost: 0,
+      };
+      issuedByProduct.set(line.productId, {
+        quantity: previousIssued.quantity + baseQuantityMilliUnits,
+        cost: previousIssued.cost + costMinorUnits,
+      });
     }
 
     storedLines.push({
@@ -1130,22 +1135,41 @@ async function postSaleInTransaction(transaction, userId, command) {
     invalid('A sale total must be greater than zero.');
   }
 
-  const nextQuantities = new Map();
-  for (const [productId, issuedQuantity] of issuedByProduct) {
+  const nextProducts = new Map();
+  for (const [productId, issued] of issuedByProduct) {
     const productSnapshot = productSnapshots.get(productId);
     const product = productSnapshot.data();
     const currentQuantity = storedInt(
       product.quantityOnHandMilliUnits,
       0,
     );
-    const nextQuantity = currentQuantity - issuedQuantity;
+    const currentUnitCost = storedInt(
+      product.purchasePriceMinorUnits,
+      0,
+    );
+    const currentInventoryValue = storedInt(
+      product.inventoryValueMinorUnits,
+      multiplyAndRound(currentUnitCost, currentQuantity),
+    );
+    const nextQuantity = currentQuantity - issued.quantity;
     if (nextQuantity < 0) {
       throw new HttpsError(
         'failed-precondition',
         'The sale would create negative stock for ' + productId + '.',
       );
     }
-    nextQuantities.set(productId, nextQuantity);
+    const nextInventoryValue = currentInventoryValue - issued.cost;
+    if (nextInventoryValue < 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'The sale would create negative inventory value for ' +
+          productId + '.',
+      );
+    }
+    nextProducts.set(productId, {
+      quantity: nextQuantity,
+      inventoryValue: nextInventoryValue,
+    });
   }
 
   const accountDeltas = new Map();
@@ -1276,11 +1300,12 @@ async function postSaleInTransaction(transaction, userId, command) {
     );
   }
 
-  for (const [productId, nextQuantity] of nextQuantities) {
+  for (const [productId, nextProduct] of nextProducts) {
     transaction.update(
       productRefs.get(productId),
       {
-        quantityOnHandMilliUnits: nextQuantity,
+        quantityOnHandMilliUnits: nextProduct.quantity,
+        inventoryValueMinorUnits: nextProduct.inventoryValue,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
