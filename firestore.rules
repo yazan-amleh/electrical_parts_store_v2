@@ -92,6 +92,27 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      match /command_outbox/{commandId} {
+        allow read: if canReadStore(storeId) &&
+          resource.data.createdBy == request.auth.uid;
+        allow create: if canReadStore(storeId) &&
+          request.resource.data.storeId == storeId &&
+          request.resource.data.createdBy == request.auth.uid &&
+          request.resource.data.status == 'pending' &&
+          request.resource.data.operation in [
+            'postSale',
+            'postPurchase',
+            'postPartyPayment'
+          ] &&
+          request.resource.data.idempotencyKey is string;
+        allow update: if canReadStore(storeId) &&
+          resource.data.createdBy == request.auth.uid &&
+          request.resource.data.storeId == storeId &&
+          request.resource.data.createdBy == request.auth.uid;
+        allow delete: if canReadStore(storeId) &&
+          resource.data.createdBy == request.auth.uid;
+      }
+
       match /party_payments/{paymentId} {
         allow read: if canReadStore(storeId);
         allow create, update, delete: if false;
