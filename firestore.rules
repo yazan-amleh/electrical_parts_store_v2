@@ -61,6 +61,21 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /inventory_movements/{movementId} {
+        allow read: if canReadStore(storeId);
+        allow create: if canManageInventory(storeId) &&
+          request.resource.data.storeId == storeId &&
+          request.resource.data.productId is string;
+        allow update, delete: if false;
+      }
+
+      match /inventory_idempotency/{key} {
+        allow read: if canManageInventory(storeId);
+        allow create: if canManageInventory(storeId) &&
+          request.resource.data.storeId == storeId;
+        allow update, delete: if false;
+      }
+
       match /journal_entries/{entryId} {
         allow read: if canReadStore(storeId);
         allow create: if canPostAccounting(storeId) &&
