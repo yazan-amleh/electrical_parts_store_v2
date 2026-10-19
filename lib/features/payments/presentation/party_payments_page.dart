@@ -119,9 +119,8 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                       enabled: !_isPosting,
                       decoration: InputDecoration(
                         labelText: isCustomer ? 'معرّف العميل' : 'معرّف المورد',
-                        hintText: isCustomer
-                            ? 'أدخل customerId'
-                            : 'أدخل supplierId',
+                        hintText:
+                            isCustomer ? 'أدخل customerId' : 'أدخل supplierId',
                         prefixIcon: Icon(
                           isCustomer
                               ? Icons.person_outline
