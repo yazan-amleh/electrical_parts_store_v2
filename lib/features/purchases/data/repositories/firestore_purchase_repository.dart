@@ -7,8 +7,8 @@ import '../../../../core/tenancy/store_context.dart';
 import '../../domain/entities/purchase.dart';
 import '../../domain/entities/purchase_posting_plan.dart';
 import '../../domain/repositories/purchase_repository.dart';
-import '../../domain/services/purchase_posting_planner.dart';
 import '../../../../infrastructure/queue/cloud_function_queue_fallback.dart';
+import '../../domain/services/purchase_posting_planner.dart';
 import '../mappers/purchase_command_mapper.dart';
 
 class FirestorePurchaseRepository implements PurchaseRepository {
