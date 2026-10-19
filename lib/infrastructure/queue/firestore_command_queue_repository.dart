@@ -68,7 +68,10 @@ class FirestoreCommandQueueRepository implements CommandQueueRepository {
           .where('createdBy', isEqualTo: context.userId)
           .where(
             'status',
-            isEqualTo: QueuedCommandStatus.pending.name,
+            whereIn: <String>[
+              QueuedCommandStatus.pending.name,
+              QueuedCommandStatus.processing.name,
+            ],
           )
           .orderBy('createdAt')
           .limit(limit)
