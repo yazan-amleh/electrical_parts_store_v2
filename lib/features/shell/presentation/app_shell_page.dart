@@ -1,28 +1,259 @@
 import 'package:flutter/material.dart';
 
+import '../../auth/domain/entities/authenticated_user.dart';
+import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
+
 class AppShellPage extends StatefulWidget {
-  const AppShellPage({super.key});
+  const AppShellPage({
+    required this.user,
+    required this.membership,
+    required this.onSignOut,
+    super.key,
+  });
+
+  final AuthenticatedUser user;
+  final StoreMembership membership;
+  final Future<void> Function() onSignOut;
 
   @override
   State<AppShellPage> createState() => _AppShellPageState();
 }
 
 class _AppShellPageState extends State<AppShellPage> {
-  static const modules = <_Module>[
-    _Module('الرئيسية', Icons.dashboard_outlined),
-    _Module('المبيعات', Icons.point_of_sale_outlined),
-    _Module('المشتريات', Icons.shopping_cart_outlined),
-    _Module('المخزون', Icons.inventory_2_outlined),
-    _Module('المحاسبة', Icons.account_balance_outlined),
-    _Module('الصناديق والبنوك', Icons.account_balance_wallet_outlined),
-    _Module('التقارير', Icons.analytics_outlined),
-    _Module('الإعدادات', Icons.settings_outlined),
+  static const _sections = <_NavigationSection>[
+    _NavigationSection(
+      title: 'عام',
+      modules: [
+        _Module(
+          id: 'dashboard',
+          label: 'لوحة التحكم',
+          icon: Icons.dashboard_outlined,
+          description: 'ملخص المبيعات والمشتريات والمخزون والسيولة.',
+          capabilities: ['ملخص اليوم', 'تنبيهات التشغيل', 'اختصارات العمل'],
+          foundationReady: false,
+        ),
+      ],
+    ),
+    _NavigationSection(
+      title: 'المبيعات',
+      modules: [
+        _Module(
+          id: 'sales',
+          label: 'المبيعات ونقطة البيع',
+          icon: Icons.point_of_sale_outlined,
+          description: 'إنشاء المبيعات وترحيلها بقيود متوازنة.',
+          capabilities: ['بيع نقدي', 'بيع آجل', 'خصومات وضريبة'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'sales-reports',
+          label: 'تقارير وتحليلات المبيعات',
+          icon: Icons.trending_up_outlined,
+          description: 'تقارير المبيعات والتفصيل حسب الفترة والمستخدم.',
+          capabilities: ['تقارير الفترة', 'تحليل الأصناف', 'تصدير'],
+          foundationReady: false,
+        ),
+        _Module(
+          id: 'offers',
+          label: 'العروض والطلبات',
+          icon: Icons.request_quote_outlined,
+          description: 'العروض والطلبات قبل تحويلها إلى مستندات مرحّلة.',
+          capabilities: ['مسودة', 'تحويل إلى بيع', 'تتبع الحالة'],
+          foundationReady: false,
+        ),
+      ],
+    ),
+    _NavigationSection(
+      title: 'المشتريات',
+      modules: [
+        _Module(
+          id: 'purchases',
+          label: 'المشتريات',
+          icon: Icons.shopping_cart_outlined,
+          description: 'تسجيل المشتريات وتحديث المخزون والدائنين ذرياً.',
+          capabilities: ['شراء نقدي', 'شراء آجل', 'ضريبة مدخلات'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'purchase-orders',
+          label: 'طلبات الشراء',
+          icon: Icons.playlist_add_check_outlined,
+          description: 'إدارة طلبات الشراء قبل اعتماد الفاتورة.',
+          capabilities: ['إنشاء طلب', 'اعتماد', 'تحويل إلى شراء'],
+          foundationReady: false,
+        ),
+      ],
+    ),
+    _NavigationSection(
+      title: 'المخزون',
+      modules: [
+        _Module(
+          id: 'products',
+          label: 'الأصناف والخدمات',
+          icon: Icons.inventory_2_outlined,
+          description: 'الأصناف والوحدات والأسعار والتكلفة.',
+          capabilities: ['أصناف', 'خدمات', 'باركود ووحدات'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'inventory',
+          label: 'حركات وأرصدة المخزون',
+          icon: Icons.swap_vert_outlined,
+          description: 'تتبع الحركة والقيمة والكميات دون تعديل مباشر للرصيد.',
+          capabilities: ['حركة وارد', 'حركة صادر', 'حد الطلب'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'categories',
+          label: 'التصنيفات',
+          icon: Icons.category_outlined,
+          description: 'تنظيم الأصناف ضمن شجرة تصنيفات قابلة للتوسع.',
+          capabilities: ['تصنيفات', 'بحث', 'فلترة'],
+          foundationReady: false,
+        ),
+      ],
+    ),
+    _NavigationSection(
+      title: 'المحاسبة',
+      modules: [
+        _Module(
+          id: 'chart-of-accounts',
+          label: 'شجرة الحسابات',
+          icon: Icons.account_tree_outlined,
+          description: 'دليل حسابات واضح مع حسابات تحكم للعملاء والموردين.',
+          capabilities: ['شجرة', 'حسابات رئيسية', 'حسابات فرعية'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'journal',
+          label: 'القيود اليومية',
+          icon: Icons.menu_book_outlined,
+          description: 'قيود متوازنة مع مفتاح تكرار ومصدر واضح.',
+          capabilities: ['قيد يدوي', 'ترحيل', 'عكس'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'ledger',
+          label: 'دفتر الأستاذ وكشوف الحساب',
+          icon: Icons.book_outlined,
+          description: 'الحركة والرصيد من القيود المرحّلة والإسقاطات القابلة لإعادة البناء.',
+          capabilities: ['دفتر أستاذ', 'كشف عميل', 'كشف مورد'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'financial-statements',
+          label: 'القوائم وميزان المراجعة',
+          icon: Icons.assessment_outlined,
+          description: 'ميزان المراجعة وقائمة الدخل والمركز المالي.',
+          capabilities: ['ميزان مراجعة', 'دخل', 'مركز مالي'],
+          foundationReady: false,
+        ),
+        _Module(
+          id: 'expenses',
+          label: 'المصروفات والضرائب',
+          icon: Icons.receipt_long_outlined,
+          description: 'مصروفات نقدية أو آجلة مع ضريبة المدخلات.',
+          capabilities: ['مصروف', 'ضريبة', 'مورد'],
+          foundationReady: true,
+        ),
+      ],
+    ),
+    _NavigationSection(
+      title: 'الصناديق والبنوك',
+      modules: [
+        _Module(
+          id: 'cash-banks',
+          label: 'الصناديق والبنوك',
+          icon: Icons.account_balance_wallet_outlined,
+          description: 'السيولة والحسابات البنكية والتحويلات الداخلية.',
+          capabilities: ['صندوق', 'بنك', 'تحويل داخلي'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'checks',
+          label: 'الشيكات',
+          icon: Icons.payments_outlined,
+          description: 'تسجيل الشيكات ومتابعة حالتها ضمن دورة التحصيل.',
+          capabilities: ['وارد', 'صادر', 'استحقاق'],
+          foundationReady: false,
+        ),
+      ],
+    ),
+    _NavigationSection(
+      title: 'العملاء والموردون',
+      modules: [
+        _Module(
+          id: 'customers',
+          label: 'العملاء',
+          icon: Icons.people_outline,
+          description: 'بيانات العملاء وأرصدتهم وكشوف حساباتهم.',
+          capabilities: ['بيانات', 'كشف حساب', 'تحصيل'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'suppliers',
+          label: 'الموردون',
+          icon: Icons.local_shipping_outlined,
+          description: 'بيانات الموردين والالتزامات والمدفوعات.',
+          capabilities: ['بيانات', 'كشف حساب', 'دفع'],
+          foundationReady: true,
+        ),
+      ],
+    ),
+    _NavigationSection(
+      title: 'التشغيل والتقارير',
+      modules: [
+        _Module(
+          id: 'repairs',
+          label: 'الصيانة والإصلاحات',
+          icon: Icons.build_outlined,
+          description: 'تتبع طلبات الإصلاح وحالتها وتكاليفها.',
+          capabilities: ['استلام', 'حالة', 'تسليم'],
+          foundationReady: false,
+        ),
+        _Module(
+          id: 'reports',
+          label: 'التقارير والتصدير',
+          icon: Icons.analytics_outlined,
+          description: 'مركز تقارير موحد مع تصدير ومرشحات.',
+          capabilities: ['تقارير', 'تصدير', 'طباعة'],
+          foundationReady: false,
+        ),
+        _Module(
+          id: 'chat',
+          label: 'المحادثات والإشعارات',
+          icon: Icons.chat_outlined,
+          description: 'التواصل والتنبيهات المرتبطة بالعمل.',
+          capabilities: ['محادثة', 'إشعارات', 'نشاط'],
+          foundationReady: false,
+        ),
+      ],
+    ),
+    _NavigationSection(
+      title: 'الإدارة',
+      modules: [
+        _Module(
+          id: 'settings',
+          label: 'الإعدادات',
+          icon: Icons.settings_outlined,
+          description: 'إعدادات المتجر والمستخدمين والأدوار والتفضيلات.',
+          capabilities: ['المتجر', 'المستخدمون', 'الصلاحيات'],
+          foundationReady: false,
+        ),
+      ],
+    ),
   ];
 
   int selectedIndex = 0;
 
+  List<_Module> get _modules => [
+        for (final section in _sections) ...section.modules,
+      ];
+
   @override
   Widget build(BuildContext context) {
+    final modules = _modules;
     final selected = modules[selectedIndex];
 
     return Directionality(
@@ -30,58 +261,177 @@ class _AppShellPageState extends State<AppShellPage> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(selected.label),
-          actions: const [
-            Padding(
-              padding: EdgeInsetsDirectional.only(end: 16),
-              child: Center(child: Text('V2')),
+          actions: [
+            Chip(
+              avatar: const Icon(Icons.verified_user_outlined, size: 18),
+              label: Text(widget.membership.role.arabicLabel),
+            ),
+            const SizedBox(width: 12),
+          ],
+        ),
+        drawer: _buildDrawer(context, modules),
+        body: _ModuleLandingPage(
+          module: selected,
+          user: widget.user,
+          membership: widget.membership,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDrawer(BuildContext context, List<_Module> modules) {
+    var moduleOffset = 0;
+
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          children: [
+            UserAccountsDrawerHeader(
+              accountName: Text(
+                widget.user.displayName?.trim().isNotEmpty == true
+                    ? widget.user.displayName!
+                    : 'مستخدم V2',
+              ),
+              accountEmail: Text(widget.user.email),
+              currentAccountPicture: const CircleAvatar(
+                child: Icon(Icons.person_outline),
+              ),
+              otherAccountsPictures: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    widget.membership.storeId,
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  for (final section in _sections) ...[
+                    Padding(
+                      padding: const EdgeInsetsDirectional.fromSTEB(
+                        20,
+                        12,
+                        20,
+                        4,
+                      ),
+                      child: Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          section.title,
+                          style: Theme.of(context).textTheme.labelLarge,
+                        ),
+                      ),
+                    ),
+                    for (var localIndex = 0;
+                        localIndex < section.modules.length;
+                        localIndex++)
+                      ListTile(
+                        leading: Icon(section.modules[localIndex].icon),
+                        title: Text(section.modules[localIndex].label),
+                        selected: selectedIndex == moduleOffset + localIndex,
+                        onTap: () {
+                          setState(() {
+                            selectedIndex = moduleOffset + localIndex;
+                          });
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                    moduleOffset += section.modules.length,
+                  ],
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('تسجيل الخروج'),
+              onTap: () {
+                Navigator.of(context).pop();
+                widget.onSignOut();
+              },
             ),
           ],
         ),
-        drawer: Drawer(
-          child: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              children: [
-                const ListTile(
-                  title: Text(
-                    'منصة المتجر والمحاسبة',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text('النسخة الجديدة'),
-                ),
-                const Divider(),
-                for (var index = 0; index < modules.length; index++)
-                  ListTile(
-                    leading: Icon(modules[index].icon),
-                    title: Text(modules[index].label),
-                    selected: selectedIndex == index,
-                    onTap: () {
-                      setState(() => selectedIndex = index);
-                      Navigator.of(context).pop();
-                    },
-                  ),
-              ],
-            ),
-          ),
-        ),
-        body: Center(
+      ),
+    );
+  }
+}
+
+class _ModuleLandingPage extends StatelessWidget {
+  const _ModuleLandingPage({
+    required this.module,
+    required this.user,
+    required this.membership,
+  });
+
+  final _Module module;
+  final AuthenticatedUser user;
+  final StoreMembership membership;
+
+  @override
+  Widget build(BuildContext context) {
+    if (module.id == 'dashboard') {
+      return _DashboardOverview(
+        user: user,
+        membership: membership,
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900),
           child: Card(
-            margin: const EdgeInsets.all(24),
             child: Padding(
-              padding: const EdgeInsets.all(32),
+              padding: const EdgeInsets.all(28),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(selected.icon, size: 52),
+                  Icon(module.icon, size: 56),
                   const SizedBox(height: 16),
                   Text(
-                    selected.label,
+                    module.label,
+                    textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'الأساس البرمجي جاهز. سيتم تركيب شاشات ومزايا V1 كاملة داخل حدود V2 الجديدة.',
+                  const SizedBox(height: 12),
+                  Text(
+                    module.description,
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final capability in module.capabilities)
+                        Chip(label: Text(capability)),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      module.foundationReady
+                          ? 'محرك هذه الوحدة موجود في الأساس البرمجي، '
+                              'والخطوة التالية تركيب واجهتها وربطها بحالات '
+                              'التحميل والأخطاء والصلاحيات.'
+                          : 'هذه الوحدة مثبتة في خريطة الترحيل حتى لا تضيع '
+                              'أي ميزة من V1، وسيتم تنفيذها ضمن ترتيب الترحيل.',
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ],
               ),
@@ -93,9 +443,126 @@ class _AppShellPageState extends State<AppShellPage> {
   }
 }
 
-class _Module {
-  const _Module(this.label, this.icon);
+class _DashboardOverview extends StatelessWidget {
+  const _DashboardOverview({
+    required this.user,
+    required this.membership,
+  });
 
+  final AuthenticatedUser user;
+  final StoreMembership membership;
+
+  @override
+  Widget build(BuildContext context) {
+    final cards = [
+      ('المبيعات', Icons.point_of_sale_outlined),
+      ('المخزون', Icons.inventory_2_outlined),
+      ('الذمم', Icons.people_outline),
+      ('السيولة', Icons.account_balance_wallet_outlined),
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1000),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'أهلاً بك، ${user.displayName?.trim().isNotEmpty == true ? user.displayName : user.email}',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'المتجر: ${membership.storeId} — لوحة V2 الأساسية',
+              ),
+              const SizedBox(height: 24),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: cards.length,
+                gridDelegate:
+                    const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 240,
+                  mainAxisExtent: 120,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                itemBuilder: (context, index) {
+                  final card = cards[index];
+                  return Card(
+                    child: ListTile(
+                      leading: Icon(card.$2, size: 32),
+                      title: Text(card.$1),
+                      subtitle: const Text('سيظهر بعد ربط الاستعلام'),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
+              Card(
+                child: const Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Text(
+                    'تم بناء هذا الهيكل ليحمل كل وحدات V1 دون خلط الواجهة '
+                    'بمصدر البيانات. الأرقام لن تُعرض قبل ربطها بمستودعات '
+                    'حقيقية واختبارات صلاحياتها.',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavigationSection {
+  const _NavigationSection({
+    required this.title,
+    required this.modules,
+  });
+
+  final String title;
+  final List<_Module> modules;
+}
+
+class _Module {
+  const _Module({
+    required this.id,
+    required this.label,
+    required this.icon,
+    required this.description,
+    required this.capabilities,
+    required this.foundationReady,
+  });
+
+  final String id;
   final String label;
   final IconData icon;
+  final String description;
+  final List<String> capabilities;
+  final bool foundationReady;
+}
+
+extension on StoreRole {
+  String get arabicLabel {
+    switch (this) {
+      case StoreRole.owner:
+        return 'مالك';
+      case StoreRole.admin:
+        return 'مدير';
+      case StoreRole.accountant:
+        return 'محاسب';
+      case StoreRole.sales:
+        return 'مبيعات';
+      case StoreRole.warehouse:
+        return 'مستودع';
+      case StoreRole.viewer:
+        return 'مشاهد';
+    }
+  }
 }
