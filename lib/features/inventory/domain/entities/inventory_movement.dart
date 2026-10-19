@@ -28,7 +28,7 @@ class InventoryMovement {
     if (unitCost.isNegative) {
       throw ArgumentError('Inventory movement unit cost cannot be negative.');
     }
-    if (idempotencyKey.trim().isEmpty) {
+    if (this.idempotencyKey.trim().isEmpty) {
       throw ArgumentError('Inventory movement idempotency key is required.');
     }
   }
