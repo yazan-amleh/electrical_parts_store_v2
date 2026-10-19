@@ -188,7 +188,7 @@ class _PartyDirectoryPageState extends State<PartyDirectoryPage> {
             if (party.phone?.isNotEmpty == true) party.phone!,
             if (party.email?.isNotEmpty == true) party.email!,
             party.isActive ? 'نشط' : 'غير نشط',
-            'الرصيد: ' + balance.formatted,
+            'الرصيد: ${balance.formatted}',
           ].join(' • '),
         ),
         trailing: IconButton(
