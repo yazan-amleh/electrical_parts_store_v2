@@ -1,5 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart' as firebase_functions;
 
+import '../../../../core/commands/command_queue_repository.dart';
 import '../../../../core/errors/failure.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
@@ -7,17 +8,21 @@ import '../../domain/entities/sale.dart';
 import '../../domain/entities/sale_posting_plan.dart';
 import '../../domain/repositories/sale_repository.dart';
 import '../../domain/services/sale_posting_planner.dart';
+import '../../../../infrastructure/queue/cloud_function_queue_fallback.dart';
 import '../mappers/sale_command_mapper.dart';
 
 class FirestoreSaleRepository implements SaleRepository {
   FirestoreSaleRepository({
     required firebase_functions.FirebaseFunctions functions,
+    CommandQueueRepository? commandQueue,
     SalePostingPlanner planner = const SalePostingPlanner(),
   })  : _functions = functions,
-        _planner = planner;
+        _planner = planner,
+        _commandQueue = commandQueue;
 
   final firebase_functions.FirebaseFunctions _functions;
   final SalePostingPlanner _planner;
+  final CommandQueueRepository? _commandQueue;
 
   @override
   Future<Result<SalePostingPlan>> postSale({
@@ -55,6 +60,27 @@ class FirestoreSaleRepository implements SaleRepository {
 
       return Success<SalePostingPlan>(plan);
     } on firebase_functions.FirebaseFunctionsException catch (error) {
+      if (_commandQueue != null &&
+          CloudFunctionQueueFallback.isTransient(error)) {
+        final commandId = 'sale-' + sale.id;
+        final queueFailure = await CloudFunctionQueueFallback.enqueue(
+          repository: _commandQueue!,
+          context: context,
+          commandId: commandId,
+          operation: 'postSale',
+          idempotencyKey: sale.idempotencyKey.value,
+          payload: SaleCommandMapper.toRequest(
+            sale: sale,
+            accounts: accounts,
+          ),
+        );
+        if (queueFailure != null) {
+          return FailureResult<SalePostingPlan>(queueFailure);
+        }
+        return FailureResult<SalePostingPlan>(
+          QueuedFailure(commandId: commandId),
+        );
+      }
       return FailureResult<SalePostingPlan>(_mapFailure(error));
     } catch (error) {
       return FailureResult<SalePostingPlan>(
