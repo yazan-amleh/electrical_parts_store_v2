@@ -47,14 +47,18 @@ class FirestoreSaleRepository implements SaleRepository {
       final rawData = response.data;
       if (rawData is! Map) {
         return const FailureResult<SalePostingPlan>(
-          InfrastructureFailure('The sale service returned an invalid response.'),
+          InfrastructureFailure(
+            'The sale service returned an invalid response.',
+          ),
         );
       }
 
       final data = Map<String, dynamic>.from(rawData);
       if (data['saleId'] != sale.id) {
         return const FailureResult<SalePostingPlan>(
-          InfrastructureFailure('The sale service returned another sale id.'),
+          InfrastructureFailure(
+            'The sale service returned another sale id.',
+          ),
         );
       }
 
@@ -72,13 +76,17 @@ class FirestoreSaleRepository implements SaleRepository {
     switch (error.code) {
       case 'permission-denied':
       case 'unauthenticated':
-        return AuthorizationFailure(error.message ?? 'Sale is not authorized.');
+        return AuthorizationFailure(
+          error.message ?? 'Sale is not authorized.',
+        );
       case 'invalid-argument':
       case 'failed-precondition':
         return ValidationFailure(error.message ?? 'Sale is invalid.');
       case 'already-exists':
       case 'aborted':
-        return ConflictFailure(error.message ?? 'Sale conflicts with existing data.');
+        return ConflictFailure(
+          error.message ?? 'Sale conflicts with existing data.',
+        );
       default:
         return InfrastructureFailure(error.message ?? error.code);
     }
