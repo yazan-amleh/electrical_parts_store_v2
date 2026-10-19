@@ -179,9 +179,7 @@ class _PartyDirectoryPageState extends State<PartyDirectoryPage> {
         onTap: () => _openEditor(party),
         leading: CircleAvatar(
           child: Icon(
-            isCustomer
-                ? Icons.person_outline
-                : Icons.local_shipping_outlined,
+            isCustomer ? Icons.person_outline : Icons.local_shipping_outlined,
           ),
         ),
         title: Text(party.name),
@@ -378,8 +376,7 @@ class _PartyEditorDialogState extends State<_PartyEditorDialog> {
     _phoneController = TextEditingController(text: party?.phone ?? '');
     _emailController = TextEditingController(text: party?.email ?? '');
     _addressController = TextEditingController(text: party?.address ?? '');
-    _taxNumberController =
-        TextEditingController(text: party?.taxNumber ?? '');
+    _taxNumberController = TextEditingController(text: party?.taxNumber ?? '');
     _creditLimitController = TextEditingController(
       text: party?.creditLimit.formatted.split(' ').first ?? '0',
     );
@@ -404,7 +401,8 @@ class _PartyEditorDialogState extends State<_PartyEditorDialog> {
             children: [
               _field(_nameController, 'الاسم', Icons.person_outline),
               _field(_phoneController, 'الهاتف', Icons.phone_outlined),
-              _field(_emailController, 'البريد الإلكتروني', Icons.email_outlined),
+              _field(
+                  _emailController, 'البريد الإلكتروني', Icons.email_outlined),
               _field(
                 _addressController,
                 'العنوان',

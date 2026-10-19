@@ -15,9 +15,7 @@ class Party {
     this.notes,
     this.isActive = true,
   }) : creditLimit = creditLimit ?? Money.zero() {
-    if (id.trim().isEmpty ||
-        storeId.trim().isEmpty ||
-        name.trim().isEmpty) {
+    if (id.trim().isEmpty || storeId.trim().isEmpty || name.trim().isEmpty) {
       throw ArgumentError('Party identity fields are required.');
     }
     if (id.contains('/') || storeId.contains('/')) {
