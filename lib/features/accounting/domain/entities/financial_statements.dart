@@ -1,5 +1,6 @@
 import '../../../../core/money/money.dart';
 import '../enums/accounting_enums.dart';
+import 'account.dart';
 import 'trial_balance.dart';
 
 class FinancialStatementLine {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/money/money.dart';
 import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
@@ -211,7 +212,7 @@ class _FinancialStatementsPageState extends State<FinancialStatementsPage> {
                       cells: [
                         DataCell(
                           Text(
-                            line.account.code + ' — ' + line.account.name,
+                            '${line.account.code} — ${line.account.name}',
                           ),
                         ),
                         DataCell(Text(line.debit.formatted)),
@@ -227,9 +228,7 @@ class _FinancialStatementsPageState extends State<FinancialStatementsPage> {
             const Divider(),
             _totalRow(
               label: 'الإجمالي',
-              value: trialBalance.totalDebit.formatted +
-                  ' / ' +
-                  trialBalance.totalCredit.formatted,
+              value: '${trialBalance.totalDebit.formatted} / ${trialBalance.totalCredit.formatted}',
             ),
           ],
         ),
@@ -268,7 +267,7 @@ class _FinancialStatementsPageState extends State<FinancialStatementsPage> {
         ),
         _buildStatementSection(
           title: 'مصروفات أخرى',
-          icon: Icons.remove_chart_outlined,
+          icon: Icons.trending_down_outlined,
           lines: statements.otherExpenses,
           total: statements.totalOtherExpenses,
         ),
@@ -366,7 +365,7 @@ class _FinancialStatementsPageState extends State<FinancialStatementsPage> {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   title: Text(
-                    line.account.code + ' — ' + line.account.name,
+                    '${line.account.code} — ${line.account.name}',
                   ),
                   trailing: Text(line.amount.formatted),
                 ),
