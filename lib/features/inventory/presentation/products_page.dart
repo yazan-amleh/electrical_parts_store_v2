@@ -109,7 +109,7 @@ class _ProductsPageState extends State<ProductsPage> {
             title: Text(product.name),
             subtitle: Text(
               [
-                if (product.sku?.isNotEmpty == true) 'SKU: ' + product.sku!,
+                if (product.sku?.isNotEmpty == true) 'SKU: ${product.sku}',
                 if (product.barcode?.isNotEmpty == true)
                   'باركود: ${product.barcode}',
                 product.isService

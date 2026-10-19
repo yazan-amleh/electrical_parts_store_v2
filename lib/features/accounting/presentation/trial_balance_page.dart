@@ -118,7 +118,7 @@ class _TrialBalancePageState extends State<TrialBalancePage> {
                         cells: [
                           DataCell(
                             Text(
-                              line.account.code + ' — ' + line.account.name,
+                              '${line.account.code} — ${line.account.name}',
                             ),
                           ),
                           DataCell(Text(line.debit.formatted)),
