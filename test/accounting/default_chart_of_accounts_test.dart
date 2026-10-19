@@ -22,11 +22,17 @@ void main() {
     };
 
     expect(accounts['1110']!.controlType, ControlType.cashBox);
+    expect(accounts['1121']!.controlType, ControlType.bank);
     expect(
       accounts['1140']!.controlType,
       ControlType.customerReceivable,
     );
     expect(accounts['1150']!.controlType, ControlType.inventory);
+    expect(
+      accounts['1160']!.controlType,
+      ControlType.cardReceivable,
+    );
+    expect(accounts['1170']!.controlType, ControlType.inputTax);
     expect(accounts['2110']!.controlType, ControlType.supplierPayable);
   });
 
