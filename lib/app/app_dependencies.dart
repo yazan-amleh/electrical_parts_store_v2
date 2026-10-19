@@ -7,6 +7,7 @@ import '../features/sales/domain/repositories/sale_repository.dart';
 import '../features/purchases/domain/repositories/purchase_repository.dart';
 import '../features/expenses/domain/repositories/expense_repository.dart';
 import '../features/payments/domain/repositories/party_payment_repository.dart';
+import '../features/transfers/domain/repositories/account_transfer_repository.dart';
 
 class AppDependencies {
   const AppDependencies({
@@ -19,6 +20,7 @@ class AppDependencies {
     this.purchaseRepository,
     this.expenseRepository,
     this.partyPaymentRepository,
+    this.accountTransferRepository,
   });
 
   final AppRuntimeConfig runtime;
@@ -30,6 +32,7 @@ class AppDependencies {
   final PurchaseRepository? purchaseRepository;
   final ExpenseRepository? expenseRepository;
   final PartyPaymentRepository? partyPaymentRepository;
+  final AccountTransferRepository? accountTransferRepository;
 
   bool get hasFirebaseSession => authSession != null;
 }

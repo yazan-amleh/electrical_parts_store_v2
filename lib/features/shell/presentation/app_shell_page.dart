@@ -17,6 +17,8 @@ import '../../expenses/domain/repositories/expense_repository.dart';
 import '../../expenses/presentation/expenses_page.dart';
 import '../../payments/domain/repositories/party_payment_repository.dart';
 import '../../payments/presentation/party_payments_page.dart';
+import '../../transfers/domain/repositories/account_transfer_repository.dart';
+import '../../transfers/presentation/account_transfers_page.dart';
 
 class AppShellPage extends StatefulWidget {
   const AppShellPage({
@@ -295,6 +297,7 @@ class _AppShellPageState extends State<AppShellPage> {
           purchaseRepository: widget.dependencies.purchaseRepository,
           expenseRepository: widget.dependencies.expenseRepository,
           partyPaymentRepository: widget.dependencies.partyPaymentRepository,
+          accountTransferRepository: widget.dependencies.accountTransferRepository,
           accountingQueryRepository:
               widget.dependencies.accountingQueryRepository,
           membership: widget.membership,
@@ -402,6 +405,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.purchaseRepository,
     required this.expenseRepository,
     required this.partyPaymentRepository,
+    required this.accountTransferRepository,
     required this.accountingQueryRepository,
     required this.membership,
   });
@@ -413,6 +417,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final PurchaseRepository? purchaseRepository;
   final ExpenseRepository? expenseRepository;
   final PartyPaymentRepository? partyPaymentRepository;
+  final AccountTransferRepository? accountTransferRepository;
   final AccountingQueryRepository? accountingQueryRepository;
   final StoreMembership membership;
 
@@ -430,6 +435,13 @@ class _ModuleLandingPage extends StatelessWidget {
       return PurchasesPage(
         repository: purchaseRepository,
         productRepository: productRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'cash-banks') {
+      return AccountTransfersPage(
+        repository: accountTransferRepository,
         user: user,
         membership: membership,
       );
