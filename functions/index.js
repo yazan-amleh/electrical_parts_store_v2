@@ -367,6 +367,7 @@ async function postPurchaseInTransaction(transaction, userId, command) {
     command.storeId,
     command.purchase.currency,
     'asset',
+    'inventory',
   );
   if (command.purchase.paymentMethod === 'credit') {
     assertAccount(
@@ -375,6 +376,7 @@ async function postPurchaseInTransaction(transaction, userId, command) {
       command.storeId,
       command.purchase.currency,
       'liability',
+      'supplierPayable',
     );
   } else {
     assertAccount(
@@ -383,6 +385,7 @@ async function postPurchaseInTransaction(transaction, userId, command) {
       command.storeId,
       command.purchase.currency,
       'asset',
+      paymentAccountControlType(command.purchase.paymentMethod),
     );
   }
   if (command.purchase.taxMinorUnits > 0) {
@@ -392,6 +395,7 @@ async function postPurchaseInTransaction(transaction, userId, command) {
       command.storeId,
       command.purchase.currency,
       'asset',
+      'inputTax',
     );
   }
 
@@ -1014,6 +1018,7 @@ async function postSaleInTransaction(transaction, userId, command) {
       command.storeId,
       command.sale.currency,
       'asset',
+      'customerReceivable',
     );
   } else {
     assertAccount(
@@ -1022,6 +1027,7 @@ async function postSaleInTransaction(transaction, userId, command) {
       command.storeId,
       command.sale.currency,
       'asset',
+      paymentAccountControlType(command.sale.paymentMethod),
     );
   }
   assertAccount(
@@ -1037,6 +1043,7 @@ async function postSaleInTransaction(transaction, userId, command) {
     command.storeId,
     command.sale.currency,
     'asset',
+    'inventory',
   );
   assertAccount(
     accountSnapshots.get(command.accounts.costOfSalesAccountId),
@@ -1055,6 +1062,7 @@ async function postSaleInTransaction(transaction, userId, command) {
       command.storeId,
       command.sale.currency,
       'liability',
+      'tax',
     );
   }
 
@@ -1467,6 +1475,7 @@ function assertAccount(
   storeId,
   currency,
   expectedType,
+  expectedControlType,
 ) {
   if (!snapshot || !snapshot.exists) {
     invalid('Account was not found: ' + accountId);
@@ -1483,6 +1492,25 @@ function assertAccount(
   }
   if (account.type !== expectedType) {
     invalid('Account type is invalid: ' + accountId);
+  }
+  if (expectedControlType &&
+      account.controlType !== expectedControlType) {
+    invalid('Account control type is invalid: ' + accountId);
+  }
+}
+
+function paymentAccountControlType(paymentMethod) {
+  switch (paymentMethod) {
+    case 'cash':
+      return 'cashBox';
+    case 'bank':
+      return 'bank';
+    case 'card':
+      return 'cardReceivable';
+    case 'credit':
+      return 'customerReceivable';
+    default:
+      invalid('Unsupported payment method.');
   }
 }
 
