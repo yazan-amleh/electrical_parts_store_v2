@@ -1,6 +1,6 @@
+import '../../../../core/idempotency/idempotency_key.dart';
 import '../../../../core/money/money.dart';
 import '../../../../core/quantity/quantity.dart';
-import '../../../../core/idempotency/idempotency_key.dart';
 import '../../../../features/accounting/domain/entities/journal_entry.dart';
 import '../../../../features/inventory/domain/entities/inventory_movement.dart';
 import 'sale.dart';
@@ -31,7 +31,12 @@ class SalePostingAccounts {
   }
 
   void validate() {
-    for (final accountId in allAccountIds) {
+    final accountIds = allAccountIds.toList(growable: false);
+    if (accountIds.toSet().length != accountIds.length) {
+      throw ArgumentError('Sale posting accounts must be distinct.');
+    }
+
+    for (final accountId in accountIds) {
       if (accountId.trim().isEmpty) {
         throw ArgumentError('Sale posting account id is required.');
       }
