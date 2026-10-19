@@ -92,6 +92,16 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      match /party_ledger_entries/{entryId} {
+        allow read: if canReadStore(storeId);
+        allow create, update, delete: if false;
+      }
+
+      match /party_balances/{balanceId} {
+        allow read: if canReadStore(storeId);
+        allow create, update, delete: if false;
+      }
+
       match /inventory_movements/{movementId} {
         allow read: if canReadStore(storeId);
         allow create: if canManageInventory(storeId) &&
