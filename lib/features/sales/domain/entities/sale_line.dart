@@ -27,6 +27,9 @@ class SaleLine {
     if (unitFactorToBase.milliUnits <= 0) {
       throw ArgumentError('Sale line unit factor must be positive.');
     }
+    if (!isService && baseQuantity.isZero) {
+      throw ArgumentError('Sale line base quantity must be positive.');
+    }
     if (unitPrice.isNegative || unitCost.isNegative) {
       throw ArgumentError('Sale line prices cannot be negative.');
     }
