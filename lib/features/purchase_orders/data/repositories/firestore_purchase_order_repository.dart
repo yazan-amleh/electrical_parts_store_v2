@@ -116,7 +116,7 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'cancel-purchase-order-${orderId}',
+        commandId: 'cancel-purchase-order-$orderId',
         operation: 'cancelPurchaseOrder',
         idempotencyKey: 'cancel-$orderId',
         payload: payload,
