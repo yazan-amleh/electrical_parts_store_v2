@@ -169,33 +169,21 @@ service cloud.firestore {
 
       match /journal_entries/{entryId} {
         allow read: if canReadStore(storeId);
-        allow create: if canPostAccounting(storeId) &&
-          request.resource.data.storeId == storeId &&
-          request.resource.data.status == 'posted' &&
-          request.resource.data.totalDebitMinorUnits ==
-            request.resource.data.totalCreditMinorUnits;
-        allow update, delete: if false;
+        allow create, update, delete: if false;
 
         match /lines/{lineId} {
           allow read: if canReadStore(storeId);
-          allow create: if canPostAccounting(storeId) &&
-            request.resource.data.storeId == storeId;
-          allow update, delete: if false;
+          allow create, update, delete: if false;
         }
       }
 
       match /account_balances/{accountId} {
         allow read: if canReadStore(storeId);
-        allow create, update: if canPostAccounting(storeId) &&
-          request.resource.data.storeId == storeId;
-        allow delete: if false;
+        allow create, update, delete: if false;
       }
 
       match /idempotency_keys/{key} {
-        allow read: if canPostAccounting(storeId);
-        allow create: if canPostAccounting(storeId) &&
-          request.resource.data.storeId == storeId;
-        allow update, delete: if false;
+        allow read, write: if false;
       }
 
       match /{document=**} {
