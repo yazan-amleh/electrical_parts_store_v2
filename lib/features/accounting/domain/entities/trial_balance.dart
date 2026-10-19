@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import '../../../../core/money/money.dart';
 import 'account.dart';
 
@@ -43,7 +41,4 @@ class TrialBalance {
   }
 
   bool get isBalanced => totalDebit == totalCredit;
-
-  @override
-  String toString() => describeIdentity(this);
 }
