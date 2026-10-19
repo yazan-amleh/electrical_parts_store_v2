@@ -351,10 +351,14 @@ async function postInventoryMovementInTransaction(
     product.quantityOnHandMilliUnits,
     0,
   );
-  const currentInventoryValue = storedInt(
+  const currentInventoryValue = Number.isSafeInteger(
     product.inventoryValueMinorUnits,
-    0,
-  );
+  )
+    ? product.inventoryValueMinorUnits
+    : multiplyAndRound(
+      storedInt(product.purchasePriceMinorUnits, 0),
+      currentQuantity,
+    );
   const nextQuantity =
     currentQuantity + command.movement.quantityDeltaMilliUnits;
   if (nextQuantity < 0) {
