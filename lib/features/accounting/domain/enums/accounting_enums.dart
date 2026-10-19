@@ -21,6 +21,7 @@ enum ControlType {
   fixedAsset,
   tax,
   inputTax,
+  cardReceivable,
 }
 
 enum StatementSection {
