@@ -8,6 +8,8 @@ import '../../auth/domain/entities/store_membership.dart';
 import '../../auth/domain/enums/store_role.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
 import '../../inventory/presentation/products_page.dart';
+import '../../sales/domain/repositories/sale_repository.dart';
+import '../../sales/presentation/sales_page.dart';
 
 class AppShellPage extends StatefulWidget {
   const AppShellPage({
@@ -282,6 +284,7 @@ class _AppShellPageState extends State<AppShellPage> {
           module: selected,
           user: widget.user,
           productRepository: widget.dependencies.productRepository,
+          saleRepository: widget.dependencies.saleRepository,
           accountingQueryRepository:
               widget.dependencies.accountingQueryRepository,
           membership: widget.membership,
@@ -385,6 +388,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.module,
     required this.user,
     required this.productRepository,
+    required this.saleRepository,
     required this.accountingQueryRepository,
     required this.membership,
   });
@@ -392,11 +396,20 @@ class _ModuleLandingPage extends StatelessWidget {
   final _Module module;
   final AuthenticatedUser user;
   final ProductRepository? productRepository;
+  final SaleRepository? saleRepository;
   final AccountingQueryRepository? accountingQueryRepository;
   final StoreMembership membership;
 
   @override
   Widget build(BuildContext context) {
+    if (module.id == 'sales') {
+      return SalesPage(
+        repository: saleRepository,
+        productRepository: productRepository,
+        user: user,
+        membership: membership,
+      );
+    }
     if (module.id == 'products') {
       return ProductsPage(
         repository: productRepository,

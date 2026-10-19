@@ -10,6 +10,8 @@ import '../features/auth/data/repositories/firebase_auth_repository.dart';
 import '../features/auth/data/repositories/firestore_store_membership_repository.dart';
 import '../features/inventory/data/repositories/firestore_inventory_repository.dart';
 import '../features/inventory/data/repositories/firestore_product_repository.dart';
+import '../features/sales/data/repositories/firestore_sale_repository.dart';
+import '../infrastructure/queue/firestore_command_queue_repository.dart';
 import 'app_dependencies.dart';
 
 abstract final class AppBootstrap {
@@ -28,6 +30,9 @@ abstract final class AppBootstrap {
     final firestore = FirebaseFirestore.instance;
     final functions = FirebaseFunctions.instanceFor(
       region: 'europe-west1',
+    );
+    final commandQueue = FirestoreCommandQueueRepository(
+      firestore: firestore,
     );
     final session = AuthSessionController(
       authRepository: FirebaseAuthRepository(
@@ -49,9 +54,14 @@ abstract final class AppBootstrap {
       inventoryRepository: FirestoreInventoryRepository(
         firestore: firestore,
         functions: functions,
+        commandQueue: commandQueue,
       ),
       productRepository: FirestoreProductRepository(
         firestore: firestore,
+      ),
+      saleRepository: FirestoreSaleRepository(
+        functions: functions,
+        commandQueue: commandQueue,
       ),
     );
   }
