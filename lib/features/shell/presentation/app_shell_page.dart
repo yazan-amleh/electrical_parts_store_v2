@@ -6,6 +6,7 @@ import '../../accounting/presentation/trial_balance_page.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../auth/domain/enums/store_role.dart';
+import '../../parties/domain/enums/party_type.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
 import '../../inventory/presentation/products_page.dart';
 import '../../sales/domain/repositories/sale_repository.dart';
@@ -14,6 +15,8 @@ import '../../purchases/domain/repositories/purchase_repository.dart';
 import '../../purchases/presentation/purchases_page.dart';
 import '../../expenses/domain/repositories/expense_repository.dart';
 import '../../expenses/presentation/expenses_page.dart';
+import '../../payments/domain/repositories/party_payment_repository.dart';
+import '../../payments/presentation/party_payments_page.dart';
 
 class AppShellPage extends StatefulWidget {
   const AppShellPage({
@@ -291,6 +294,7 @@ class _AppShellPageState extends State<AppShellPage> {
           saleRepository: widget.dependencies.saleRepository,
           purchaseRepository: widget.dependencies.purchaseRepository,
           expenseRepository: widget.dependencies.expenseRepository,
+          partyPaymentRepository: widget.dependencies.partyPaymentRepository,
           accountingQueryRepository:
               widget.dependencies.accountingQueryRepository,
           membership: widget.membership,
@@ -397,6 +401,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.saleRepository,
     required this.purchaseRepository,
     required this.expenseRepository,
+    required this.partyPaymentRepository,
     required this.accountingQueryRepository,
     required this.membership,
   });
@@ -407,6 +412,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
   final ExpenseRepository? expenseRepository;
+  final PartyPaymentRepository? partyPaymentRepository;
   final AccountingQueryRepository? accountingQueryRepository;
   final StoreMembership membership;
 
@@ -426,6 +432,22 @@ class _ModuleLandingPage extends StatelessWidget {
         productRepository: productRepository,
         user: user,
         membership: membership,
+      );
+    }
+    if (module.id == 'customers') {
+      return PartyPaymentsPage(
+        repository: partyPaymentRepository,
+        user: user,
+        membership: membership,
+        initialPartyType: PartyType.customer,
+      );
+    }
+    if (module.id == 'suppliers') {
+      return PartyPaymentsPage(
+        repository: partyPaymentRepository,
+        user: user,
+        membership: membership,
+        initialPartyType: PartyType.supplier,
       );
     }
     if (module.id == 'expenses') {
