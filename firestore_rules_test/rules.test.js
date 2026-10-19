@@ -228,6 +228,43 @@ describe('Firestore security rules', function () {
     );
   });
 
+  it('keeps journals and balance projections server-owned', async () => {
+    await assertFails(
+      setDoc(storeDoc(accountantDb, 'journal_entries', 'manual-1'), {
+        storeId: STORE_ID,
+        status: 'posted',
+        totalDebitMinorUnits: 100,
+        totalCreditMinorUnits: 100,
+      }),
+    );
+    await assertFails(
+      setDoc(
+        storeDoc(
+          accountantDb,
+          'journal_entries',
+          'journal-1',
+          'lines',
+          'line-2',
+        ),
+        {
+          storeId: STORE_ID,
+          accountId: '1110',
+          debitMinorUnits: 100,
+          creditMinorUnits: 0,
+        },
+      ),
+    );
+    await assertFails(
+      setDoc(storeDoc(accountantDb, 'account_balances', '1110'), {
+        storeId: STORE_ID,
+        accountId: '1110',
+        debitMinorUnits: 100,
+        creditMinorUnits: 0,
+        balanceMinorUnits: 100,
+      }),
+    );
+  });
+
   it('keeps idempotency documents server-owned', async () => {
     const idempotencyCollections = [
       'sale_idempotency',
