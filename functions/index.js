@@ -235,6 +235,21 @@ async function postPurchaseInTransaction(transaction, userId, command) {
     .collection('idempotency_keys')
     .doc(journalIdempotencyKey);
 
+  const isCreditPurchase =
+    command.purchase.paymentMethod === 'credit';
+  const supplierLedgerId = isCreditPurchase
+    ? command.purchase.id + '-supplier'
+    : null;
+  const supplierLedgerRef = isCreditPurchase
+    ? storeRef.collection('party_ledger_entries').doc(supplierLedgerId)
+    : null;
+  const supplierBalanceId = isCreditPurchase
+    ? 'supplier-' + command.purchase.supplierId
+    : null;
+  const supplierBalanceRef = isCreditPurchase
+    ? storeRef.collection('party_balances').doc(supplierBalanceId)
+    : null;
+
   const membershipSnapshot = await transaction.get(memberRef);
   assertMembership(
     membershipSnapshot,
@@ -272,6 +287,16 @@ async function postPurchaseInTransaction(transaction, userId, command) {
   );
   if (journalIdempotencySnapshot.exists) {
     conflict('The journal idempotency key already exists.');
+  }
+
+  let supplierLedgerSnapshot = null;
+  let supplierBalanceSnapshot = null;
+  if (isCreditPurchase) {
+    supplierLedgerSnapshot = await transaction.get(supplierLedgerRef);
+    if (supplierLedgerSnapshot.exists) {
+      conflict('A supplier ledger entry for this purchase already exists.');
+    }
+    supplierBalanceSnapshot = await transaction.get(supplierBalanceRef);
   }
 
   const productIds = [...new Set(
@@ -660,6 +685,45 @@ async function postPurchaseInTransaction(transaction, userId, command) {
     );
   }
 
+  if (isCreditPurchase) {
+    const balance = supplierBalanceSnapshot.exists
+      ? supplierBalanceSnapshot.data()
+      : {};
+    const currentDebit = storedInt(balance.debitMinorUnits, 0);
+    const currentCredit = storedInt(balance.creditMinorUnits, 0);
+    const nextDebit = currentDebit;
+    const nextCredit = currentCredit + grandTotalMinorUnits;
+
+    transaction.set(
+      supplierLedgerRef,
+      {
+        storeId: command.storeId,
+        partyType: 'supplier',
+        partyId: command.purchase.supplierId,
+        sourceType: 'purchase',
+        sourceId: command.purchase.id,
+        currency: command.purchase.currency,
+        debitMinorUnits: 0,
+        creditMinorUnits: grandTotalMinorUnits,
+        description: command.purchase.description,
+        postedAt: Timestamp.fromDate(command.purchase.postedAt),
+      },
+    );
+    transaction.set(
+      supplierBalanceRef,
+      {
+        storeId: command.storeId,
+        partyType: 'supplier',
+        partyId: command.purchase.supplierId,
+        currency: command.purchase.currency,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextDebit - nextCredit,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
   for (const accountId of accountIds) {
     const balanceSnapshot = balanceSnapshots.get(accountId);
     const balance = balanceSnapshot.exists
@@ -884,6 +948,20 @@ async function postSaleInTransaction(transaction, userId, command) {
     .collection('idempotency_keys')
     .doc(journalIdempotencyKey);
 
+  const isCreditSale = command.sale.paymentMethod === 'credit';
+  const customerLedgerId = isCreditSale
+    ? command.sale.id + '-customer'
+    : null;
+  const customerLedgerRef = isCreditSale
+    ? storeRef.collection('party_ledger_entries').doc(customerLedgerId)
+    : null;
+  const customerBalanceId = isCreditSale
+    ? 'customer-' + command.sale.customerId
+    : null;
+  const customerBalanceRef = isCreditSale
+    ? storeRef.collection('party_balances').doc(customerBalanceId)
+    : null;
+
   const membershipSnapshot = await transaction.get(memberRef);
   assertMembership(membershipSnapshot, command.storeId, 'post sales');
 
@@ -917,6 +995,16 @@ async function postSaleInTransaction(transaction, userId, command) {
   );
   if (journalIdempotencySnapshot.exists) {
     conflict('The journal idempotency key already exists.');
+  }
+
+  let customerLedgerSnapshot = null;
+  let customerBalanceSnapshot = null;
+  if (isCreditSale) {
+    customerLedgerSnapshot = await transaction.get(customerLedgerRef);
+    if (customerLedgerSnapshot.exists) {
+      conflict('A customer ledger entry for this sale already exists.');
+    }
+    customerBalanceSnapshot = await transaction.get(customerBalanceRef);
   }
 
   const productIds = [...new Set(
@@ -1398,6 +1486,45 @@ async function postSaleInTransaction(transaction, userId, command) {
     transaction.set(
       journalRef.collection('lines').doc(line.id),
       line,
+    );
+  }
+
+  if (isCreditSale) {
+    const balance = customerBalanceSnapshot.exists
+      ? customerBalanceSnapshot.data()
+      : {};
+    const currentDebit = storedInt(balance.debitMinorUnits, 0);
+    const currentCredit = storedInt(balance.creditMinorUnits, 0);
+    const nextDebit = currentDebit + grandTotalMinorUnits;
+    const nextCredit = currentCredit;
+
+    transaction.set(
+      customerLedgerRef,
+      {
+        storeId: command.storeId,
+        partyType: 'customer',
+        partyId: command.sale.customerId,
+        sourceType: 'sale',
+        sourceId: command.sale.id,
+        currency: command.sale.currency,
+        debitMinorUnits: grandTotalMinorUnits,
+        creditMinorUnits: 0,
+        description: command.sale.description,
+        postedAt: Timestamp.fromDate(command.sale.postedAt),
+      },
+    );
+    transaction.set(
+      customerBalanceRef,
+      {
+        storeId: command.storeId,
+        partyType: 'customer',
+        partyId: command.sale.customerId,
+        currency: command.sale.currency,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextDebit - nextCredit,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
     );
   }
 
