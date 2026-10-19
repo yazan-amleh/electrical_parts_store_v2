@@ -121,9 +121,7 @@ class FirestoreAccountingQueryRepository
     final balances = (balancesResult as Success<List<AccountBalanceSnapshot>)
         .value
         .asMap()
-        .map(
-          (_, value) => MapEntry(value.accountId, value),
-        );
+        .map((_, value) => MapEntry(value.accountId, value));
 
     final lines = <TrialBalanceLine>[];
     for (final account in accounts.where((account) => !account.isHeader)) {

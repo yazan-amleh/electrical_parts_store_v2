@@ -112,5 +112,4 @@ void main() {
     expect(due, isA<Success<List<QueuedCommand>>>());
     expect((due as Success<List<QueuedCommand>>).value, hasLength(1));
   });
-
 }

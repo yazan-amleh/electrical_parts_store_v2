@@ -51,9 +51,9 @@ class _ProductsPageState extends State<ProductsPage> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: TextField(
                 controller: _searchController,
                 decoration: const InputDecoration(
@@ -62,10 +62,10 @@ class _ProductsPageState extends State<ProductsPage> {
                 ),
                 onChanged: (_) => setState(() {}),
               ),
-            ),
-            Expanded(child: _buildBody(context, filtered)),
-          ],
-        ),
+          ),
+          Expanded(child: _buildBody(context, filtered)),
+        ],
+      ),
     );
   }
 

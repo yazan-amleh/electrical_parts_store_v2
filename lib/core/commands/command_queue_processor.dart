@@ -93,8 +93,7 @@ class CommandQueueProcessor {
     required DateTime now,
   }) {
     final attempt = command.attemptCount + 1;
-    final retryable = failure is InfrastructureFailure &&
-        attempt < maxAttempts;
+    final retryable = failure is InfrastructureFailure && attempt < maxAttempts;
     if (!retryable) {
       return command.processing(now: now).failed(failure.message);
     }

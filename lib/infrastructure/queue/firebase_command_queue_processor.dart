@@ -12,8 +12,7 @@ class FirebaseCommandQueueProcessor {
     required CommandQueueRepository repository,
     CommandQueueProcessor? processor,
   })  : _functions = functions,
-        _processor = processor ??
-            CommandQueueProcessor(repository: repository);
+        _processor = processor ?? CommandQueueProcessor(repository: repository);
 
   final firebase_functions.FirebaseFunctions _functions;
   final CommandQueueProcessor _processor;
