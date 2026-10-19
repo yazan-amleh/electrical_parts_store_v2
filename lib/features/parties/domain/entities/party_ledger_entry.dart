@@ -9,7 +9,7 @@ class PartyLedgerEntry {
     required this.partyId,
     required this.sourceType,
     required this.sourceId,
-    required this.postedAt,
+    required DateTime postedAt,
     required this.debit,
     required this.credit,
     this.description,
