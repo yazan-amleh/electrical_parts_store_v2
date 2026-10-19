@@ -1,16 +1,40 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import '../core/config/app_runtime_config.dart';
+import '../features/auth/application/auth_session_controller.dart';
+import '../features/auth/data/repositories/firebase_auth_repository.dart';
+import '../features/auth/data/repositories/firestore_store_membership_repository.dart';
+import 'app_dependencies.dart';
 
 abstract final class AppBootstrap {
-  static Future<void> initialize({
+  static Future<AppDependencies> initialize({
     AppRuntimeConfig? config,
   }) async {
     final runtime = config ?? AppRuntimeConfig.fromEnvironment();
-    if (!runtime.useFirebase || Firebase.apps.isNotEmpty) {
-      return;
+    if (!runtime.useFirebase) {
+      return AppDependencies(runtime: runtime);
     }
 
-    await Firebase.initializeApp();
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+    }
+
+    final session = AuthSessionController(
+      authRepository: FirebaseAuthRepository(
+        auth: FirebaseAuth.instance,
+      ),
+      membershipRepository: FirestoreStoreMembershipRepository(
+        firestore: FirebaseFirestore.instance,
+      ),
+      storeId: runtime.storeId,
+    );
+    session.start();
+
+    return AppDependencies(
+      runtime: runtime,
+      authSession: session,
+    );
   }
 }
