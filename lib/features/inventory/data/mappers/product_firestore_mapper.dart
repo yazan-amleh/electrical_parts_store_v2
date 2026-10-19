@@ -12,15 +12,19 @@ abstract final class ProductFirestoreMapper {
     final data = snapshot.data() ?? const <String, dynamic>{};
     final storeId = _string(data['storeId'], '');
     final currency = _string(data['currency'], 'ILS');
+    final purchasePrice = Money(
+      minorUnits: _int(data['purchasePriceMinorUnits']),
+      currency: currency,
+    );
+    final quantityOnHand = Quantity.fromMilliUnits(
+      _int(data['quantityOnHandMilliUnits']),
+    );
 
     return Product(
       id: snapshot.id,
       storeId: storeId,
       name: _string(data['name'], snapshot.id),
-      purchasePrice: Money(
-        minorUnits: _int(data['purchasePriceMinorUnits']),
-        currency: currency,
-      ),
+      purchasePrice: purchasePrice,
       sellingPrice: Money(
         minorUnits: _int(data['sellingPriceMinorUnits']),
         currency: currency,
@@ -29,9 +33,14 @@ abstract final class ProductFirestoreMapper {
         minorUnits: _int(data['wholesalePriceMinorUnits']),
         currency: currency,
       ),
-      quantityOnHand: Quantity.fromMilliUnits(
-        _int(data['quantityOnHandMilliUnits']),
+      inventoryValue: Money(
+        minorUnits: _int(
+          data['inventoryValueMinorUnits'],
+          _defaultInventoryValue(purchasePrice, quantityOnHand),
+        ),
+        currency: currency,
       ),
+      quantityOnHand: quantityOnHand,
       minimumQuantity: Quantity.fromMilliUnits(
         _int(data['minimumQuantityMilliUnits'], 5000),
       ),
@@ -69,6 +78,7 @@ abstract final class ProductFirestoreMapper {
       'purchasePriceMinorUnits': product.purchasePrice.minorUnits,
       'sellingPriceMinorUnits': product.sellingPrice.minorUnits,
       'wholesalePriceMinorUnits': product.wholesalePrice.minorUnits,
+      'inventoryValueMinorUnits': product.inventoryValue.minorUnits,
       'quantityOnHandMilliUnits': product.quantityOnHand.milliUnits,
       'minimumQuantityMilliUnits': product.minimumQuantity.milliUnits,
       'categoryId': product.categoryId,
@@ -181,5 +191,13 @@ abstract final class ProductFirestoreMapper {
         : value is num
             ? value.toInt()
             : fallback;
+  }
+
+  static int _defaultInventoryValue(
+    Money purchasePrice,
+    Quantity quantity,
+  ) {
+    final numerator = purchasePrice.minorUnits * quantity.milliUnits;
+    return (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
   }
 }
