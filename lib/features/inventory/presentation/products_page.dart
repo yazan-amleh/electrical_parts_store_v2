@@ -6,6 +6,7 @@ import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../domain/entities/product.dart';
 import '../domain/repositories/product_repository.dart';
+import 'product_editor_dialog.dart';
 
 class ProductsPage extends StatefulWidget {
   const ProductsPage({
