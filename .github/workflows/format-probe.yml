@@ -1,0 +1,25 @@
+name: format-probe
+
+on:
+  push:
+    branches:
+      - v2/foundation
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Format target
+        run: |
+          dart format lib/features/categories/presentation/categories_page.dart
+          echo FORMAT_CATEGORIES_BEGIN
+          cat lib/features/categories/presentation/categories_page.dart
+          echo FORMAT_CATEGORIES_END
