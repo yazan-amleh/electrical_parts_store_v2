@@ -73,6 +73,10 @@ abstract final class AccountFirestoreMapper {
   }
 
   static int _int(Object? value, int fallback) {
-    return value is int ? value : value is num ? value.toInt() : fallback;
+    return value is int
+        ? value
+        : value is num
+            ? value.toInt()
+            : fallback;
   }
 }
