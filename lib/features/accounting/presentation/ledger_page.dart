@@ -113,7 +113,7 @@ class _LedgerPageState extends State<LedgerPage> {
                       (candidate) => DropdownMenuItem<String>(
                         value: candidate.id,
                         child: Text(
-                          '\${candidate.code} — \${candidate.name}',
+                          '${candidate.code} — ${candidate.name}',
                         ),
                       ),
                     )
@@ -313,8 +313,8 @@ class _LedgerPageState extends State<LedgerPage> {
 
   String _formatDate(DateTime date) {
     final utc = date.toUtc();
-    return '\${utc.year.toString().padLeft(4, '0')}-'
-        '\${utc.month.toString().padLeft(2, '0')}-'
-        '\${utc.day.toString().padLeft(2, '0')}';
+    return '${utc.year.toString().padLeft(4, '0')}-'
+        '${utc.month.toString().padLeft(2, '0')}-'
+        '${utc.day.toString().padLeft(2, '0')}';
   }
 }
