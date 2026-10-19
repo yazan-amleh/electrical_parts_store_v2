@@ -28,6 +28,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Check functions syntax
+        run: node --check functions/index.js
+
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed lib test
 
