@@ -28,9 +28,6 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Format probe
-        run: dart format --output=show lib/features/inventory/data/mappers/inventory_movement_firestore_mapper.dart lib/features/inventory/data/repositories/firestore_inventory_repository.dart lib/features/inventory/data/repositories/firestore_product_repository.dart
-
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed lib test
 
