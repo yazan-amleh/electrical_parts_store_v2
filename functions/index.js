@@ -22,6 +22,43 @@ const EXPENSE_PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
 const PAYMENT_POSTING_ROLES = new Set(['owner', 'admin', 'accountant']);
 const PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
 const PURCHASE_PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
+const INVENTORY_MOVEMENT_TYPES = new Set([
+  'openingBalance',
+  'adjustment',
+  'saleReturn',
+  'purchaseReturn',
+]);
+const INVENTORY_POSTING_ROLES = new Set(['owner', 'admin', 'warehouse']);
+
+exports.postInventoryMovement = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parseInventoryMovementCommand(request.data);
+
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return postInventoryMovementInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('postInventoryMovement failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The inventory movement could not be posted.',
+    );
+  }
+});
 
 exports.postJournalEntry = onCall(async (request) => {
   if (!request.auth) {
@@ -202,6 +239,172 @@ exports.postPartyPayment = onCall(async (request) => {
     );
   }
 });
+
+function parseInventoryMovementCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const rawMovement = asObject(command.movement, 'movement');
+  const type = stringValue(rawMovement.type, 'movement.type');
+  if (!INVENTORY_MOVEMENT_TYPES.has(type)) {
+    invalid('This inventory movement type must use a business command.');
+  }
+
+  const quantityDeltaMilliUnits = rawMovement.quantityDeltaMilliUnits;
+  if (!Number.isSafeInteger(quantityDeltaMilliUnits) ||
+      quantityDeltaMilliUnits === 0) {
+    invalid('movement.quantityDeltaMilliUnits must be a non-zero integer.');
+  }
+
+  return {
+    storeId,
+    movement: {
+      id: safeId(rawMovement.id, 'movement.id'),
+      idempotencyKey: safeId(
+        rawMovement.idempotencyKey,
+        'movement.idempotencyKey',
+      ),
+      productId: safeId(rawMovement.productId, 'movement.productId'),
+      type,
+      quantityDeltaMilliUnits,
+      unitCostMinorUnits: nonNegativeInt(
+        rawMovement.unitCostMinorUnits,
+        'movement.unitCostMinorUnits',
+      ),
+      totalCostMinorUnits: nonNegativeInt(
+        rawMovement.totalCostMinorUnits,
+        'movement.totalCostMinorUnits',
+      ),
+      currency: stringValue(rawMovement.currency, 'movement.currency'),
+      sourceType: rawMovement.sourceType == null
+        ? ''
+        : stringValue(rawMovement.sourceType, 'movement.sourceType'),
+      sourceId: optionalSafeId(rawMovement.sourceId, 'movement.sourceId'),
+      occurredAt: parseDate(
+        rawMovement.occurredAt,
+        'movement.occurredAt',
+      ),
+    },
+  };
+}
+
+async function postInventoryMovementInTransaction(
+  transaction,
+  userId,
+  command,
+) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberRef = storeRef.collection('members').doc(userId);
+  const productRef = storeRef
+    .collection('products')
+    .doc(command.movement.productId);
+  const movementRef = storeRef
+    .collection('inventory_movements')
+    .doc(command.movement.id);
+  const idempotencyRef = storeRef
+    .collection('inventory_idempotency')
+    .doc(command.movement.idempotencyKey);
+
+  const membershipSnapshot = await transaction.get(memberRef);
+  assertMembership(
+    membershipSnapshot,
+    command.storeId,
+    'post inventory movements',
+    INVENTORY_POSTING_ROLES,
+  );
+
+  const idempotencySnapshot = await transaction.get(idempotencyRef);
+  if (idempotencySnapshot.exists) {
+    const existingMovementId = idempotencySnapshot.data().movementId;
+    if (existingMovementId === command.movement.id) {
+      return {
+        status: 'already_posted',
+        movementId: command.movement.id,
+      };
+    }
+    conflict('The inventory idempotency key is already assigned.');
+  }
+
+  const existingMovementSnapshot = await transaction.get(movementRef);
+  if (existingMovementSnapshot.exists) {
+    conflict('The inventory movement id already exists.');
+  }
+
+  const productSnapshot = await transaction.get(productRef);
+  if (!productSnapshot.exists) {
+    invalid('Product was not found.');
+  }
+
+  const product = productSnapshot.data();
+  if (product.storeId !== command.storeId) {
+    deny('Product belongs to another store.');
+  }
+  if (product.isService === true) {
+    invalid('Services cannot receive stock movements.');
+  }
+
+  const currency = product.currency || 'ILS';
+  if (currency !== command.movement.currency) {
+    invalid('Movement currency does not match the product.');
+  }
+
+  const currentQuantity = storedInt(
+    product.quantityOnHandMilliUnits,
+    0,
+  );
+  const currentInventoryValue = storedInt(
+    product.inventoryValueMinorUnits,
+    0,
+  );
+  const nextQuantity =
+    currentQuantity + command.movement.quantityDeltaMilliUnits;
+  if (nextQuantity < 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The movement would create negative stock.',
+    );
+  }
+
+  const nextInventoryValue = command.movement.quantityDeltaMilliUnits < 0
+    ? currentInventoryValue - command.movement.totalCostMinorUnits
+    : currentInventoryValue + command.movement.totalCostMinorUnits;
+  if (nextInventoryValue < 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'The movement would create negative inventory value.',
+    );
+  }
+
+  transaction.update(productRef, {
+    quantityOnHandMilliUnits: nextQuantity,
+    inventoryValueMinorUnits: nextInventoryValue,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  transaction.set(movementRef, {
+    storeId: command.storeId,
+    productId: command.movement.productId,
+    type: command.movement.type,
+    quantityDeltaMilliUnits: command.movement.quantityDeltaMilliUnits,
+    unitCostMinorUnits: command.movement.unitCostMinorUnits,
+    totalCostMinorUnits: command.movement.totalCostMinorUnits,
+    currency: command.movement.currency,
+    idempotencyKey: command.movement.idempotencyKey,
+    sourceType: command.movement.sourceType,
+    sourceId: command.movement.sourceId,
+    occurredAt: Timestamp.fromDate(command.movement.occurredAt),
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  transaction.set(idempotencyRef, {
+    storeId: command.storeId,
+    movementId: command.movement.id,
+    idempotencyKey: command.movement.idempotencyKey,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    status: 'posted',
+    movementId: command.movement.id,
+  };
+}
 
 function parseJournalEntryCommand(rawCommand) {
   const command = asObject(rawCommand, 'command');
