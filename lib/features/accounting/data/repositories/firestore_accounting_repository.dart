@@ -72,10 +72,8 @@ class FirestoreAccountingRepository implements AccountingRepository {
             );
           }
 
-          final accountIds = entry.lines
-              .map((line) => line.accountId)
-              .toSet()
-              .toList();
+          final accountIds =
+              entry.lines.map((line) => line.accountId).toSet().toList();
           final accountSnapshots =
               <String, DocumentSnapshot<Map<String, dynamic>>>{};
           final balanceSnapshots =
@@ -171,10 +169,8 @@ class FirestoreAccountingRepository implements AccountingRepository {
             final currentCredit = _minorUnits(
               balanceData['creditMinorUnits'],
             );
-            final nextDebit =
-                currentDebit + (debitDeltas[accountId] ?? 0);
-            final nextCredit =
-                currentCredit + (creditDeltas[accountId] ?? 0);
+            final nextDebit = currentDebit + (debitDeltas[accountId] ?? 0);
+            final nextCredit = currentCredit + (creditDeltas[accountId] ?? 0);
 
             transaction.set(
               balances.doc(accountId),
@@ -244,8 +240,7 @@ class FirestoreAccountingRepository implements AccountingRepository {
         _firestore,
         context.storeId,
       ).doc(accountId).get();
-      final balanceData =
-          balanceSnapshot.data() ?? const <String, dynamic>{};
+      final balanceData = balanceSnapshot.data() ?? const <String, dynamic>{};
       final debit = _minorUnits(balanceData['debitMinorUnits']);
       final credit = _minorUnits(balanceData['creditMinorUnits']);
       final debitCreditBalance = debit - credit;
@@ -271,6 +266,10 @@ class FirestoreAccountingRepository implements AccountingRepository {
   }
 
   static int _minorUnits(Object? value) {
-    return value is int ? value : value is num ? value.toInt() : 0;
+    return value is int
+        ? value
+        : value is num
+            ? value.toInt()
+            : 0;
   }
 }
