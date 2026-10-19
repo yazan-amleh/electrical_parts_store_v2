@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../../../core/errors/failure.dart';
 import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../domain/entities/authenticated_user.dart';
@@ -53,7 +52,7 @@ class AuthSessionController extends ChangeNotifier {
 
     _authSubscription = _authRepository.authStateChanges().listen(
       _handleUser,
-      onError: (Object error, StackTrace stackTrace) {
+      onError: (Object error, _) {
         _setFailure(error.toString());
       },
     );
