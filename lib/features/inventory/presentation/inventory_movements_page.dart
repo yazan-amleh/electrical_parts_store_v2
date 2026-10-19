@@ -274,7 +274,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'الرصيد الحالي: ' + product.quantityOnHand.formatted,
+              'الرصيد الحالي: ${product.quantityOnHand.formatted}',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             if (_errorMessage != null) ...[
@@ -342,13 +342,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
                       : Theme.of(context).colorScheme.primary,
                 ),
                 title: Text(_movementTypeLabel(movement.type)),
-                subtitle: Text(
-                  _dateLabel(movement.occurredAt) +
-                      ' • ' +
-                      (movement.sourceType.isEmpty
-                          ? 'حركة يدوية'
-                          : movement.sourceType),
-                ),
+                subtitle: Text("${_dateLabel(movement.occurredAt)} • ${movement.sourceType.isEmpty ? 'حركة يدوية' : movement.sourceType}"),
                 trailing: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -579,15 +573,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
 
   String _dateLabel(DateTime date) {
     final local = date.toLocal();
-    return local.year.toString() +
-        '/' +
-        local.month.toString().padLeft(2, '0') +
-        '/' +
-        local.day.toString().padLeft(2, '0') +
-        ' ' +
-        local.hour.toString().padLeft(2, '0') +
-        ':' +
-        local.minute.toString().padLeft(2, '0');
+    return '${local.year}/${local.month.toString().padLeft(2, '0')}/${local.day.toString().padLeft(2, '0')} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
 
   void _showMessage(String message) {
