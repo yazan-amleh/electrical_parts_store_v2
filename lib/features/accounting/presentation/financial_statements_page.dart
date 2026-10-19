@@ -228,7 +228,8 @@ class _FinancialStatementsPageState extends State<FinancialStatementsPage> {
             const Divider(),
             _totalRow(
               label: 'الإجمالي',
-              value: '${trialBalance.totalDebit.formatted} / ${trialBalance.totalCredit.formatted}',
+              value:
+                  '${trialBalance.totalDebit.formatted} / ${trialBalance.totalCredit.formatted}',
             ),
           ],
         ),
