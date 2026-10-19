@@ -1,4 +1,5 @@
 import '../../domain/entities/sale.dart';
+import '../../domain/entities/sale_line.dart';
 import '../../domain/entities/sale_posting_plan.dart';
 
 abstract final class SaleCommandMapper {
@@ -29,7 +30,7 @@ abstract final class SaleCommandMapper {
     };
   }
 
-  static Map<String, dynamic> _lineToMap(line) {
+  static Map<String, dynamic> _lineToMap(SaleLine line) {
     return <String, dynamic>{
       'id': line.id,
       'productId': line.productId,
