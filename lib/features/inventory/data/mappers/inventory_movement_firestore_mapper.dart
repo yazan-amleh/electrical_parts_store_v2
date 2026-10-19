@@ -38,6 +38,7 @@ abstract final class InventoryMovementFirestoreMapper {
       ),
       sourceType: _string(data['sourceType'], ''),
       sourceId: data['sourceId'] as String?,
+      description: _string(data['description'], ''),
       occurredAt:
           _date(data['occurredAt']) ?? DateTime.fromMillisecondsSinceEpoch(0),
     );

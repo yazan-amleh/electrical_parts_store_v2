@@ -279,6 +279,10 @@ function parseInventoryMovementCommand(rawCommand) {
         ? ''
         : stringValue(rawMovement.sourceType, 'movement.sourceType'),
       sourceId: optionalSafeId(rawMovement.sourceId, 'movement.sourceId'),
+      description: optionalText(
+        rawMovement.description,
+        'movement.description',
+      ),
       occurredAt: parseDate(
         rawMovement.occurredAt,
         'movement.occurredAt',
@@ -394,6 +398,7 @@ async function postInventoryMovementInTransaction(
     idempotencyKey: command.movement.idempotencyKey,
     sourceType: command.movement.sourceType,
     sourceId: command.movement.sourceId,
+    description: command.movement.description,
     occurredAt: Timestamp.fromDate(command.movement.occurredAt),
     createdAt: FieldValue.serverTimestamp(),
   });
@@ -3441,6 +3446,16 @@ function optionalSafeId(value, label) {
     return null;
   }
   return safeId(value, label);
+}
+
+function optionalText(value, label) {
+  if (value == null) {
+    return '';
+  }
+  if (typeof value !== 'string') {
+    invalid(label + ' must be a string.');
+  }
+  return value.trim();
 }
 
 function positiveInt(value, label) {

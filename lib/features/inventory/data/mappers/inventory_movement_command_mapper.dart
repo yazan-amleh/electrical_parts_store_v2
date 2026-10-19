@@ -15,6 +15,7 @@ abstract final class InventoryMovementCommandMapper {
         'currency': movement.unitCost.currency,
         'sourceType': movement.sourceType,
         'sourceId': movement.sourceId,
+        'description': movement.description,
         'occurredAt': movement.occurredAt.toUtc().toIso8601String(),
       },
     };

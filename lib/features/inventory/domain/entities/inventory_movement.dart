@@ -15,6 +15,7 @@ class InventoryMovement {
     required IdempotencyKey idempotencyKey,
     this.sourceType = '',
     this.sourceId,
+    this.description = '',
     DateTime? occurredAt,
   })  : totalCost = totalCost ?? _defaultTotalCost(quantityDelta, unitCost),
         idempotencyKey = idempotencyKey.value,
@@ -48,6 +49,7 @@ class InventoryMovement {
   final String idempotencyKey;
   final String sourceType;
   final String? sourceId;
+  final String description;
   final DateTime occurredAt;
 
   static Money _defaultTotalCost(Quantity quantity, Money unitCost) {

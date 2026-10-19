@@ -477,6 +477,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
       idempotencyKey: IdempotencyKey(['inventory-', now].join()),
       sourceType: 'manual_inventory',
       sourceId: null,
+      description: _descriptionController.text.trim(),
       occurredAt: DateTime.now().toUtc(),
     );
 
