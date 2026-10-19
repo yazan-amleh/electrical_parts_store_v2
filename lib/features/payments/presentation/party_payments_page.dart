@@ -4,7 +4,6 @@ import '../../../core/errors/failure.dart';
 import '../../../core/idempotency/idempotency_key.dart';
 import '../../../core/money/money.dart';
 import '../../../core/result/result.dart';
-import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../parties/domain/enums/party_type.dart';
@@ -257,8 +256,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       return;
     }
 
-    final paymentId =
-        'party-payment-' + DateTime.now().microsecondsSinceEpoch.toString();
+    final paymentId = 'party-payment-${DateTime.now().microsecondsSinceEpoch}';
     final payment = PartyPayment(
       id: paymentId,
       storeId: widget.membership.storeId,
