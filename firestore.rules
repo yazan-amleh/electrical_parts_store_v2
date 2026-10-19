@@ -32,6 +32,10 @@ service cloud.firestore {
       return hasRole(storeId, ['owner', 'admin', 'accountant']);
     }
 
+    function canManageInventory(storeId) {
+      return hasRole(storeId, ['owner', 'admin', 'warehouse']);
+    }
+
     match /stores/{storeId} {
       allow read: if canReadStore(storeId);
       allow create: if signedIn() &&
@@ -47,6 +51,13 @@ service cloud.firestore {
       match /accounts/{accountId} {
         allow read: if canReadStore(storeId);
         allow create, update: if canManageStore(storeId);
+        allow delete: if false;
+      }
+
+      match /products/{productId} {
+        allow read: if canReadStore(storeId);
+        allow create, update: if canManageInventory(storeId) &&
+          request.resource.data.storeId == storeId;
         allow delete: if false;
       }
 
