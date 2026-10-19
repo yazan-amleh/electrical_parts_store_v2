@@ -1,5 +1,6 @@
 import '../../../../core/idempotency/idempotency_key.dart';
 import '../../../../core/money/money.dart';
+import '../../../../core/quantity/quantity.dart';
 import '../../../../core/tenancy/store_context.dart';
 import '../enums/purchase_payment_method.dart';
 import 'purchase_line.dart';
@@ -79,12 +80,10 @@ class Purchase {
 
   Money get grandTotal => subtotal + tax;
 
-  QuantitySummary get quantities {
-    return QuantitySummary(
-      lines.fold(
-        0,
-        (sum, line) => sum + line.baseQuantity.milliUnits,
-      ),
+  Quantity get totalReceivedQuantity {
+    return lines.fold(
+      const Quantity.fromMilliUnits(0),
+      (sum, line) => sum + line.baseQuantity,
     );
   }
 
@@ -102,8 +101,3 @@ class Purchase {
   }
 }
 
-class QuantitySummary {
-  const QuantitySummary(this.baseMilliUnits);
-
-  final int baseMilliUnits;
-}
