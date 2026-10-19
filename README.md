@@ -13,6 +13,17 @@ V2 is a clean rebuild of the electrical-parts and accounting platform.
 - UI depends on application use cases and repository contracts, never directly on Firebase.
 - Firebase is the first adapter; the domain and application layers remain database-portable.
 
+
+## Implemented accounting commands
+
+- Sales and purchases post journal lines, inventory movements, stored balances, and party projections atomically.
+- Customer receipts and supplier payments update the party subledger and control accounts atomically.
+- Operating expenses support cash, bank, card, and supplier-credit posting with optional input tax.
+- Internal transfers move value between liquid asset accounts through a balanced journal.
+- All callable commands validate tenant membership, account type/control type, currency, idempotency, and posting roles.
+- Transient callable failures can be saved in the Firestore outbox and retried safely later; expired processing leases are recoverable.
+- The V1-to-V2 screen inventory is tracked in `docs/v1_feature_parity_matrix.md`.
+
 ## Current branch
 
 The `v2/foundation` branch contains the initial project and accounting-domain foundation. Feature parity with V1 will be ported module by module and verified with acceptance tests.
