@@ -47,6 +47,10 @@ service cloud.firestore {
       return hasRole(storeId, ['owner', 'admin', 'warehouse']);
     }
 
+    function canManageOffers(storeId) {
+      return hasRole(storeId, ['owner', 'admin', 'accountant', 'sales']);
+    }
+
     match /stores/{storeId} {
       allow read: if canReadStore(storeId);
       allow create: if signedIn() &&
@@ -99,6 +103,28 @@ service cloud.firestore {
           request.resource.data.storeId == storeId &&
           request.resource.data.name is string;
         allow delete: if false;
+      }
+
+      match /offers/{offerId} {
+        allow read: if canReadStore(storeId);
+        allow create, update, delete: if false;
+      }
+
+      match /offer_idempotency/{key} {
+        allow read, write: if false;
+      }
+
+      match /offer_orders/{orderId} {
+        allow read: if canReadStore(storeId);
+        allow create, update, delete: if false;
+      }
+
+      match /offer_order_idempotency/{key} {
+        allow read, write: if false;
+      }
+
+      match /offer_order_confirmation_idempotency/{key} {
+        allow read, write: if false;
       }
 
       match /sales/{saleId} {
@@ -155,7 +181,14 @@ service cloud.firestore {
             'postInventoryMovement',
             'createPurchaseOrder',
             'cancelPurchaseOrder',
-            'receivePurchaseOrder'
+            'receivePurchaseOrder',
+            'createOffer',
+            'updateOffer',
+            'setOfferActive',
+            'archiveOffer',
+            'createOfferOrder',
+            'cancelOfferOrder',
+            'confirmOfferOrder'
           ] &&
           request.resource.data.idempotencyKey is string;
         allow update: if canReadStore(storeId) &&

@@ -17,6 +17,8 @@ const Timestamp = admin.firestore.Timestamp;
 const QUANTITY_SCALE = 1000;
 const MAX_LINES = 100;
 const POSTING_ROLES = new Set(['owner', 'admin', 'accountant', 'sales']);
+const OFFER_ROLES = new Set(['owner', 'admin', 'accountant', 'sales']);
+const OFFER_PRICE_TYPES = new Set(['retail', 'wholesale', 'custom']);
 const PARTY_PAYMENT_METHODS = new Set(['cash', 'bank', 'card']);
 const EXPENSE_PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
 const PAYMENT_POSTING_ROLES = new Set(['owner', 'admin', 'accountant']);
@@ -156,6 +158,168 @@ exports.postPurchase = onCall(async (request) => {
   }
 });
 
+
+
+exports.createOffer = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parseOfferCreateCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return createOfferInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('createOffer failed', {message: error.message, stack: error.stack});
+    throw new HttpsError('internal', 'The offer could not be created.');
+  }
+});
+
+exports.updateOffer = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parseOfferUpdateCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return updateOfferInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('updateOffer failed', {message: error.message, stack: error.stack});
+    throw new HttpsError('internal', 'The offer could not be updated.');
+  }
+});
+
+exports.setOfferActive = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parseOfferActiveCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return setOfferActiveInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('setOfferActive failed', {message: error.message, stack: error.stack});
+    throw new HttpsError('internal', 'The offer status could not be changed.');
+  }
+});
+
+exports.archiveOffer = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parseOfferArchiveCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return archiveOfferInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('archiveOffer failed', {message: error.message, stack: error.stack});
+    throw new HttpsError('internal', 'The offer could not be archived.');
+  }
+});
+
+exports.createOfferOrder = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parseOfferOrderCreateCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return createOfferOrderInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('createOfferOrder failed', {message: error.message, stack: error.stack});
+    throw new HttpsError('internal', 'The offer order could not be created.');
+  }
+});
+
+exports.cancelOfferOrder = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parseOfferOrderCancelCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return cancelOfferOrderInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('cancelOfferOrder failed', {message: error.message, stack: error.stack});
+    throw new HttpsError('internal', 'The offer order could not be cancelled.');
+  }
+});
+
+exports.confirmOfferOrder = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parseOfferOrderConfirmCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return confirmOfferOrderInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('confirmOfferOrder failed', {message: error.message, stack: error.stack});
+    throw new HttpsError('internal', 'The offer order could not be confirmed.');
+  }
+});
 
 exports.createPurchaseOrder = onCall(async (request) => {
   if (!request.auth) {
@@ -3181,7 +3345,12 @@ function parseCommand(rawCommand) {
   };
 }
 
-async function postSaleInTransaction(transaction, userId, command) {
+async function postSaleInTransaction(
+  transaction,
+  userId,
+  command,
+  allowedRoles = POSTING_ROLES,
+) {
   const storeRef = db.collection('stores').doc(command.storeId);
   const memberRef = storeRef.collection('members').doc(userId);
   const saleRef = storeRef.collection('sales').doc(command.sale.id);
@@ -3212,7 +3381,12 @@ async function postSaleInTransaction(transaction, userId, command) {
     : null;
 
   const membershipSnapshot = await transaction.get(memberRef);
-  assertMembership(membershipSnapshot, command.storeId, 'post sales');
+  assertMembership(
+    membershipSnapshot,
+    command.storeId,
+    'post sales',
+    allowedRoles,
+  );
 
   const saleIdempotencySnapshot = await transaction.get(
     saleIdempotencyRef,
@@ -4048,4 +4222,717 @@ function deny(message) {
 
 function conflict(message) {
   throw new HttpsError('already-exists', message);
+}
+
+
+function parseOfferCreateCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const rawOffer = asObject(command.offer, 'offer');
+  const offer = parseOfferPayload(rawOffer);
+  const idempotencyKey = safeId(
+    command.idempotencyKey || offer.id,
+    'idempotencyKey',
+  );
+  return {storeId, offer, idempotencyKey};
+}
+
+function parseOfferUpdateCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const offerId = safeId(command.offerId, 'offerId');
+  const offer = parseOfferPayload(asObject(command.offer, 'offer'));
+  if (offer.id !== offerId) {
+    invalid('Offer id does not match the update target.');
+  }
+  return {storeId, offerId, offer};
+}
+
+function parseOfferPayload(rawOffer) {
+  const rawLines = Array.isArray(rawOffer.lines) ? rawOffer.lines : [];
+  if (rawLines.length === 0 || rawLines.length > MAX_LINES) {
+    invalid('An offer must contain between 1 and 100 lines.');
+  }
+
+  const currency = stringValue(rawOffer.currency, 'offer.currency');
+  const lines = rawLines.map((rawLine, index) => {
+    const line = asObject(rawLine, 'offer.lines[' + index + ']');
+    const priceType = stringValue(
+      line.priceType || 'custom',
+      'offer line priceType',
+    );
+    if (!OFFER_PRICE_TYPES.has(priceType)) {
+      invalid('Unsupported offer price type.');
+    }
+    const unitId = optionalSafeId(line.unitId, 'offer unitId');
+    return {
+      id: safeId(line.id, 'offer line id'),
+      productId: safeId(line.productId, 'offer product id'),
+      productName: stringValue(line.productName, 'offer product name'),
+      originalUnitPriceMinorUnits: nonNegativeInt(
+        line.originalUnitPriceMinorUnits,
+        'offer original price',
+      ),
+      finalUnitPriceMinorUnits: nonNegativeInt(
+        line.finalUnitPriceMinorUnits,
+        'offer final price',
+      ),
+      quantityMilliUnits: positiveInt(
+        line.quantityMilliUnits,
+        'offer quantityMilliUnits',
+      ),
+      unitFactorToBaseMilliUnits: positiveInt(
+        line.unitFactorToBaseMilliUnits,
+        'offer unit factor',
+      ),
+      priceType,
+      unitId,
+      unitName: line.unitName == null
+        ? null
+        : stringValue(line.unitName, 'offer unitName'),
+      isService: line.isService === true,
+    };
+  });
+
+  const lineIds = new Set(lines.map((line) => line.id));
+  if (lineIds.size !== lines.length) {
+    invalid('Offer line ids must be unique.');
+  }
+
+  for (const line of lines) {
+    if (line.finalUnitPriceMinorUnits > line.originalUnitPriceMinorUnits) {
+      invalid('Offer final price cannot exceed the original price.');
+    }
+  }
+
+  const startDate = rawOffer.startDate == null
+    ? null
+    : parseDate(rawOffer.startDate, 'offer.startDate');
+  const endDate = rawOffer.endDate == null
+    ? null
+    : parseDate(rawOffer.endDate, 'offer.endDate');
+  if (startDate && endDate && startDate > endDate) {
+    invalid('Offer start date must be before its end date.');
+  }
+
+  return {
+    id: safeId(rawOffer.id, 'offer id'),
+    offerNumber: stringValue(rawOffer.offerNumber, 'offer number'),
+    name: stringValue(rawOffer.name, 'offer name'),
+    description: optionalText(rawOffer.description, 'offer.description'),
+    currency,
+    createdAt: parseDate(rawOffer.createdAt, 'offer.createdAt'),
+    isActive: rawOffer.isActive !== false,
+    startDate,
+    endDate,
+    imageUrl: rawOffer.imageUrl == null
+      ? null
+      : stringValue(rawOffer.imageUrl, 'offer.imageUrl'),
+    globalDiscountMinorUnits: nonNegativeInt(
+      rawOffer.globalDiscountMinorUnits || 0,
+      'offer global discount',
+    ),
+    lines,
+  };
+}
+
+function parseOfferActiveCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  return {
+    storeId: safeId(command.storeId, 'storeId'),
+    offerId: safeId(command.offerId, 'offerId'),
+    isActive: command.isActive === true,
+  };
+}
+
+function parseOfferArchiveCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  return {
+    storeId: safeId(command.storeId, 'storeId'),
+    offerId: safeId(command.offerId, 'offerId'),
+  };
+}
+
+function parseOfferOrderCreateCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const rawOrder = asObject(command.order, 'order');
+  return {
+    storeId,
+    order: {
+      id: safeId(rawOrder.id, 'offer order id'),
+      orderNumber: stringValue(rawOrder.orderNumber, 'offer order number'),
+      offerId: safeId(rawOrder.offerId, 'offer id'),
+      customerId: safeId(rawOrder.customerId, 'customer id'),
+      idempotencyKey: safeId(
+        rawOrder.idempotencyKey || rawOrder.id,
+        'offer order idempotencyKey',
+      ),
+      createdAt: parseDate(rawOrder.createdAt, 'offer order.createdAt'),
+    },
+  };
+}
+
+function parseOfferOrderCancelCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  return {
+    storeId: safeId(command.storeId, 'storeId'),
+    orderId: safeId(command.orderId, 'orderId'),
+  };
+}
+
+function parseOfferOrderConfirmCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const postingAccounts = asObject(
+    command.postingAccounts,
+    'postingAccounts',
+  );
+  const paymentMethod = stringValue(command.paymentMethod, 'paymentMethod');
+  if (!PAYMENT_METHODS.has(paymentMethod)) {
+    invalid('Unsupported offer order payment method.');
+  }
+  const accounts = {
+    settlementAccountId: optionalSafeId(
+      postingAccounts.settlementAccountId,
+      'settlementAccountId',
+    ),
+    customerReceivableAccountId: optionalSafeId(
+      postingAccounts.customerReceivableAccountId,
+      'customerReceivableAccountId',
+    ),
+    salesAccountId: safeId(
+      postingAccounts.salesAccountId,
+      'salesAccountId',
+    ),
+    inventoryAccountId: safeId(
+      postingAccounts.inventoryAccountId,
+      'inventoryAccountId',
+    ),
+    costOfSalesAccountId: safeId(
+      postingAccounts.costOfSalesAccountId,
+      'costOfSalesAccountId',
+    ),
+    taxAccountId: optionalSafeId(
+      postingAccounts.taxAccountId,
+      'taxAccountId',
+    ),
+  };
+  const paymentAccountId = paymentMethod === 'credit'
+    ? accounts.customerReceivableAccountId
+    : accounts.settlementAccountId;
+  if (!paymentAccountId) {
+    invalid('The offer order payment account is required.');
+  }
+  return {
+    storeId: safeId(command.storeId, 'storeId'),
+    orderId: safeId(command.orderId, 'orderId'),
+    idempotencyKey: safeId(command.idempotencyKey, 'idempotencyKey'),
+    postedAt: parseDate(command.postedAt, 'postedAt'),
+    paymentMethod,
+    accounts,
+  };
+}
+
+async function createOfferInTransaction(transaction, userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberRef = storeRef.collection('members').doc(userId);
+  const offerRef = storeRef.collection('offers').doc(command.offer.id);
+  const idempotencyRef = storeRef
+    .collection('offer_idempotency')
+    .doc(command.idempotencyKey);
+
+  const memberSnapshot = await transaction.get(memberRef);
+  assertMembership(memberSnapshot, command.storeId, 'manage offers', OFFER_ROLES);
+  const idempotencySnapshot = await transaction.get(idempotencyRef);
+  if (idempotencySnapshot.exists) {
+    const data = idempotencySnapshot.data();
+    if (data.offerId === command.offer.id) {
+      return {status: 'already_created', offerId: command.offer.id};
+    }
+    conflict('The offer idempotency key is already assigned.');
+  }
+  const existingSnapshot = await transaction.get(offerRef);
+  if (existingSnapshot.exists) {
+    conflict('The offer id already exists.');
+  }
+
+  const canonical = await canonicalOfferLines(transaction, storeRef, command);
+  const offerData = offerDocument(command, canonical);
+  transaction.set(offerRef, offerData);
+  transaction.set(idempotencyRef, {
+    storeId: command.storeId,
+    offerId: command.offer.id,
+    idempotencyKey: command.idempotencyKey,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {status: 'created', offerId: command.offer.id};
+}
+
+async function updateOfferInTransaction(transaction, userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberSnapshot = await transaction.get(
+    storeRef.collection('members').doc(userId),
+  );
+  assertMembership(memberSnapshot, command.storeId, 'manage offers', OFFER_ROLES);
+  const offerRef = storeRef.collection('offers').doc(command.offerId);
+  const existingSnapshot = await transaction.get(offerRef);
+  if (!existingSnapshot.exists) {
+    invalid('Offer was not found.');
+  }
+
+  const canonical = await canonicalOfferLines(transaction, storeRef, command);
+  const existing = existingSnapshot.data();
+  const next = offerDocument(command, canonical);
+  next.createdAt = existing.createdAt || next.createdAt;
+  transaction.set(offerRef, next);
+  return {status: 'updated', offerId: command.offerId};
+}
+
+async function setOfferActiveInTransaction(transaction, userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberSnapshot = await transaction.get(
+    storeRef.collection('members').doc(userId),
+  );
+  assertMembership(memberSnapshot, command.storeId, 'manage offers', OFFER_ROLES);
+  const offerRef = storeRef.collection('offers').doc(command.offerId);
+  const offerSnapshot = await transaction.get(offerRef);
+  if (!offerSnapshot.exists) {
+    invalid('Offer was not found.');
+  }
+  transaction.update(offerRef, {
+    isActive: command.isActive,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return {status: 'updated', offerId: command.offerId};
+}
+
+async function archiveOfferInTransaction(transaction, userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberSnapshot = await transaction.get(
+    storeRef.collection('members').doc(userId),
+  );
+  assertMembership(memberSnapshot, command.storeId, 'manage offers', OFFER_ROLES);
+  const offerRef = storeRef.collection('offers').doc(command.offerId);
+  const offerSnapshot = await transaction.get(offerRef);
+  if (!offerSnapshot.exists) {
+    invalid('Offer was not found.');
+  }
+  transaction.update(offerRef, {
+    isActive: false,
+    archivedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return {status: 'archived', offerId: command.offerId};
+}
+
+async function canonicalOfferLines(transaction, storeRef, command) {
+  const productIds = [...new Set(
+    command.offer.lines.map((line) => line.productId),
+  )];
+  const productSnapshots = new Map();
+  for (const productId of productIds) {
+    productSnapshots.set(
+      productId,
+      await transaction.get(storeRef.collection('products').doc(productId)),
+    );
+  }
+
+  const lines = [];
+  let originalTotal = 0;
+  let lineFinalTotal = 0;
+  for (const line of command.offer.lines) {
+    const productSnapshot = productSnapshots.get(line.productId);
+    if (!productSnapshot || !productSnapshot.exists) {
+      invalid('Product was not found: ' + line.productId);
+    }
+    const product = productSnapshot.data();
+    if (product.storeId !== command.storeId) {
+      deny('Product belongs to another store.');
+    }
+    if (product.isActive === false) {
+      invalid('Inactive products cannot be used in an offer.');
+    }
+    const productCurrency = product.currency || 'ILS';
+    if (productCurrency !== command.offer.currency) {
+      invalid('Product currency does not match the offer.');
+    }
+    if (product.isService !== line.isService) {
+      invalid('Offer service type does not match the product.');
+    }
+    const expectedFactor = expectedUnitFactor(product, line.unitId);
+    if (expectedFactor !== line.unitFactorToBaseMilliUnits) {
+      invalid('Product unit changed. Refresh the offer and try again.');
+    }
+    const originalLine = multiplyAndRound(
+      line.originalUnitPriceMinorUnits,
+      line.quantityMilliUnits,
+    );
+    const finalLine = multiplyAndRound(
+      line.finalUnitPriceMinorUnits,
+      line.quantityMilliUnits,
+    );
+    originalTotal += originalLine;
+    lineFinalTotal += finalLine;
+    lines.push({
+      id: line.id,
+      productId: line.productId,
+      productName: product.name,
+      originalUnitPriceMinorUnits: line.originalUnitPriceMinorUnits,
+      finalUnitPriceMinorUnits: line.finalUnitPriceMinorUnits,
+      quantityMilliUnits: line.quantityMilliUnits,
+      unitFactorToBaseMilliUnits: line.unitFactorToBaseMilliUnits,
+      priceType: line.priceType,
+      unitId: line.unitId,
+      unitName: line.unitName || product.baseUnitName || null,
+      isService: line.isService,
+    });
+  }
+  if (command.offer.globalDiscountMinorUnits > lineFinalTotal) {
+    invalid('Offer discount cannot exceed the offer total.');
+  }
+  return {lines, originalTotal, lineFinalTotal};
+}
+
+function offerDocument(command, canonical) {
+  const totalDiscount = canonical.originalTotal -
+    canonical.lineFinalTotal +
+    command.offer.globalDiscountMinorUnits;
+  const totalFinal = canonical.lineFinalTotal -
+    command.offer.globalDiscountMinorUnits;
+  return {
+    storeId: command.storeId,
+    offerNumber: command.offer.offerNumber,
+    name: command.offer.name,
+    description: command.offer.description,
+    currency: command.offer.currency,
+    createdAt: Timestamp.fromDate(command.offer.createdAt),
+    isActive: command.offer.isActive,
+    startDate: command.offer.startDate
+      ? Timestamp.fromDate(command.offer.startDate)
+      : null,
+    endDate: command.offer.endDate
+      ? Timestamp.fromDate(command.offer.endDate)
+      : null,
+    imageUrl: command.offer.imageUrl,
+    globalDiscountMinorUnits: command.offer.globalDiscountMinorUnits,
+    totalOriginalMinorUnits: canonical.originalTotal,
+    totalDiscountMinorUnits: totalDiscount,
+    totalFinalMinorUnits: totalFinal,
+    lines: canonical.lines,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+async function createOfferOrderInTransaction(transaction, userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberSnapshot = await transaction.get(
+    storeRef.collection('members').doc(userId),
+  );
+  assertMembership(
+    memberSnapshot,
+    command.storeId,
+    'manage offer orders',
+    OFFER_ROLES,
+  );
+
+  const orderRef = storeRef.collection('offer_orders').doc(command.order.id);
+  const idempotencyRef = storeRef
+    .collection('offer_order_idempotency')
+    .doc(command.order.idempotencyKey);
+  const [idempotencySnapshot, orderSnapshot, offerSnapshot, customerSnapshot] =
+    await Promise.all([
+      transaction.get(idempotencyRef),
+      transaction.get(orderRef),
+      transaction.get(storeRef.collection('offers').doc(command.order.offerId)),
+      transaction.get(storeRef.collection('parties').doc(command.order.customerId)),
+    ]);
+
+  if (idempotencySnapshot.exists) {
+    const data = idempotencySnapshot.data();
+    if (data.orderId === command.order.id) {
+      return {status: 'already_created', orderId: command.order.id};
+    }
+    conflict('The offer order idempotency key is already assigned.');
+  }
+  if (orderSnapshot.exists) {
+    conflict('The offer order id already exists.');
+  }
+  if (!offerSnapshot.exists) {
+    invalid('Offer was not found.');
+  }
+  const offer = offerSnapshot.data();
+  if (offer.storeId !== command.storeId) {
+    deny('Offer belongs to another store.');
+  }
+  if (!isOfferCurrentlyActive(offer)) {
+    invalid('Only an active offer can create a new order.');
+  }
+  if (!customerSnapshot.exists) {
+    invalid('Customer was not found.');
+  }
+  const customer = customerSnapshot.data();
+  if (customer.storeId !== command.storeId ||
+      customer.partyType !== 'customer') {
+    invalid('The selected party is not a customer in this store.');
+  }
+  if (customer.isActive === false) {
+    invalid('Inactive customers cannot receive offer orders.');
+  }
+
+  const offerLines = Array.isArray(offer.lines) ? offer.lines : [];
+  if (offerLines.length === 0) {
+    invalid('The offer has no products.');
+  }
+  for (const line of offerLines) {
+    const productSnapshot = await transaction.get(
+      storeRef.collection('products').doc(line.productId),
+    );
+    if (!productSnapshot.exists) {
+      invalid('Product was not found: ' + line.productId);
+    }
+    const product = productSnapshot.data();
+    if (product.storeId !== command.storeId || product.isActive === false) {
+      invalid('An offer product is no longer available.');
+    }
+    if (product.isService !== (line.isService === true)) {
+      invalid('An offer product type changed.');
+    }
+    const factor = expectedUnitFactor(product, line.unitId || null);
+    const required = multiplyAndRound(
+      storedInt(line.quantityMilliUnits, 0),
+      factor,
+    );
+    if (!product.isService &&
+        storedInt(product.quantityOnHandMilliUnits, 0) < required) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Insufficient stock for offer product ' + line.productId + '.',
+      );
+    }
+  }
+
+  const orderData = {
+    storeId: command.storeId,
+    orderNumber: command.order.orderNumber,
+    offerId: command.order.offerId,
+    offerNumber: offer.offerNumber,
+    customerId: command.order.customerId,
+    customerName: customer.name,
+    currency: offer.currency,
+    createdAt: Timestamp.fromDate(command.order.createdAt),
+    status: 'pending',
+    paymentMethod: null,
+    globalDiscountMinorUnits: storedInt(offer.globalDiscountMinorUnits, 0),
+    totalMinorUnits: storedInt(offer.totalFinalMinorUnits, 0),
+    saleId: null,
+    journalEntryId: null,
+    confirmedAt: null,
+    lines: offerLines,
+    createdBy: userId,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  transaction.set(orderRef, orderData);
+  transaction.set(idempotencyRef, {
+    storeId: command.storeId,
+    orderId: command.order.id,
+    idempotencyKey: command.order.idempotencyKey,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {status: 'created', orderId: command.order.id};
+}
+
+async function cancelOfferOrderInTransaction(transaction, userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberSnapshot = await transaction.get(
+    storeRef.collection('members').doc(userId),
+  );
+  assertMembership(
+    memberSnapshot,
+    command.storeId,
+    'manage offer orders',
+    OFFER_ROLES,
+  );
+  const orderRef = storeRef.collection('offer_orders').doc(command.orderId);
+  const orderSnapshot = await transaction.get(orderRef);
+  if (!orderSnapshot.exists) {
+    invalid('Offer order was not found.');
+  }
+  const order = orderSnapshot.data();
+  if (order.status === 'cancelled') {
+    return {status: 'already_cancelled', orderId: command.orderId};
+  }
+  if (order.status === 'confirmed') {
+    invalid('A confirmed offer order must be reversed through a sales return.');
+  }
+  transaction.update(orderRef, {
+    status: 'cancelled',
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return {status: 'cancelled', orderId: command.orderId};
+}
+
+async function confirmOfferOrderInTransaction(transaction, userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberSnapshot = await transaction.get(
+    storeRef.collection('members').doc(userId),
+  );
+  assertMembership(
+    memberSnapshot,
+    command.storeId,
+    'confirm offer orders',
+    OFFER_ROLES,
+  );
+  const orderRef = storeRef.collection('offer_orders').doc(command.orderId);
+  const confirmationRef = storeRef
+    .collection('offer_order_confirmation_idempotency')
+    .doc(command.idempotencyKey);
+  const [orderSnapshot, confirmationSnapshot] = await Promise.all([
+    transaction.get(orderRef),
+    transaction.get(confirmationRef),
+  ]);
+  if (!orderSnapshot.exists) {
+    invalid('Offer order was not found.');
+  }
+  const order = orderSnapshot.data();
+  if (confirmationSnapshot.exists) {
+    const data = confirmationSnapshot.data();
+    return {
+      status: 'already_confirmed',
+      orderId: command.orderId,
+      saleId: data.saleId,
+      journalEntryId: data.journalEntryId,
+    };
+  }
+  if (order.status === 'confirmed') {
+    return {
+      status: 'already_confirmed',
+      orderId: command.orderId,
+      saleId: order.saleId,
+      journalEntryId: order.journalEntryId,
+    };
+  }
+  if (order.status === 'cancelled') {
+    invalid('A cancelled offer order cannot be confirmed.');
+  }
+
+  const rawLines = Array.isArray(order.lines) ? order.lines : [];
+  const saleLines = [];
+  const productSnapshots = new Map();
+  for (const line of rawLines) {
+    const productRef = storeRef.collection('products').doc(line.productId);
+    const productSnapshot = await transaction.get(productRef);
+    if (!productSnapshot.exists) {
+      invalid('Product was not found: ' + line.productId);
+    }
+    const product = productSnapshot.data();
+    if (product.storeId !== command.storeId || product.isActive === false) {
+      invalid('An offer product is no longer available.');
+    }
+    if (product.isService !== (line.isService === true)) {
+      invalid('An offer product type changed.');
+    }
+    const factor = expectedUnitFactor(product, line.unitId || null);
+    if (factor !== storedInt(line.unitFactorToBaseMilliUnits, 0)) {
+      invalid('Product unit changed. Refresh the offer order and try again.');
+    }
+    productSnapshots.set(line.productId, productSnapshot);
+    saleLines.push({
+      id: command.orderId + '-' + line.id,
+      productId: line.productId,
+      description: line.productName,
+      quantityMilliUnits: positiveInt(
+        storedInt(line.quantityMilliUnits, 0),
+        'offer order quantity',
+      ),
+      unitFactorToBaseMilliUnits: factor,
+      unitPriceMinorUnits: nonNegativeInt(
+        storedInt(line.finalUnitPriceMinorUnits, 0),
+        'offer order price',
+      ),
+      unitCostMinorUnits: line.isService === true
+        ? 0
+        : storedInt(product.purchasePriceMinorUnits, 0),
+      discountMinorUnits: 0,
+      unitId: line.unitId || null,
+      unitName: line.unitName || product.baseUnitName || null,
+      isService: line.isService === true,
+    });
+  }
+
+  let remainingDiscount = storedInt(order.globalDiscountMinorUnits, 0);
+  for (const line of saleLines) {
+    const gross = multiplyAndRound(
+      line.unitPriceMinorUnits,
+      line.quantityMilliUnits,
+    );
+    const discount = Math.min(remainingDiscount, gross);
+    line.discountMinorUnits = discount;
+    remainingDiscount -= discount;
+  }
+  if (remainingDiscount > 0) {
+    invalid('Offer discount exceeds the order total.');
+  }
+
+  const saleId = 'sale-offer-order-' + command.orderId;
+  const saleCommand = {
+    storeId: command.storeId,
+    sale: {
+      id: saleId,
+      idempotencyKey: command.idempotencyKey,
+      postedAt: command.postedAt,
+      paymentMethod: command.paymentMethod,
+      customerId: order.customerId,
+      description: 'Offer ' + order.offerNumber +
+        ' order ' + order.orderNumber,
+      currency: order.currency,
+      taxMinorUnits: 0,
+      lines: saleLines,
+    },
+    accounts: command.accounts,
+  };
+  const result = await postSaleInTransaction(
+    transaction,
+    userId,
+    saleCommand,
+    OFFER_ROLES,
+  );
+
+  transaction.update(orderRef, {
+    status: 'confirmed',
+    paymentMethod: command.paymentMethod,
+    saleId: result.saleId,
+    journalEntryId: result.journalEntryId,
+    confirmedAt: Timestamp.fromDate(command.postedAt),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  transaction.set(confirmationRef, {
+    storeId: command.storeId,
+    orderId: command.orderId,
+    saleId: result.saleId,
+    journalEntryId: result.journalEntryId,
+    idempotencyKey: command.idempotencyKey,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {
+    status: result.status === 'already_posted'
+      ? 'already_confirmed'
+      : 'confirmed',
+    orderId: command.orderId,
+    saleId: result.saleId,
+    journalEntryId: result.journalEntryId,
+  };
+}
+
+function isOfferCurrentlyActive(offer) {
+  if (offer.isActive === false) {
+    return false;
+  }
+  const now = Date.now();
+  if (offer.startDate && offer.startDate.toMillis() > now) {
+    return false;
+  }
+  if (offer.endDate && offer.endDate.toMillis() < now) {
+    return false;
+  }
+  return true;
 }
