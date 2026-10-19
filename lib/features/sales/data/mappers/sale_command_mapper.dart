@@ -22,6 +22,7 @@ abstract final class SaleCommandMapper {
       },
       'postingAccounts': <String, dynamic>{
         'settlementAccountId': accounts.settlementAccountId,
+        'customerReceivableAccountId': accounts.customerReceivableAccountId,
         'salesAccountId': accounts.salesAccountId,
         'inventoryAccountId': accounts.inventoryAccountId,
         'costOfSalesAccountId': accounts.costOfSalesAccountId,
