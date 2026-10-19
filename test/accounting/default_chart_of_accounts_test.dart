@@ -8,7 +8,10 @@ void main() {
     final accounts = DefaultChartOfAccounts.forStore('store-1');
 
     expect(accounts, isNotEmpty);
-    expect(accounts.map((account) => account.code).toSet(), hasLength(accounts.length));
+    expect(
+      accounts.map((account) => account.code).toSet(),
+      hasLength(accounts.length),
+    );
     expect(accounts.every((account) => account.storeId == 'store-1'), isTrue);
   });
 
@@ -30,7 +33,13 @@ void main() {
   test('header accounts cannot receive journal postings', () {
     final accounts = DefaultChartOfAccounts.forStore('store-1');
 
-    expect(accounts.firstWhere((account) => account.code == '1100').canPost, isFalse);
-    expect(accounts.firstWhere((account) => account.code == '1110').canPost, isTrue);
+    expect(
+      accounts.firstWhere((account) => account.code == '1100').canPost,
+      isFalse,
+    );
+    expect(
+      accounts.firstWhere((account) => account.code == '1110').canPost,
+      isTrue,
+    );
   });
 }
