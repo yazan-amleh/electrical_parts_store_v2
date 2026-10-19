@@ -300,7 +300,8 @@ abstract final class DefaultChartOfAccounts {
       }
     }
 
-    for (final account in accounts.where((account) => account.parentId != null)) {
+    for (final account
+        in accounts.where((account) => account.parentId != null)) {
       final parent = accounts
           .where((candidate) => candidate.id == account.parentId)
           .firstOrNull;
