@@ -10,6 +10,7 @@ class Account {
     required this.normalSide,
     required this.controlType,
     required this.statementSection,
+    this.currency = 'ILS',
     this.isActive = true,
   });
 
@@ -21,5 +22,6 @@ class Account {
   final NormalSide normalSide;
   final ControlType controlType;
   final StatementSection statementSection;
+  final String currency;
   final bool isActive;
 }
