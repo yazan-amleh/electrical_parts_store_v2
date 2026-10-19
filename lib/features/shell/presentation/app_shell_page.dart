@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
+import '../../accounting/domain/repositories/accounting_query_repository.dart';
+import '../../accounting/presentation/trial_balance_page.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../auth/domain/enums/store_role.dart';
@@ -279,6 +281,8 @@ class _AppShellPageState extends State<AppShellPage> {
           module: selected,
           user: widget.user,
           productRepository: widget.dependencies.productRepository,
+          accountingQueryRepository:
+              widget.dependencies.accountingQueryRepository,
           membership: widget.membership,
         ),
       ),
@@ -379,12 +383,14 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.module,
     required this.user,
     required this.productRepository,
+    required this.accountingQueryRepository,
     required this.membership,
   });
 
   final _Module module;
   final AuthenticatedUser user;
   final ProductRepository? productRepository;
+  final AccountingQueryRepository? accountingQueryRepository;
   final StoreMembership membership;
 
   @override
@@ -392,6 +398,13 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'products') {
       return ProductsPage(
         repository: productRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'financial-statements') {
+      return TrialBalancePage(
+        repository: accountingQueryRepository,
         user: user,
         membership: membership,
       );
