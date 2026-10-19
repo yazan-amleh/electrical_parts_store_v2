@@ -1,22 +1,31 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart' as firebase_functions;
 
+import '../../../../core/commands/command_queue_repository.dart';
 import '../../../../core/errors/failure.dart';
 import '../../../../core/money/money.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
 import '../../../../infrastructure/firebase/firebase_paths.dart';
+import '../../../../infrastructure/queue/cloud_function_queue_fallback.dart';
 import '../../domain/entities/journal_entry.dart';
 import '../../domain/enums/accounting_enums.dart';
 import '../../domain/repositories/accounting_repository.dart';
 import '../mappers/account_firestore_mapper.dart';
-import '../mappers/journal_entry_firestore_mapper.dart';
+import '../mappers/journal_entry_command_mapper.dart';
 
 class FirestoreAccountingRepository implements AccountingRepository {
   FirestoreAccountingRepository({
     required FirebaseFirestore firestore,
-  }) : _firestore = firestore;
+    required firebase_functions.FirebaseFunctions functions,
+    CommandQueueRepository? commandQueue,
+  })  : _firestore = firestore,
+        _functions = functions,
+        _commandQueue = commandQueue;
 
   final FirebaseFirestore _firestore;
+  final firebase_functions.FirebaseFunctions _functions;
+  final CommandQueueRepository? _commandQueue;
 
   @override
   Future<Result<JournalEntry>> postJournalEntry({
@@ -38,170 +47,40 @@ class FirestoreAccountingRepository implements AccountingRepository {
       );
     }
 
+    final payload = JournalEntryCommandMapper.toRequest(entry);
+
     try {
-      return await _firestore.runTransaction<Result<JournalEntry>>(
-        (transaction) async {
-          final accounts = FirebasePaths.accounts(_firestore, context.storeId);
-          final balances = FirebasePaths.accountBalances(
-            _firestore,
-            context.storeId,
-          );
-          final journalEntries = FirebasePaths.journalEntries(
-            _firestore,
-            context.storeId,
-          );
-          final idempotencyKeys = FirebasePaths.idempotencyKeys(
-            _firestore,
-            context.storeId,
-          );
+      final callable = _functions.httpsCallable('postJournalEntry');
+      final response = await callable.call<Map<String, dynamic>>(payload);
+      if (response.data['entryId'] != entry.id) {
+        return const FailureResult<JournalEntry>(
+          InfrastructureFailure(
+            'The journal service returned another entry id.',
+          ),
+        );
+      }
 
-          final idempotencyReference =
-              idempotencyKeys.doc(entry.idempotencyKey);
-          final idempotencySnapshot =
-              await transaction.get(idempotencyReference);
-          if (idempotencySnapshot.exists) {
-            final existingEntryId =
-                idempotencySnapshot.data()?['entryId'] as String?;
-            if (existingEntryId == entry.id) {
-              return Success<JournalEntry>(entry);
-            }
-            return const FailureResult<JournalEntry>(
-              ConflictFailure(
-                'The idempotency key is already assigned to another entry.',
-              ),
-            );
-          }
-
-          final accountIds =
-              entry.lines.map((line) => line.accountId).toSet().toList();
-          final accountSnapshots =
-              <String, DocumentSnapshot<Map<String, dynamic>>>{};
-          final balanceSnapshots =
-              <String, DocumentSnapshot<Map<String, dynamic>>>{};
-
-          for (final accountId in accountIds) {
-            final accountReference = accounts.doc(accountId);
-            accountSnapshots[accountId] =
-                await transaction.get(accountReference);
-          }
-          for (final accountId in accountIds) {
-            final balanceReference = balances.doc(accountId);
-            balanceSnapshots[accountId] =
-                await transaction.get(balanceReference);
-          }
-
-          final debitDeltas = <String, int>{};
-          final creditDeltas = <String, int>{};
-
-          for (final line in entry.lines) {
-            final accountSnapshot = accountSnapshots[line.accountId];
-            if (accountSnapshot == null || !accountSnapshot.exists) {
-              return FailureResult<JournalEntry>(
-                ValidationFailure(
-                  'Account not found in current store: ${line.accountId}',
-                ),
-              );
-            }
-
-            final account = AccountFirestoreMapper.fromSnapshot(
-              accountSnapshot,
-            );
-            if (account.storeId != context.storeId) {
-              return FailureResult<JournalEntry>(
-                AuthorizationFailure(
-                  'Account belongs to another store: ${line.accountId}',
-                ),
-              );
-            }
-            if (!account.canPost) {
-              return FailureResult<JournalEntry>(
-                ValidationFailure(
-                  'Account is not postable: ${line.accountId}',
-                ),
-              );
-            }
-            if (account.currency != line.debit.currency) {
-              return FailureResult<JournalEntry>(
-                ValidationFailure(
-                  'Account currency does not match line currency: ${line.accountId}',
-                ),
-              );
-            }
-
-            debitDeltas.update(
-              line.accountId,
-              (value) => value + line.debit.minorUnits,
-              ifAbsent: () => line.debit.minorUnits,
-            );
-            creditDeltas.update(
-              line.accountId,
-              (value) => value + line.credit.minorUnits,
-              ifAbsent: () => line.credit.minorUnits,
-            );
-          }
-
-          final journalReference = journalEntries.doc(entry.id);
-          transaction.set(
-            journalReference,
-            JournalEntryFirestoreMapper.header(entry),
-          );
-
-          for (var index = 0; index < entry.lines.length; index++) {
-            final line = entry.lines[index];
-            transaction.set(
-              journalReference.collection('lines').doc(line.id),
-              JournalEntryFirestoreMapper.line(
-                storeId: context.storeId,
-                line: line,
-                lineNumber: index + 1,
-              ),
-            );
-          }
-
-          for (final accountId in accountIds) {
-            final balanceSnapshot = balanceSnapshots[accountId];
-            final balanceData =
-                balanceSnapshot?.data() ?? const <String, dynamic>{};
-            final currentDebit = _minorUnits(
-              balanceData['debitMinorUnits'],
-            );
-            final currentCredit = _minorUnits(
-              balanceData['creditMinorUnits'],
-            );
-            final nextDebit = currentDebit + (debitDeltas[accountId] ?? 0);
-            final nextCredit = currentCredit + (creditDeltas[accountId] ?? 0);
-
-            transaction.set(
-              balances.doc(accountId),
-              <String, dynamic>{
-                'storeId': context.storeId,
-                'accountId': accountId,
-                'currency': entry.totalDebit.currency,
-                'debitMinorUnits': nextDebit,
-                'creditMinorUnits': nextCredit,
-                'balanceMinorUnits': nextDebit - nextCredit,
-                'updatedAt': FieldValue.serverTimestamp(),
-              },
-            );
-          }
-
-          transaction.set(
-            idempotencyReference,
-            <String, dynamic>{
-              'storeId': context.storeId,
-              'entryId': entry.id,
-              'idempotencyKey': entry.idempotencyKey,
-              'createdAt': FieldValue.serverTimestamp(),
-            },
-          );
-
-          return Success<JournalEntry>(entry);
-        },
-      );
-    } on FirebaseException catch (error) {
-      return FailureResult<JournalEntry>(
-        InfrastructureFailure(error.message ?? error.code),
-      );
+      return Success<JournalEntry>(entry);
+    } on firebase_functions.FirebaseFunctionsException catch (error) {
+      if (_commandQueue != null &&
+          CloudFunctionQueueFallback.isTransient(error)) {
+        final commandId = 'journal-' + entry.id;
+        final queueFailure = await CloudFunctionQueueFallback.enqueue(
+          repository: _commandQueue!,
+          context: context,
+          commandId: commandId,
+          operation: 'postJournalEntry',
+          idempotencyKey: entry.idempotencyKey,
+          payload: payload,
+        );
+        if (queueFailure != null) {
+          return FailureResult<JournalEntry>(queueFailure);
+        }
+        return FailureResult<JournalEntry>(
+          QueuedFailure(commandId: commandId),
+        );
+      }
+      return FailureResult<JournalEntry>(_mapFailure(error));
     } catch (error) {
       return FailureResult<JournalEntry>(
         InfrastructureFailure(error.toString()),
@@ -261,6 +140,30 @@ class FirestoreAccountingRepository implements AccountingRepository {
       return FailureResult<Money>(
         InfrastructureFailure(error.toString()),
       );
+    }
+  }
+
+  Failure _mapFailure(
+    firebase_functions.FirebaseFunctionsException error,
+  ) {
+    switch (error.code) {
+      case 'permission-denied':
+      case 'unauthenticated':
+        return AuthorizationFailure(
+          error.message ?? 'Journal entry is not authorized.',
+        );
+      case 'invalid-argument':
+      case 'failed-precondition':
+        return ValidationFailure(
+          error.message ?? 'Journal entry is invalid.',
+        );
+      case 'already-exists':
+      case 'aborted':
+        return ConflictFailure(
+          error.message ?? 'Journal entry conflicts with existing data.',
+        );
+      default:
+        return InfrastructureFailure(error.message ?? error.code);
     }
   }
 
