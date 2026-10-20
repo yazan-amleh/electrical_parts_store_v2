@@ -42,6 +42,7 @@ import '../../repairs/domain/repositories/repair_repository.dart';
 import '../../repairs/presentation/repairs_page.dart';
 import '../../reports/domain/repositories/reports_repository.dart';
 import '../../reports/presentation/reports_page.dart';
+import '../../reports/presentation/sales_analytics_page.dart';
 import '../../settings/domain/repositories/settings_repository.dart';
 import '../../settings/presentation/settings_page.dart';
 
@@ -95,7 +96,7 @@ class _AppShellPageState extends State<AppShellPage> {
           icon: Icons.trending_up_outlined,
           description: 'تقارير المبيعات والتفصيل حسب الفترة والمستخدم.',
           capabilities: ['تقارير الفترة', 'تحليل الأصناف', 'تصدير'],
-          foundationReady: false,
+          foundationReady: true,
         ),
         _Module(
           id: 'offers',
@@ -636,6 +637,13 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'financial-statements') {
       return FinancialStatementsPage(
         repository: accountingQueryRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'sales-reports') {
+      return SalesAnalyticsPage(
+        repository: reportsRepository,
         user: user,
         membership: membership,
       );
