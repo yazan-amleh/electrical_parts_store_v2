@@ -43,6 +43,8 @@ import '../../transfers/presentation/cash_banks_page.dart';
 import '../../repairs/domain/repositories/repair_repository.dart';
 import '../../repairs/domain/services/repair_document_builder.dart';
 import '../../repairs/presentation/repairs_page.dart';
+import '../../bookings/domain/repositories/booking_catalog_repository.dart';
+import '../../bookings/presentation/booking_catalog_page.dart';
 import '../../reports/domain/repositories/reports_repository.dart';
 import '../../reports/domain/services/report_document_builder.dart';
 import '../../reports/presentation/reports_page.dart';
@@ -259,6 +261,14 @@ class _AppShellPageState extends State<AppShellPage> {
           capabilities: ['بيانات', 'كشف حساب', 'دفع'],
           foundationReady: true,
         ),
+        _Module(
+          id: 'booking-catalog',
+          label: 'كتالوج الحجوزات والتصوير',
+          icon: Icons.event_available_outlined,
+          description: 'عملاء الحجوزات وخيارات التصوير قبل بناء دورة الحجز.',
+          capabilities: ['عملاء الحجوزات', 'خيارات التصوير', 'بحث وفلترة'],
+          foundationReady: true,
+        ),
       ],
     ),
     _NavigationSection(
@@ -401,6 +411,8 @@ class _AppShellPageState extends State<AppShellPage> {
           chatAttachmentRepository:
               widget.dependencies.chatAttachmentRepository,
           settingsRepository: widget.dependencies.settingsRepository,
+          bookingCatalogRepository:
+              widget.dependencies.bookingCatalogRepository,
           membership: widget.membership,
         ),
       ),
@@ -520,6 +532,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.chatRepository,
     this.chatAttachmentRepository,
     required this.settingsRepository,
+    this.bookingCatalogRepository,
     required this.membership,
   });
 
@@ -549,6 +562,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final ChatRepository? chatRepository;
   final ChatAttachmentRepository? chatAttachmentRepository;
   final SettingsRepository? settingsRepository;
+  final BookingCatalogRepository? bookingCatalogRepository;
   final StoreMembership membership;
 
   @override
@@ -598,6 +612,13 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'checks') {
       return ChequesPage(
         repository: chequeRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'booking-catalog') {
+      return BookingCatalogPage(
+        repository: bookingCatalogRepository,
         user: user,
         membership: membership,
       );
