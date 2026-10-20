@@ -1,4 +1,5 @@
 const { setGlobalOptions } = require('firebase-functions/v2');
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const {
   HttpsError,
   onCall,
@@ -37,6 +38,110 @@ const INVENTORY_MOVEMENT_TYPES = new Set([
   'purchaseReturn',
 ]);
 const INVENTORY_POSTING_ROLES = new Set(['owner', 'admin', 'warehouse']);
+
+exports.sendChatMessageNotification = onDocumentCreated(
+  'stores/{storeId}/chatRooms/{roomId}/messages/{messageId}',
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) {
+      return null;
+    }
+
+    const message = snapshot.data() || {};
+    const { storeId, roomId, messageId } = event.params;
+    const senderId = typeof message.senderId === 'string'
+      ? message.senderId
+      : '';
+    const roomSnapshot = await db
+      .collection('stores')
+      .doc(storeId)
+      .collection('chatRooms')
+      .doc(roomId)
+      .get();
+    if (!roomSnapshot.exists) {
+      return null;
+    }
+
+    const room = roomSnapshot.data() || {};
+    const participantIds = Array.isArray(room.participantIds)
+      ? room.participantIds.filter((userId) => typeof userId === 'string')
+      : [];
+    const recipientIds = participantIds.filter((userId) => userId !== senderId);
+    if (recipientIds.length === 0) {
+      return null;
+    }
+
+    const tokens = [];
+    for (let offset = 0; offset < recipientIds.length; offset += 30) {
+      const userIds = recipientIds.slice(offset, offset + 30);
+      const tokenSnapshot = await db
+        .collection('stores')
+        .doc(storeId)
+        .collection('notificationTokens')
+        .where('userId', 'in', userIds)
+        .get();
+      for (const tokenDoc of tokenSnapshot.docs) {
+        const tokenData = tokenDoc.data() || {};
+        if (typeof tokenData.token === 'string' && tokenData.token.length > 0) {
+          tokens.push({
+            value: tokenData.token,
+            ref: tokenDoc.ref,
+          });
+        }
+      }
+    }
+    const uniqueTokens = [
+      ...new Map(tokens.map((entry) => [entry.value, entry])).values(),
+    ];
+    if (uniqueTokens.length === 0) {
+      return null;
+    }
+
+    const content = typeof message.content === 'string'
+      ? message.content.trim()
+      : '';
+    const body = content || 'تم إرسال مرفق جديد';
+    const response = await admin.messaging().sendEachForMulticast({
+      tokens: uniqueTokens.map((entry) => entry.value),
+      notification: {
+        title: typeof room.name === 'string' && room.name.trim()
+          ? room.name.trim()
+          : 'محادثة جديدة',
+        body: body.substring(0, 120),
+      },
+      data: {
+        storeId,
+        roomId,
+        messageId,
+        type: typeof message.type === 'string' ? message.type : 'text',
+      },
+    });
+
+    const invalidTokenRefs = [];
+    response.responses.forEach((result, index) => {
+      const code = result.error?.code;
+      if (
+        code === 'messaging/registration-token-not-registered' ||
+        code === 'messaging/invalid-registration-token'
+      ) {
+        invalidTokenRefs.push(uniqueTokens[index].ref);
+      }
+    });
+    if (invalidTokenRefs.length > 0) {
+      const batch = db.batch();
+      for (const tokenRef of invalidTokenRefs) {
+        batch.delete(tokenRef);
+      }
+      await batch.commit();
+    }
+
+    return {
+      sent: response.successCount,
+      removedInvalidTokens: invalidTokenRefs.length,
+    };
+  },
+);
+
 
 exports.postInventoryMovement = onCall(async (request) => {
   if (!request.auth) {

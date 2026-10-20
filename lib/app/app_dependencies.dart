@@ -15,6 +15,7 @@ import '../features/reports/domain/repositories/reports_repository.dart';
 import '../features/reports/domain/services/report_document_builder.dart';
 import '../features/chat/domain/repositories/chat_attachment_repository.dart';
 import '../features/chat/domain/repositories/chat_repository.dart';
+import '../features/notifications/domain/repositories/notification_repository.dart';
 import '../features/settings/domain/repositories/settings_repository.dart';
 import '../features/repairs/domain/repositories/repair_repository.dart';
 import '../features/repairs/domain/services/repair_document_builder.dart';
@@ -52,6 +53,7 @@ class AppDependencies {
     this.reportDocumentBuilder,
     this.chatRepository,
     this.chatAttachmentRepository,
+    this.notificationRepository,
     this.settingsRepository,
   });
 
@@ -80,6 +82,7 @@ class AppDependencies {
   final ReportDocumentBuilder? reportDocumentBuilder;
   final ChatRepository? chatRepository;
   final ChatAttachmentRepository? chatAttachmentRepository;
+  final NotificationRepository? notificationRepository;
   final SettingsRepository? settingsRepository;
 
   bool get hasFirebaseSession => authSession != null;

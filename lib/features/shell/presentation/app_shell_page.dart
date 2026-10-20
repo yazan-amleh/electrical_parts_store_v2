@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
+import '../../../core/tenancy/store_context.dart';
 import '../../dashboard/presentation/dashboard_page.dart';
 import '../../categories/domain/repositories/category_repository.dart';
 import '../../categories/domain/services/category_inventory_document_builder.dart';
@@ -50,6 +51,7 @@ import '../../chat/domain/repositories/chat_attachment_repository.dart';
 import '../../chat/domain/repositories/chat_repository.dart';
 import '../../chat/presentation/chat_page.dart';
 import '../../settings/domain/repositories/settings_repository.dart';
+import '../../notifications/domain/repositories/notification_repository.dart';
 import '../../settings/presentation/settings_page.dart';
 
 class AppShellPage extends StatefulWidget {
@@ -318,6 +320,38 @@ class _AppShellPageState extends State<AppShellPage> {
       ];
 
   @override
+  void initState() {
+    super.initState();
+    _registerNotifications();
+  }
+
+  Future<void> _registerNotifications() async {
+    final repository = widget.dependencies.notificationRepository;
+    if (repository == null) {
+      return;
+    }
+    await repository.registerCurrentDevice(
+      context: StoreContext(
+        storeId: widget.membership.storeId,
+        userId: widget.user.id,
+      ),
+    );
+  }
+
+  Future<void> _signOut() async {
+    final repository = widget.dependencies.notificationRepository;
+    if (repository != null) {
+      await repository.unregisterCurrentDevice(
+        context: StoreContext(
+          storeId: widget.membership.storeId,
+          userId: widget.user.id,
+        ),
+      );
+    }
+    await widget.onSignOut();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final modules = _modules;
     final selected = modules[selectedIndex];
@@ -449,7 +483,7 @@ class _AppShellPageState extends State<AppShellPage> {
               title: const Text('تسجيل الخروج'),
               onTap: () {
                 Navigator.of(context).pop();
-                widget.onSignOut();
+                _signOut();
               },
             ),
           ],

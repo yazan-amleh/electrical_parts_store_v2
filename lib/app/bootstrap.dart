@@ -27,6 +27,7 @@ import '../features/chat/data/repositories/firebase_chat_attachment_repository.d
 import '../features/chat/data/repositories/firestore_chat_repository.dart';
 import '../features/settings/data/repositories/firestore_settings_repository.dart';
 import '../features/offers/data/repositories/firestore_offer_repository.dart';
+import '../features/notifications/data/repositories/firebase_notification_repository.dart';
 import '../features/expenses/data/repositories/firestore_expense_repository.dart';
 import '../features/payments/data/repositories/firestore_party_payment_repository.dart';
 import '../features/parties/data/repositories/firestore_party_ledger_repository.dart';
@@ -136,6 +137,9 @@ abstract final class AppBootstrap {
       chatRepository: FirestoreChatRepository(firestore: firestore),
       chatAttachmentRepository: FirebaseChatAttachmentRepository(
         storage: FirebaseStorage.instance,
+      ),
+      notificationRepository: FirebaseNotificationRepository(
+        firestore: firestore,
       ),
       settingsRepository: FirestoreSettingsRepository(firestore: firestore),
     );

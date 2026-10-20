@@ -752,4 +752,43 @@ describe('Firestore security rules', function () {
     );
   });
 
+  it('keeps notification tokens private and user-owned', async () => {
+    const tokenRef = storeDoc(
+      salesDb,
+      'notificationTokens',
+      'token-1',
+    );
+    await assertSucceeds(
+      setDoc(tokenRef, {
+        storeId: STORE_ID,
+        userId: 'sales-1',
+        token: 'fcm-token-1',
+        platform: 'web',
+      }),
+    );
+    await assertFails(getDoc(tokenRef));
+    await assertFails(
+      updateDoc(tokenRef, {
+        userId: 'owner-1',
+      }),
+    );
+    await assertFails(
+      setDoc(storeDoc(salesDb, 'notificationTokens', 'token-2'), {
+        storeId: STORE_ID,
+        userId: 'owner-1',
+        token: 'fcm-token-2',
+        platform: 'web',
+      }),
+    );
+    await assertFails(
+      setDoc(storeDoc(outsiderDb, 'notificationTokens', 'token-3'), {
+        storeId: STORE_ID,
+        userId: 'outsider-1',
+        token: 'fcm-token-3',
+        platform: 'web',
+      }),
+    );
+    await assertSucceeds(deleteDoc(tokenRef));
+  });
+
 });
