@@ -40,6 +40,7 @@ async function seedStore() {
     await setDoc(doc(db, 'stores', STORE_ID), {
       ownerId: 'owner-1',
       name: 'Store A',
+      currency: 'ILS',
     });
 
     const members = [
@@ -282,6 +283,32 @@ describe('Firestore security rules', function () {
         partyType: 'customer',
         partyId: 'customer-2',
         balanceMinorUnits: 100,
+      }),
+    );
+  });
+
+  it('restricts store settings and member management', async () => {
+    await assertSucceeds(
+      updateDoc(storeDoc(ownerDb), {
+        name: 'Renamed Store',
+        currency: 'ILS',
+      }),
+    );
+    await assertFails(
+      updateDoc(storeDoc(accountantDb), {
+        name: 'Unauthorized Rename',
+      }),
+    );
+
+    await assertSucceeds(
+      updateDoc(storeDoc(ownerDb, 'members', 'sales-1'), {
+        role: 'accountant',
+        isActive: true,
+      }),
+    );
+    await assertFails(
+      updateDoc(storeDoc(accountantDb, 'members', 'sales-1'), {
+        role: 'admin',
       }),
     );
   });
