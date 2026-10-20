@@ -19,10 +19,11 @@ abstract final class ChequeFirestoreMapper {
       id: snapshot.id,
       storeId: _string(data['storeId']),
       partyType: PartyType.values.firstWhere(
-        (candidate) => candidate.name == _string(
-          data['partyType'],
-          PartyType.customer.name,
-        ),
+        (candidate) =>
+            candidate.name == _string(
+              data['partyType'],
+              PartyType.customer.name,
+            ),
         orElse: () => PartyType.customer,
       ),
       partyId: _string(data['partyId']),
