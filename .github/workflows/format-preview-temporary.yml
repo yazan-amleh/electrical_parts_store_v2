@@ -1,0 +1,17 @@
+name: Temporary format preview
+
+on:
+  push:
+    branches:
+      - v2/foundation
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: dart format --output=show lib/features/accounting_audit/presentation/accounting_audit_page.dart
