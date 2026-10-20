@@ -148,6 +148,9 @@ class FirestoreReportsRepository implements ReportsRepository {
           salesByPaymentMethod: Map.unmodifiable(salesByPaymentMethod),
           expensesByPaymentMethod: Map.unmodifiable(expensesByPaymentMethod),
           transactions: List.unmodifiable(transactions),
+          mayBeTruncated: snapshots.any(
+            (snapshot) => snapshot.docs.length >= limit,
+          ),
         ),
       );
     } on FirebaseException catch (error) {
