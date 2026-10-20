@@ -202,7 +202,8 @@ void main() {
       ),
     );
 
-    expect(await balance(repository, 'inventory'), const Money(minorUnits: 3000));
+    expect(
+        await balance(repository, 'inventory'), const Money(minorUnits: 3000));
     expect(await balance(repository, 'payable'), const Money(minorUnits: 5000));
     expect(
       await balance(repository, 'receivable'),
