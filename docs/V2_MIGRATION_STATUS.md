@@ -19,8 +19,8 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 - Firestore rules proposal and emulator tests.
 - Accounting audit callable and UI.
 - Repair workflow and accounting contract.
-- Cash/bank overview, canonical operational reports, sales analytics, CSV clipboard export, PDF/print/share adapters, and the secure chat foundation.
-- CI checks for JavaScript syntax, formatting, analyzer, Flutter tests and Firestore rules.
+- Cash/bank overview, canonical operational reports, sales analytics, CSV clipboard export, PDF/print/share adapters, secure chat with attachment storage, notification-token registration, and participant-only push delivery.
+- CI checks for JavaScript syntax, formatting, analyzer, Flutter tests, Firestore rules, and Storage rules with emulator coverage.
 
 ## Release gates still open
 
