@@ -91,9 +91,7 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      isCustomer
-                          ? 'كشف حساب العميل'
-                          : 'كشف حساب المورد',
+                      isCustomer ? 'كشف حساب العميل' : 'كشف حساب المورد',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                   ),
@@ -115,7 +113,9 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
               child: ListTile(
                 title: Text(widget.party.name),
                 subtitle: Text(
-                  isCustomer ? 'الرصيد المستحق على العميل' : 'الرصيد المستحق للمورد',
+                  isCustomer
+                      ? 'الرصيد المستحق على العميل'
+                      : 'الرصيد المستحق للمورد',
                 ),
                 trailing: Text(
                   _balance.formatted,
@@ -284,3 +284,4 @@ class _PartyLedgerRow {
   final PartyLedgerEntry entry;
   final Money runningBalance;
 }
+Formatted 1 file (1 changed) in 0.01 seconds.
