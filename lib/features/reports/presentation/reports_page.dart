@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/money/money.dart';
 import '../../../core/result/result.dart';
@@ -141,6 +142,11 @@ class _ReportsPageState extends State<ReportsPage> {
                   onPressed: _isLoading ? null : _load,
                   icon: const Icon(Icons.filter_alt_outlined),
                   label: const Text('تطبيق الفترة'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _report == null ? null : _copyCsv,
+                  icon: const Icon(Icons.content_copy_outlined),
+                  label: const Text('نسخ CSV'),
                 ),
               ],
             ),
@@ -498,6 +504,47 @@ class _ReportsPageState extends State<ReportsPage> {
       }
       _isLoading = false;
     });
+  }
+
+  Future<void> _copyCsv() async {
+    final report = _report;
+    if (report == null) {
+      return;
+    }
+
+    final rows = <String>[
+      'date,type,description,payment_method,amount,currency',
+      for (final transaction in report.transactions)
+        [
+          _csvValue(_formatDate(transaction.postedAt)),
+          _csvValue(_sourceLabel(transaction.source)),
+          _csvValue(transaction.description ?? transaction.id),
+          _csvValue(
+            transaction.paymentMethod == null
+                ? ''
+                : _paymentLabel(transaction.paymentMethod!),
+          ),
+          transaction.amount.minorUnits.toString(),
+          _csvValue(transaction.amount.currency),
+        ].join(','),
+    ];
+    await Clipboard.setData(ClipboardData(text: rows.join('\n')));
+    if (mounted) {
+      _showMessage('تم نسخ التقرير بصيغة CSV إلى الحافظة.');
+    }
+  }
+
+  String _csvValue(String value) {
+    return '"' + value.replaceAll('"', '""') + '"';
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _pickFrom() async {
