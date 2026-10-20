@@ -216,7 +216,7 @@ class FirestoreRepairRepository implements RepairRepository {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'deliver-repair-${repairId}',
+        commandId: 'deliver-repair-$repairId',
         operation: 'deliverRepair',
         idempotencyKey: idempotencyKey,
         payload: payload,
