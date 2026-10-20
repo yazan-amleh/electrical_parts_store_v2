@@ -587,8 +587,8 @@ class _PhotographyOptionDialogState extends State<_PhotographyOptionDialog> {
         keyboardType: maxLines > 1
             ? null
             : decimal
-                ? const TextInputType.numberWithOptions(decimal: true)
-                : TextInputType.number,
+            ? const TextInputType.numberWithOptions(decimal: true)
+            : TextInputType.number,
         decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
       ),
     );
