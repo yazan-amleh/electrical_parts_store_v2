@@ -220,7 +220,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                         label: Text(
                           _dueDate == null
                               ? 'اختيار تاريخ الاستحقاق (اختياري)'
-                              : 'الاستحقاق: ' + _formatDate(_dueDate!),
+                              : 'الاستحقاق: ${_formatDate(_dueDate!)}',
                         ),
                       ),
                     ],
