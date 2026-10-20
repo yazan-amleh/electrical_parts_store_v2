@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/result/result.dart';
@@ -6,6 +7,7 @@ import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../settings/domain/entities/store_member.dart';
 import '../../settings/domain/repositories/settings_repository.dart';
+import '../domain/entities/chat_attachment.dart';
 import '../domain/entities/chat_message.dart';
 import '../domain/entities/chat_participant.dart';
 import '../domain/entities/chat_room.dart';
@@ -280,6 +282,109 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     }
   }
 
+  Future<void> _pickAndSendAttachment() async {
+    final attachmentRepository = widget.attachmentRepository;
+    if (_sending || attachmentRepository == null) {
+      return;
+    }
+    final selection = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      withData: true,
+    );
+    if (!mounted || selection == null) {
+      return;
+    }
+    final file = selection.files.single;
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      _showMessage('تعذر قراءة الملف المختار.');
+      return;
+    }
+
+    setState(() {
+      _sending = true;
+    });
+    final uploadResult = await attachmentRepository.upload(
+      context: _context,
+      roomId: widget.room.id,
+      fileName: file.name,
+      bytes: bytes,
+      contentType: _contentTypeFor(file),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (uploadResult is FailureResult<ChatAttachment>) {
+      setState(() {
+        _sending = false;
+      });
+      _showMessage(uploadResult.failure.message);
+      return;
+    }
+
+    final attachment = (uploadResult as Success<ChatAttachment>).value;
+    final messageResult = await widget.repository.sendMessage(
+      context: _context,
+      roomId: widget.room.id,
+      senderName: widget.user.displayName ?? widget.user.email,
+      content: '',
+      type: _messageTypeFor(file),
+      attachmentUrls: [attachment.downloadUrl],
+    );
+    if (messageResult is Success<ChatMessage>) {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+        });
+      }
+      return;
+    }
+
+    await attachmentRepository.delete(
+      context: _context,
+      attachment: attachment,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _sending = false;
+    });
+    if (messageResult is FailureResult<ChatMessage>) {
+      _showMessage(messageResult.failure.message);
+    }
+  }
+
+  String? _contentTypeFor(PlatformFile file) {
+    switch (file.extension?.toLowerCase()) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'pdf':
+        return 'application/pdf';
+      case 'txt':
+        return 'text/plain';
+      default:
+        return null;
+    }
+  }
+
+  ChatMessageType _messageTypeFor(PlatformFile file) {
+    switch (file.extension?.toLowerCase()) {
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'webp':
+        return ChatMessageType.image;
+      default:
+        return ChatMessageType.file;
+    }
+  }
+
   Future<void> _archiveRoom() async {
     final result = await widget.repository.archiveRoom(
       context: _context,
@@ -420,6 +525,9 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
             _MessageComposer(
               controller: _composerController,
               sending: _sending,
+              onAttach: widget.attachmentRepository == null
+                  ? null
+                  : _pickAndSendAttachment,
               onSend: _sendMessage,
             ),
           ],
@@ -482,11 +590,13 @@ class _MessageComposer extends StatelessWidget {
     required this.controller,
     required this.sending,
     required this.onSend,
+    this.onAttach,
   });
 
   final TextEditingController controller;
   final bool sending;
   final VoidCallback onSend;
+  final VoidCallback? onAttach;
 
   @override
   Widget build(BuildContext context) {
@@ -498,6 +608,12 @@ class _MessageComposer extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: Row(
             children: [
+              IconButton(
+                onPressed: sending ? null : onAttach,
+                icon: const Icon(Icons.attach_file_outlined),
+                tooltip: 'إرفاق ملف',
+              ),
+              const SizedBox(width: 4),
               Expanded(
                 child: TextField(
                   controller: controller,

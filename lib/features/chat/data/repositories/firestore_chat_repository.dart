@@ -242,7 +242,9 @@ class FirestoreChatRepository implements ChatRepository {
           transaction.set(messageRef, ChatFirestoreMapper.messageToMap(value));
           transaction.update(roomRef, <String, dynamic>{
             'lastMessageAt': Timestamp.fromDate(now),
-            'lastMessageText': normalizedContent,
+            'lastMessageText': normalizedContent.isEmpty
+                ? _messagePreview(type)
+                : normalizedContent,
             'lastMessageSenderId': context.userId,
             'unreadCountByUser': unread,
             'updatedAt': Timestamp.fromDate(now),
@@ -463,6 +465,25 @@ class FirestoreChatRepository implements ChatRepository {
       );
     } catch (error) {
       return FailureResult<void>(InfrastructureFailure(error.toString()));
+    }
+  }
+
+  static String _messagePreview(ChatMessageType type) {
+    switch (type) {
+      case ChatMessageType.image:
+        return 'صورة';
+      case ChatMessageType.file:
+        return 'ملف مرفق';
+      case ChatMessageType.audio:
+        return 'مقطع صوتي';
+      case ChatMessageType.video:
+        return 'فيديو';
+      case ChatMessageType.location:
+        return 'موقع';
+      case ChatMessageType.system:
+        return 'إشعار';
+      case ChatMessageType.text:
+        return '';
     }
   }
 
