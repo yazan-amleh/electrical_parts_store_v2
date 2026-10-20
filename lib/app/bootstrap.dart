@@ -7,6 +7,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import '../core/config/app_runtime_config.dart';
 import '../features/accounting/data/repositories/firestore_accounting_query_repository.dart';
 import '../features/accounting/data/repositories/firestore_accounting_repository.dart';
+import '../features/bookings/data/repositories/firestore_booking_catalog_repository.dart';
 import '../features/accounting_audit/data/repositories/firestore_accounting_audit_repository.dart';
 import '../features/categories/data/repositories/firestore_category_repository.dart';
 import '../features/categories/data/exporters/pdf_category_inventory_document_builder.dart';
@@ -142,6 +143,9 @@ abstract final class AppBootstrap {
         firestore: firestore,
       ),
       settingsRepository: FirestoreSettingsRepository(firestore: firestore),
+      bookingCatalogRepository: FirestoreBookingCatalogRepository(
+        firestore: firestore,
+      ),
     );
   }
 }
