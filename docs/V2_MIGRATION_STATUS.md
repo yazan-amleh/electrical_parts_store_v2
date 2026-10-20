@@ -25,8 +25,8 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 ## Release gates still open
 
 1. Complete remaining UI parity and responsive review.
-2. Complete the remaining V1-specific PDF/print documents (repair/category outputs), then review the current PDF layouts on phone and desktop.
-   Operational reports and sales analytics now use paginated reads with a visible safety cap.
+2. Review all PDF/print layouts on phone and desktop, including the V1-specific documents now implemented.
+   Operational reports and sales analytics use paginated reads with a visible safety cap.
 3. Expand emulator scenarios, including concurrent retries and cheque bounce.
 4. Run a clean-data acceptance pass with representative store workflows.
 5. Configure the separate V2 Firebase project, then deploy only after the
