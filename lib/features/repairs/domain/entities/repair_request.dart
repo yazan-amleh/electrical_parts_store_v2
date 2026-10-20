@@ -1,6 +1,5 @@
 import '../../../../core/idempotency/idempotency_key.dart';
 import '../../../../core/money/money.dart';
-import '../../../../core/tenancy/store_context.dart';
 import '../enums/device_condition.dart';
 import '../enums/repair_priority.dart';
 import '../enums/repair_status.dart';
@@ -209,4 +208,10 @@ class RepairRequest {
       costOfParts: costOfParts ?? this.costOfParts,
     );
   }
+  static void _ensureIdentifier(String value, String label) {
+    if (value.trim().isEmpty || value.contains('/')) {
+      throw ArgumentError('$label is invalid.');
+    }
+  }
+
 }
