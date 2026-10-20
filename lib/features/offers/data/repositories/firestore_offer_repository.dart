@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart' as firebase_functions;
 
 import '../../../../core/commands/command_queue_repository.dart';
+import '../../../../core/errors/failure.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
 import '../../../../infrastructure/firebase/firebase_paths.dart';
@@ -122,9 +123,9 @@ class FirestoreOfferRepository implements OfferRepository {
     );
     return _callVoid(
       context: context,
-      commandId: 'offer-active-${offerId}-${isActive}',
+      commandId: 'offer-active-$offerId-$isActive',
       operation: 'setOfferActive',
-      idempotencyKey: 'offer-active-' + offerId + '-' + isActive.toString(),
+      idempotencyKey: 'offer-active-$offerId-$isActive',
       payload: payload,
       functionName: 'setOfferActive',
     );
@@ -141,9 +142,9 @@ class FirestoreOfferRepository implements OfferRepository {
     );
     return _callVoid(
       context: context,
-      commandId: 'archive-offer-${offerId}',
+      commandId: 'archive-offer-$offerId',
       operation: 'archiveOffer',
-      idempotencyKey: 'archive-${offerId}',
+      idempotencyKey: 'archive-$offerId',
       payload: payload,
       functionName: 'archiveOffer',
     );
@@ -264,9 +265,9 @@ class FirestoreOfferRepository implements OfferRepository {
     );
     return _callVoid(
       context: context,
-      commandId: 'cancel-offer-order-${orderId}',
+      commandId: 'cancel-offer-order-$orderId',
       operation: 'cancelOfferOrder',
-      idempotencyKey: 'cancel-${orderId}',
+      idempotencyKey: 'cancel-$orderId',
       payload: payload,
       functionName: 'cancelOfferOrder',
     );

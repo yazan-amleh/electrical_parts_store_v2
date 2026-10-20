@@ -664,9 +664,9 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
           Money.zero(currency: _currency);
       final stamp = DateTime.now().microsecondsSinceEpoch;
       final offer = Offer(
-        id: 'offer-${stamp}',
+        id: 'offer-$stamp',
         storeId: '',
-        offerNumber: 'OFFER-${stamp}',
+        offerNumber: 'OFFER-$stamp',
         name: name,
         description: _descriptionController.text.trim().isEmpty
             ? null
@@ -912,9 +912,9 @@ class _CreateOfferOrderDialogState extends State<_CreateOfferOrderDialog> {
     }
     final stamp = DateTime.now().microsecondsSinceEpoch;
     final order = OfferOrder(
-      id: 'offer-order-${stamp}',
+      id: 'offer-order-$stamp',
       storeId: widget.storeId,
-      orderNumber: 'OO-${stamp}',
+      orderNumber: 'OO-$stamp',
       offerId: _offer.id,
       offerNumber: _offer.offerNumber,
       customerId: customer.id,
