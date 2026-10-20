@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 import '../core/config/app_runtime_config.dart';
 import '../features/accounting/data/repositories/firestore_accounting_query_repository.dart';
@@ -22,6 +23,7 @@ import '../features/repairs/data/exporters/pdf_repair_document_builder.dart';
 import '../features/purchase_orders/data/repositories/firestore_purchase_order_repository.dart';
 import '../features/reports/data/repositories/firestore_reports_repository.dart';
 import '../features/reports/data/exporters/pdf_report_document_builder.dart';
+import '../features/chat/data/repositories/firebase_chat_attachment_repository.dart';
 import '../features/chat/data/repositories/firestore_chat_repository.dart';
 import '../features/settings/data/repositories/firestore_settings_repository.dart';
 import '../features/offers/data/repositories/firestore_offer_repository.dart';
@@ -132,6 +134,9 @@ abstract final class AppBootstrap {
       categoryInventoryDocumentBuilder: PdfCategoryInventoryDocumentBuilder(),
       repairDocumentBuilder: PdfRepairDocumentBuilder(),
       chatRepository: FirestoreChatRepository(firestore: firestore),
+      chatAttachmentRepository: FirebaseChatAttachmentRepository(
+        storage: FirebaseStorage.instance,
+      ),
       settingsRepository: FirestoreSettingsRepository(firestore: firestore),
     );
   }

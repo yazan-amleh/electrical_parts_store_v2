@@ -46,6 +46,7 @@ import '../../reports/domain/repositories/reports_repository.dart';
 import '../../reports/domain/services/report_document_builder.dart';
 import '../../reports/presentation/reports_page.dart';
 import '../../reports/presentation/sales_analytics_page.dart';
+import '../../chat/domain/repositories/chat_attachment_repository.dart';
 import '../../chat/domain/repositories/chat_repository.dart';
 import '../../chat/presentation/chat_page.dart';
 import '../../settings/domain/repositories/settings_repository.dart';
@@ -364,6 +365,8 @@ class _AppShellPageState extends State<AppShellPage> {
           reportsRepository: widget.dependencies.reportsRepository,
           reportDocumentBuilder: widget.dependencies.reportDocumentBuilder,
           chatRepository: widget.dependencies.chatRepository,
+          chatAttachmentRepository:
+              widget.dependencies.chatAttachmentRepository,
           settingsRepository: widget.dependencies.settingsRepository,
           membership: widget.membership,
         ),
@@ -482,6 +485,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.reportsRepository,
     required this.reportDocumentBuilder,
     required this.chatRepository,
+    this.chatAttachmentRepository,
     required this.settingsRepository,
     required this.membership,
   });
@@ -510,6 +514,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final ReportsRepository? reportsRepository;
   final ReportDocumentBuilder? reportDocumentBuilder;
   final ChatRepository? chatRepository;
+  final ChatAttachmentRepository? chatAttachmentRepository;
   final SettingsRepository? settingsRepository;
   final StoreMembership membership;
 
@@ -685,6 +690,7 @@ class _ModuleLandingPage extends StatelessWidget {
       if (chatRepository != null && settingsRepository != null) {
         return ChatPage(
           repository: chatRepository,
+          attachmentRepository: chatAttachmentRepository,
           settingsRepository: settingsRepository,
           user: user,
           membership: membership,

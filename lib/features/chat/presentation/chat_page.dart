@@ -6,15 +6,18 @@ import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../settings/domain/entities/store_member.dart';
 import '../../settings/domain/repositories/settings_repository.dart';
+import '../domain/entities/chat_attachment.dart';
 import '../domain/entities/chat_message.dart';
 import '../domain/entities/chat_participant.dart';
 import '../domain/entities/chat_room.dart';
 import '../domain/enums/chat_enums.dart';
+import '../domain/repositories/chat_attachment_repository.dart';
 import '../domain/repositories/chat_repository.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({
     required this.repository,
+    this.attachmentRepository,
     required this.settingsRepository,
     required this.user,
     required this.membership,
@@ -22,6 +25,7 @@ class ChatPage extends StatefulWidget {
   });
 
   final ChatRepository repository;
+  final ChatAttachmentRepository? attachmentRepository;
   final SettingsRepository settingsRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
@@ -175,6 +179,7 @@ class _ChatPageState extends State<ChatPage> {
                       MaterialPageRoute<void>(
                         builder: (context) => ChatRoomPage(
                           repository: widget.repository,
+                          attachmentRepository: widget.attachmentRepository,
                           room: room,
                           user: widget.user,
                           membership: widget.membership,
@@ -200,6 +205,7 @@ class _ChatPageState extends State<ChatPage> {
 class ChatRoomPage extends StatefulWidget {
   const ChatRoomPage({
     required this.repository,
+    this.attachmentRepository,
     required this.room,
     required this.user,
     required this.membership,
@@ -207,6 +213,7 @@ class ChatRoomPage extends StatefulWidget {
   });
 
   final ChatRepository repository;
+  final ChatAttachmentRepository? attachmentRepository;
   final ChatRoom room;
   final AuthenticatedUser user;
   final StoreMembership membership;
