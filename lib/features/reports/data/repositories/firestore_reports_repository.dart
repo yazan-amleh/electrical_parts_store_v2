@@ -123,6 +123,10 @@ class FirestoreReportsRepository implements ReportsRepository {
           case 'expense':
             expensesTotal += transaction.amount;
             expensesCount++;
+            _increment(
+              expensesByPaymentMethod,
+              transaction.paymentMethod ?? 'unknown',
+            );
         }
       }
 
