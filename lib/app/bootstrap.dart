@@ -19,6 +19,7 @@ import '../features/purchases/data/repositories/firestore_purchase_repository.da
 import '../features/repairs/data/repositories/firestore_repair_repository.dart';
 import '../features/purchase_orders/data/repositories/firestore_purchase_order_repository.dart';
 import '../features/reports/data/repositories/firestore_reports_repository.dart';
+import '../features/reports/data/exporters/pdf_report_document_builder.dart';
 import '../features/settings/data/repositories/firestore_settings_repository.dart';
 import '../features/offers/data/repositories/firestore_offer_repository.dart';
 import '../features/expenses/data/repositories/firestore_expense_repository.dart';
@@ -33,7 +34,10 @@ abstract final class AppBootstrap {
   static Future<AppDependencies> initialize({AppRuntimeConfig? config}) async {
     final runtime = config ?? AppRuntimeConfig.fromEnvironment();
     if (!runtime.useFirebase) {
-      return AppDependencies(runtime: runtime);
+      return AppDependencies(
+        runtime: runtime,
+        reportDocumentBuilder: PdfReportDocumentBuilder(),
+      );
     }
 
     if (Firebase.apps.isEmpty) {
@@ -119,6 +123,7 @@ abstract final class AppBootstrap {
         commandQueue: commandQueue,
       ),
       reportsRepository: FirestoreReportsRepository(firestore: firestore),
+      reportDocumentBuilder: PdfReportDocumentBuilder(),
       settingsRepository: FirestoreSettingsRepository(firestore: firestore),
     );
   }
