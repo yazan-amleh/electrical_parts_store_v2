@@ -535,7 +535,7 @@ class _ReportsPageState extends State<ReportsPage> {
   }
 
   String _csvValue(String value) {
-    return '"' + value.replaceAll('"', '""') + '"';
+    return '"${value.replaceAll('"', '""')}"';
   }
 
   void _showMessage(String message) {
