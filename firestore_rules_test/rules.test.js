@@ -14,6 +14,7 @@ const {
   doc,
   getDoc,
   setDoc,
+  Timestamp,
   updateDoc,
 } = require('firebase/firestore');
 
@@ -124,6 +125,37 @@ async function seedStore() {
       partyType: 'customer',
       partyId: 'customer-1',
       balanceMinorUnits: 100,
+    });
+
+    await setDoc(storeDoc(db, 'chatRooms', 'room-1'), {
+      storeId: STORE_ID,
+      name: 'Support',
+      participantIds: ['owner-1', 'sales-1'],
+      participants: [
+        {
+          userId: 'owner-1',
+          displayName: 'Owner',
+          joinedAt: Timestamp.fromMillis(1000),
+          isAdmin: true,
+        },
+        {
+          userId: 'sales-1',
+          displayName: 'Sales',
+          joinedAt: Timestamp.fromMillis(1000),
+          isAdmin: false,
+        },
+      ],
+      createdAt: Timestamp.fromMillis(1000),
+      updatedAt: Timestamp.fromMillis(1000),
+      lastMessageAt: null,
+      lastMessageText: '',
+      lastMessageSenderId: '',
+      unreadCountByUser: { 'owner-1': 0, 'sales-1': 0 },
+      isGroup: false,
+      groupDescription: null,
+      createdBy: 'owner-1',
+      type: 'support',
+      isArchived: false,
     });
   });
 }
@@ -490,4 +522,234 @@ describe('Firestore security rules', function () {
       }),
     );
   });
+  it('enforces participant-scoped chat rooms and atomic room ownership', async () => {
+    await assertSucceeds(
+      getDoc(storeDoc(ownerDb, 'chatRooms', 'room-1')),
+    );
+    await assertSucceeds(
+      getDoc(storeDoc(salesDb, 'chatRooms', 'room-1')),
+    );
+    await assertFails(
+      getDoc(storeDoc(accountantDb, 'chatRooms', 'room-1')),
+    );
+    await assertFails(
+      getDoc(storeDoc(outsiderDb, 'chatRooms', 'room-1')),
+    );
+    await assertFails(
+      getDoc(storeDoc(inactiveDb, 'chatRooms', 'room-1')),
+    );
+
+    await assertSucceeds(
+      setDoc(storeDoc(salesDb, 'chatRooms', 'room-2'), {
+        storeId: STORE_ID,
+        name: 'Accounting',
+        participantIds: ['sales-1', 'accountant-1'],
+        participants: [
+          {
+            userId: 'sales-1',
+            displayName: 'Sales',
+            joinedAt: Timestamp.fromMillis(1000),
+            isAdmin: true,
+          },
+          {
+            userId: 'accountant-1',
+            displayName: 'Accountant',
+            joinedAt: Timestamp.fromMillis(1000),
+            isAdmin: false,
+          },
+        ],
+        createdAt: Timestamp.fromMillis(1000),
+        updatedAt: Timestamp.fromMillis(1000),
+        lastMessageAt: null,
+        lastMessageText: '',
+        lastMessageSenderId: '',
+        unreadCountByUser: { 'sales-1': 0, 'accountant-1': 0 },
+        isGroup: true,
+        groupDescription: 'Accounting support',
+        createdBy: 'sales-1',
+        type: 'group',
+        isArchived: false,
+      }),
+    );
+    await assertFails(
+      setDoc(storeDoc(salesDb, 'chatRooms', 'room-3'), {
+        storeId: STORE_ID,
+        name: 'Invalid',
+        participantIds: ['accountant-1'],
+        participants: [],
+        createdAt: Timestamp.fromMillis(1000),
+        updatedAt: Timestamp.fromMillis(1000),
+        createdBy: 'sales-1',
+        type: 'group',
+        isGroup: true,
+      }),
+    );
+    await assertFails(
+      setDoc(storeDoc(outsiderDb, 'chatRooms', 'room-4'), {
+        storeId: STORE_ID,
+        name: 'Outsider',
+        participantIds: ['outsider-1'],
+        participants: [],
+        createdAt: Timestamp.fromMillis(1000),
+        updatedAt: Timestamp.fromMillis(1000),
+        createdBy: 'outsider-1',
+        type: 'direct',
+        isGroup: false,
+      }),
+    );
+  });
+
+  it('restricts chat messages, unread projections and participant management', async () => {
+    const messageRef = storeDoc(
+      salesDb,
+      'chatRooms',
+      'room-1',
+      'messages',
+      'message-1',
+    );
+
+    await assertSucceeds(
+      setDoc(messageRef, {
+        storeId: STORE_ID,
+        roomId: 'room-1',
+        senderId: 'sales-1',
+        senderName: 'Sales',
+        content: 'Hello',
+        sentAt: Timestamp.fromMillis(2000),
+        type: 'text',
+        attachmentUrls: [],
+        isDeleted: false,
+      }),
+    );
+    await assertFails(
+      setDoc(
+        storeDoc(
+          accountantDb,
+          'chatRooms',
+          'room-1',
+          'messages',
+          'message-2',
+        ),
+        {
+          storeId: STORE_ID,
+          roomId: 'room-1',
+          senderId: 'accountant-1',
+          senderName: 'Accountant',
+          content: 'Not a participant',
+          sentAt: Timestamp.fromMillis(2000),
+          type: 'text',
+          attachmentUrls: [],
+          isDeleted: false,
+        },
+      ),
+    );
+    await assertFails(
+      setDoc(
+        storeDoc(
+          salesDb,
+          'chatRooms',
+          'room-1',
+          'messages',
+          'message-3',
+        ),
+        {
+          storeId: STORE_ID,
+          roomId: 'room-1',
+          senderId: 'owner-1',
+          senderName: 'Spoofed owner',
+          content: 'Spoofed',
+          sentAt: Timestamp.fromMillis(2000),
+          type: 'text',
+          attachmentUrls: [],
+          isDeleted: false,
+        },
+      ),
+    );
+    await assertFails(
+      getDoc(
+        storeDoc(
+          outsiderDb,
+          'chatRooms',
+          'room-1',
+          'messages',
+          'message-1',
+        ),
+      ),
+    );
+    await assertSucceeds(
+      updateDoc(messageRef, {
+        isDeleted: true,
+      }),
+    );
+    await assertFails(
+      updateDoc(
+        storeDoc(
+          ownerDb,
+          'chatRooms',
+          'room-1',
+          'messages',
+          'message-1',
+        ),
+        {
+          isDeleted: true,
+        },
+      ),
+    );
+    await assertFails(deleteDoc(messageRef));
+
+    const messageTime = Timestamp.fromMillis(3000);
+    await assertSucceeds(
+      updateDoc(storeDoc(salesDb, 'chatRooms', 'room-1'), {
+        lastMessageAt: messageTime,
+        lastMessageText: 'Hello',
+        lastMessageSenderId: 'sales-1',
+        updatedAt: messageTime,
+        unreadCountByUser: { 'owner-1': 1, 'sales-1': 0 },
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(storeDoc(ownerDb, 'chatRooms', 'room-1'), {
+        unreadCountByUser: { 'owner-1': 0, 'sales-1': 0 },
+        updatedAt: Timestamp.fromMillis(4000),
+      }),
+    );
+    await assertFails(
+      updateDoc(storeDoc(salesDb, 'chatRooms', 'room-1'), {
+        name: 'Participant rename',
+      }),
+    );
+
+    await assertSucceeds(
+      updateDoc(storeDoc(ownerDb, 'chatRooms', 'room-1'), {
+        participantIds: ['owner-1', 'sales-1', 'warehouse-1'],
+        participants: [
+          {
+            userId: 'owner-1',
+            displayName: 'Owner',
+            joinedAt: Timestamp.fromMillis(1000),
+            isAdmin: true,
+          },
+          {
+            userId: 'sales-1',
+            displayName: 'Sales',
+            joinedAt: Timestamp.fromMillis(1000),
+            isAdmin: false,
+          },
+          {
+            userId: 'warehouse-1',
+            displayName: 'Warehouse',
+            joinedAt: Timestamp.fromMillis(4000),
+            isAdmin: false,
+          },
+        ],
+      }),
+    );
+    await assertSucceeds(
+      getDoc(storeDoc(warehouseDb, 'chatRooms', 'room-1')),
+    );
+    await assertFails(
+      deleteDoc(storeDoc(ownerDb, 'chatRooms', 'room-1')),
+    );
+  });
+
 });
