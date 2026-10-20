@@ -9,6 +9,7 @@ abstract interface class ReportsRepository {
     required DateTime from,
     required DateTime to,
     int limit = 500,
+    int maxDocuments = 10000,
   });
 
   Future<Result<SalesAnalytics>> getSalesAnalytics({
@@ -16,5 +17,6 @@ abstract interface class ReportsRepository {
     required DateTime from,
     required DateTime to,
     int limit = 500,
+    int maxDocuments = 10000,
   });
 }
