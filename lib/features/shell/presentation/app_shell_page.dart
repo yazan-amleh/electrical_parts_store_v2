@@ -39,6 +39,7 @@ import '../../cheques/presentation/cheques_page.dart';
 import '../../transfers/domain/repositories/account_transfer_repository.dart';
 import '../../transfers/presentation/cash_banks_page.dart';
 import '../../repairs/domain/repositories/repair_repository.dart';
+import '../../repairs/domain/services/repair_document_builder.dart';
 import '../../repairs/presentation/repairs_page.dart';
 import '../../reports/domain/repositories/reports_repository.dart';
 import '../../reports/domain/services/report_document_builder.dart';
@@ -354,6 +355,7 @@ class _AppShellPageState extends State<AppShellPage> {
           accountingQueryRepository:
               widget.dependencies.accountingQueryRepository,
           repairRepository: widget.dependencies.repairRepository,
+          repairDocumentBuilder: widget.dependencies.repairDocumentBuilder,
           reportsRepository: widget.dependencies.reportsRepository,
           reportDocumentBuilder: widget.dependencies.reportDocumentBuilder,
           settingsRepository: widget.dependencies.settingsRepository,
@@ -469,6 +471,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.accountTransferRepository,
     required this.accountingQueryRepository,
     required this.repairRepository,
+    required this.repairDocumentBuilder,
     required this.reportsRepository,
     required this.reportDocumentBuilder,
     required this.settingsRepository,
@@ -494,6 +497,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final AccountTransferRepository? accountTransferRepository;
   final AccountingQueryRepository? accountingQueryRepository;
   final RepairRepository? repairRepository;
+  final RepairDocumentBuilder? repairDocumentBuilder;
   final ReportsRepository? reportsRepository;
   final ReportDocumentBuilder? reportDocumentBuilder;
   final SettingsRepository? settingsRepository;
@@ -553,6 +557,7 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'repairs') {
       return RepairsPage(
         repository: repairRepository,
+        documentBuilder: repairDocumentBuilder,
         productRepository: productRepository,
         partyRepository: partyRepository,
         user: user,
