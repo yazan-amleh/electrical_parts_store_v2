@@ -88,8 +88,8 @@ class _FinancialStatementsPageState extends State<FinancialStatementsPage> {
             switch (_selectedView) {
               _StatementView.trialBalance => _buildTrialBalance(trialBalance),
               _StatementView.incomeStatement => _buildIncomeStatement(
-                statements,
-              ),
+                  statements,
+                ),
               _StatementView.balanceSheet => _buildBalanceSheet(statements),
             },
           ],

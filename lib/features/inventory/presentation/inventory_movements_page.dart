@@ -445,8 +445,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
       return;
     }
 
-    final direction =
-        _movementType == InventoryMovementType.purchaseReturn ||
+    final direction = _movementType == InventoryMovementType.purchaseReturn ||
             (_movementType == InventoryMovementType.adjustment &&
                 !_increaseOnAdjustment)
         ? -1

@@ -95,9 +95,8 @@ class _AccountTransfersPageState extends State<AccountTransfersPage> {
                               setState(() {
                                 _fromAccountId = value;
                                 if (_toAccountId == value) {
-                                  _toAccountId = value == '1110'
-                                      ? '1121'
-                                      : '1110';
+                                  _toAccountId =
+                                      value == '1110' ? '1121' : '1110';
                                 }
                               });
                             },

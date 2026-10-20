@@ -70,7 +70,7 @@ abstract final class AccountFirestoreMapper {
     return value is int
         ? value
         : value is num
-        ? value.toInt()
-        : fallback;
+            ? value.toInt()
+            : fallback;
   }
 }

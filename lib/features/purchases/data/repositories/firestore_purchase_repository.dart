@@ -16,9 +16,9 @@ class FirestorePurchaseRepository implements PurchaseRepository {
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
     PurchasePostingPlanner planner = const PurchasePostingPlanner(),
-  }) : _functions = functions,
-       _planner = planner,
-       _commandQueue = commandQueue;
+  })  : _functions = functions,
+        _planner = planner,
+        _commandQueue = commandQueue;
 
   final firebase_functions.FirebaseFunctions _functions;
   final PurchasePostingPlanner _planner;

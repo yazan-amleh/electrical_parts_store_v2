@@ -75,9 +75,8 @@ class _ProductsPageState extends State<ProductsPage> {
                 ),
                 const SizedBox(width: 8),
                 FilledButton.icon(
-                  onPressed: widget.repository == null
-                      ? null
-                      : () => _openEditor(),
+                  onPressed:
+                      widget.repository == null ? null : () => _openEditor(),
                   icon: const Icon(Icons.add),
                   label: const Text('إضافة صنف'),
                 ),

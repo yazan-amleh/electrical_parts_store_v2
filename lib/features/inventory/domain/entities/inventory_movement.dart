@@ -17,9 +17,9 @@ class InventoryMovement {
     this.sourceId,
     this.description = '',
     DateTime? occurredAt,
-  }) : totalCost = totalCost ?? _defaultTotalCost(quantityDelta, unitCost),
-       idempotencyKey = idempotencyKey.value,
-       occurredAt = (occurredAt ?? DateTime.now()).toUtc() {
+  })  : totalCost = totalCost ?? _defaultTotalCost(quantityDelta, unitCost),
+        idempotencyKey = idempotencyKey.value,
+        occurredAt = (occurredAt ?? DateTime.now()).toUtc() {
     if (id.trim().isEmpty ||
         storeId.trim().isEmpty ||
         productId.trim().isEmpty) {

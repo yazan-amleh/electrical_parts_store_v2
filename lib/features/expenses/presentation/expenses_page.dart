@@ -152,9 +152,9 @@ class _ExpensesPageState extends State<ExpensesPage> {
                             .map(
                               (method) =>
                                   DropdownMenuItem<ExpensePaymentMethod>(
-                                    value: method,
-                                    child: Text(method.arabicLabel),
-                                  ),
+                                value: method,
+                                child: Text(method.arabicLabel),
+                              ),
                             )
                             .toList(growable: false),
                         onChanged: _isPosting
@@ -296,9 +296,8 @@ class _ExpensesPageState extends State<ExpensesPage> {
       expenseAccountId: _expenseAccountId,
       amount: amount,
       tax: tax,
-      supplierId: _paymentMethod == ExpensePaymentMethod.credit
-          ? supplierId
-          : null,
+      supplierId:
+          _paymentMethod == ExpensePaymentMethod.credit ? supplierId : null,
       description: _descriptionController.text.trim().isEmpty
           ? null
           : _descriptionController.text.trim(),

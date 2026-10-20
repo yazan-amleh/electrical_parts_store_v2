@@ -376,7 +376,8 @@ class _RepairDialogState extends State<_RepairDialog> {
       _setError(result.failure.message);
       return;
     }
-    final products = (result as Success<List<Product>>).value
+    final products = (result as Success<List<Product>>)
+        .value
         .where((product) => product.isActive && !product.isService)
         .toList(growable: false);
     final part = await showDialog<RepairPart>(
@@ -501,8 +502,7 @@ class _RepairDialogState extends State<_RepairDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final canEdit =
-        !_busy &&
+    final canEdit = !_busy &&
         !_repair.isInvoiced &&
         _repair.status != RepairStatus.cancelled;
     return Directionality(
@@ -1083,9 +1083,8 @@ class _PaymentDialogState extends State<_PaymentDialog> {
           currency: widget.currency,
         ),
         description: widget.kind.arabicLabel,
-        chequeNumber: _method == PartyPaymentMethod.cheque
-            ? _chequeNumber.text
-            : null,
+        chequeNumber:
+            _method == PartyPaymentMethod.cheque ? _chequeNumber.text : null,
         bankName: _method == PartyPaymentMethod.cheque ? _bankName.text : null,
       );
       Navigator.of(context).pop(payment);
@@ -1198,12 +1197,11 @@ Widget _field(
     maxLines: maxLines,
     keyboardType: keyboardType,
     decoration: InputDecoration(labelText: label),
-    validator:
-        validator ??
+    validator: validator ??
         (requiredField
             ? (value) => value == null || value.trim().isEmpty
-                  ? 'هذا الحقل مطلوب.'
-                  : null
+                ? 'هذا الحقل مطلوب.'
+                : null
             : null),
   );
 }

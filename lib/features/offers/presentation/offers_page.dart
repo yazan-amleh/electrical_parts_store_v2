@@ -187,10 +187,10 @@ class _OffersPageState extends State<OffersPage> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _errorMessage != null
-                ? _buildError()
-                : _showOrders
-                ? _buildOrders(orders)
-                : _buildOffers(offers),
+                    ? _buildError()
+                    : _showOrders
+                        ? _buildOrders(orders)
+                        : _buildOffers(offers),
           ),
         ],
       ),
@@ -401,9 +401,8 @@ class _OffersPageState extends State<OffersPage> {
       return;
     }
     final customers = (parties as Success<List<Party>>).value;
-    final activeOffers = _offers
-        .where((offer) => offer.isCurrentlyActive)
-        .toList();
+    final activeOffers =
+        _offers.where((offer) => offer.isCurrentlyActive).toList();
     if (activeOffers.isEmpty || customers.isEmpty) {
       _showMessage('يلزم وجود عرض نشط وعميل واحد على الأقل.');
       return;
@@ -611,8 +610,8 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
             : Money(
                 minorUnits:
                     product.wholesalePrice.minorUnits > original.minorUnits
-                    ? original.minorUnits
-                    : product.wholesalePrice.minorUnits,
+                        ? original.minorUnits
+                        : product.wholesalePrice.minorUnits,
                 currency: original.currency,
               );
         _selected[product.id] = _OfferDraft(
@@ -662,8 +661,7 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
           ),
         );
       }
-      final discount =
-          _parseMoney(_globalDiscountController.text, _currency) ??
+      final discount = _parseMoney(_globalDiscountController.text, _currency) ??
           Money.zero(currency: _currency);
       final stamp = DateTime.now().microsecondsSinceEpoch;
       final offer = Offer(
@@ -687,9 +685,9 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
     } catch (error) {
       setState(
         () => _errorMessage = error.toString().replaceFirst(
-          'Invalid argument(s): ',
-          '',
-        ),
+              'Invalid argument(s): ',
+              '',
+            ),
       );
     }
   }
@@ -800,10 +798,10 @@ class _OfferDraft {
     required this.product,
     required Money finalPrice,
     required this.priceType,
-  }) : priceController = TextEditingController(
-         text: (finalPrice.minorUnits / 100).toStringAsFixed(2),
-       ),
-       quantityController = TextEditingController(text: '1');
+  })  : priceController = TextEditingController(
+          text: (finalPrice.minorUnits / 100).toStringAsFixed(2),
+        ),
+        quantityController = TextEditingController(text: '1');
 
   final Product product;
   final TextEditingController priceController;
@@ -1002,9 +1000,8 @@ Money? _parseMoney(String raw, String currency) {
       (fractionText.isNotEmpty && int.tryParse(fractionText) == null)) {
     return null;
   }
-  final fraction = fractionText.isEmpty
-      ? 0
-      : int.parse(fractionText.padRight(2, '0'));
+  final fraction =
+      fractionText.isEmpty ? 0 : int.parse(fractionText.padRight(2, '0'));
   return Money(minorUnits: major * 100 + fraction, currency: currency);
 }
 

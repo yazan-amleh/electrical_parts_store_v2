@@ -85,12 +85,10 @@ abstract final class OfferFirestoreMapper {
       'currency': offer.currency,
       'createdAt': Timestamp.fromDate(offer.createdAt),
       'isActive': offer.isActive,
-      'startDate': offer.startDate == null
-          ? null
-          : Timestamp.fromDate(offer.startDate!),
-      'endDate': offer.endDate == null
-          ? null
-          : Timestamp.fromDate(offer.endDate!),
+      'startDate':
+          offer.startDate == null ? null : Timestamp.fromDate(offer.startDate!),
+      'endDate':
+          offer.endDate == null ? null : Timestamp.fromDate(offer.endDate!),
       'imageUrl': offer.imageUrl,
       'globalDiscountMinorUnits': offer.globalDiscount.minorUnits,
       'totalOriginalMinorUnits': offer.originalTotal.minorUnits,
@@ -183,8 +181,8 @@ abstract final class OfferFirestoreMapper {
     return value is int
         ? value
         : value is num
-        ? value.toInt()
-        : fallback;
+            ? value.toInt()
+            : fallback;
   }
 
   static DateTime? _date(Object? value) {

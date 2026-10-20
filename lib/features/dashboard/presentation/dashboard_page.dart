@@ -68,11 +68,12 @@ class _DashboardPageState extends State<DashboardPage> {
 
     final metrics = _buildMetrics();
     final lowStockProducts =
-        _products.where((product) => product.isLowStock).toList()..sort(
-          (left, right) => left.quantityOnHand.milliUnits.compareTo(
-            right.quantityOnHand.milliUnits,
-          ),
-        );
+        _products.where((product) => product.isLowStock).toList()
+          ..sort(
+            (left, right) => left.quantityOnHand.milliUnits.compareTo(
+              right.quantityOnHand.milliUnits,
+            ),
+          );
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -245,9 +246,8 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildIntegrityCard(BuildContext context) {
     final trialBalance = _trialBalance!;
     final isBalanced = trialBalance.isBalanced;
-    final color = isBalanced
-        ? Colors.green
-        : Theme.of(context).colorScheme.error;
+    final color =
+        isBalanced ? Colors.green : Theme.of(context).colorScheme.error;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),

@@ -16,9 +16,9 @@ class FirestoreSaleRepository implements SaleRepository {
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
     SalePostingPlanner planner = const SalePostingPlanner(),
-  }) : _functions = functions,
-       _planner = planner,
-       _commandQueue = commandQueue;
+  })  : _functions = functions,
+        _planner = planner,
+        _commandQueue = commandQueue;
 
   final firebase_functions.FirebaseFunctions _functions;
   final SalePostingPlanner _planner;

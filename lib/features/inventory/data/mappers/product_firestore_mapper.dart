@@ -55,9 +55,8 @@ abstract final class ProductFirestoreMapper {
       baseUnitId: data['baseUnitId'] as String?,
       baseUnitName: data['baseUnitName'] as String?,
       isService: data['isService'] is bool ? data['isService'] as bool : false,
-      discountable: data['discountable'] is bool
-          ? data['discountable'] as bool
-          : true,
+      discountable:
+          data['discountable'] is bool ? data['discountable'] as bool : true,
       expiryDate: _date(data['expiryDate']),
       isActive: data['isActive'] is bool ? data['isActive'] as bool : true,
       units: _units(
@@ -188,8 +187,8 @@ abstract final class ProductFirestoreMapper {
     return value is int
         ? value
         : value is num
-        ? value.toInt()
-        : fallback;
+            ? value.toInt()
+            : fallback;
   }
 
   static int _defaultInventoryValue(Money purchasePrice, Quantity quantity) {

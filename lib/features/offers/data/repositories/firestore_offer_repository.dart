@@ -21,9 +21,9 @@ class FirestoreOfferRepository implements OfferRepository {
     required FirebaseFirestore firestore,
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
-  }) : _firestore = firestore,
-       _functions = functions,
-       _commandQueue = commandQueue;
+  })  : _firestore = firestore,
+        _functions = functions,
+        _commandQueue = commandQueue;
 
   final FirebaseFirestore _firestore;
   final firebase_functions.FirebaseFunctions _functions;
@@ -39,16 +39,15 @@ class FirestoreOfferRepository implements OfferRepository {
         _firestore,
         context.storeId,
       ).get();
-      final offers =
-          snapshot.docs
-              .map(OfferFirestoreMapper.fromSnapshot)
-              .where(
-                (offer) =>
-                    offer.storeId == context.storeId &&
-                    (includeInactive || offer.isActive),
-              )
-              .toList()
-            ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+      final offers = snapshot.docs
+          .map(OfferFirestoreMapper.fromSnapshot)
+          .where(
+            (offer) =>
+                offer.storeId == context.storeId &&
+                (includeInactive || offer.isActive),
+          )
+          .toList()
+        ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
       return Success<List<Offer>>(offers);
     } on FirebaseException catch (error) {
       return FailureResult<List<Offer>>(
@@ -166,16 +165,15 @@ class FirestoreOfferRepository implements OfferRepository {
         _firestore,
         context.storeId,
       ).get();
-      final orders =
-          snapshot.docs
-              .map(OfferFirestoreMapper.orderFromSnapshot)
-              .where(
-                (order) =>
-                    order.storeId == context.storeId &&
-                    (offerId == null || order.offerId == offerId),
-              )
-              .toList()
-            ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+      final orders = snapshot.docs
+          .map(OfferFirestoreMapper.orderFromSnapshot)
+          .where(
+            (order) =>
+                order.storeId == context.storeId &&
+                (offerId == null || order.offerId == offerId),
+          )
+          .toList()
+        ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
       return Success<List<OfferOrder>>(orders);
     } on FirebaseException catch (error) {
       return FailureResult<List<OfferOrder>>(

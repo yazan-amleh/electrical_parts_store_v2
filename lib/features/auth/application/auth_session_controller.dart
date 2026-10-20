@@ -23,9 +23,9 @@ class AuthSessionController extends ChangeNotifier {
     required AuthRepository authRepository,
     required StoreMembershipRepository membershipRepository,
     required String storeId,
-  }) : _authRepository = authRepository,
-       _membershipRepository = membershipRepository,
-       _storeId = storeId.trim();
+  })  : _authRepository = authRepository,
+        _membershipRepository = membershipRepository,
+        _storeId = storeId.trim();
 
   final AuthRepository _authRepository;
   final StoreMembershipRepository _membershipRepository;

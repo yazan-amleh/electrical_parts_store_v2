@@ -45,18 +45,17 @@ class InMemoryCommandQueueRepository implements CommandQueueRepository {
     }
 
     final currentTime = (now ?? DateTime.now()).toUtc();
-    final commands =
-        _commands.values
-            .where(
-              (command) =>
-                  command.storeId == context.storeId &&
-                  command.createdBy == context.userId &&
-                  command.isDue(currentTime),
-            )
-            .toList()
-          ..sort(
-            (first, second) => first.createdAt.compareTo(second.createdAt),
-          );
+    final commands = _commands.values
+        .where(
+          (command) =>
+              command.storeId == context.storeId &&
+              command.createdBy == context.userId &&
+              command.isDue(currentTime),
+        )
+        .toList()
+      ..sort(
+        (first, second) => first.createdAt.compareTo(second.createdAt),
+      );
 
     return Success<List<QueuedCommand>>(
       commands.take(limit).toList(growable: false),

@@ -10,7 +10,7 @@ import 'queued_command_firestore_mapper.dart';
 
 class FirestoreCommandQueueRepository implements CommandQueueRepository {
   FirestoreCommandQueueRepository({required FirebaseFirestore firestore})
-    : _firestore = firestore;
+      : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 

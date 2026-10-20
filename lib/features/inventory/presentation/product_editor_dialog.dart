@@ -205,8 +205,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
     }
 
     final currentId = _selectedCategoryId;
-    final hasCurrent =
-        currentId != null &&
+    final hasCurrent = currentId != null &&
         widget.categories.any((category) => category.id == currentId);
     final items = <DropdownMenuItem<String>>[
       if (!hasCurrent && currentId != null && currentId.isNotEmpty)
@@ -335,8 +334,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
 
     try {
       final product = _initialProduct;
-      final productId =
-          product?.id ??
+      final productId = product?.id ??
           ['product-', DateTime.now().microsecondsSinceEpoch].join();
       Navigator.of(context).pop(
         Product(
@@ -350,8 +348,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
               product?.quantityOnHand ?? const Quantity.fromMilliUnits(0),
           minimumQuantity: minimumQuantity,
           categoryId: categoryId,
-          inventoryValue:
-              product?.inventoryValue ??
+          inventoryValue: product?.inventoryValue ??
               Money.zero(currency: purchasePrice.currency),
           supplierId: product?.supplierId,
           imageUrl: product?.imageUrl ?? '',

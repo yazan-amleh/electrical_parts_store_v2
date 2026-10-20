@@ -128,9 +128,8 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                       enabled: !_isPosting,
                       decoration: InputDecoration(
                         labelText: isCustomer ? 'معرّف العميل' : 'معرّف المورد',
-                        hintText: isCustomer
-                            ? 'أدخل customerId'
-                            : 'أدخل supplierId',
+                        hintText:
+                            isCustomer ? 'أدخل customerId' : 'أدخل supplierId',
                         prefixIcon: Icon(
                           isCustomer
                               ? Icons.person_outline
@@ -187,9 +186,9 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                         child: Text(
                           isCustomer
                               ? 'يُسجّل الشيك الوارد في حساب الشيكات قيد التحصيل '
-                                    '1130، ولا يزيد الصندوق حتى يتم تحصيله.'
+                                  '1130، ولا يزيد الصندوق حتى يتم تحصيله.'
                               : 'يُسجّل الشيك الصادر في حساب الشيكات الصادرة '
-                                    '2210، ولا ينقص البنك حتى يتم صرفه.',
+                                  '2210، ولا ينقص البنك حتى يتم صرفه.',
                         ),
                       ),
                       const SizedBox(height: 8),

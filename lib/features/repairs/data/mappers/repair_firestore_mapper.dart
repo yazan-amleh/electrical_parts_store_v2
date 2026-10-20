@@ -22,27 +22,27 @@ abstract final class RepairFirestoreMapper {
     final rawParts = data['parts'];
     final parts = rawParts is List
         ? rawParts
-              .whereType<Map<Object?, Object?>>()
-              .map(
-                (raw) => RepairPart(
-                  id: _string(raw['id'], 'part-$id'),
-                  productId: _string(raw['productId']),
-                  productName: _string(raw['productName']),
-                  quantity: Quantity.fromMilliUnits(
-                    _int(raw['quantityMilliUnits']),
-                  ),
-                  unitPrice: Money(
-                    minorUnits: _int(raw['unitPriceMinorUnits']),
-                    currency: _string(raw['currency'], currency),
-                  ),
-                  unitCost: Money(
-                    minorUnits: _int(raw['unitCostMinorUnits']),
-                    currency: _string(raw['currency'], currency),
-                  ),
-                  source: _string(raw['source'], 'products'),
+            .whereType<Map<Object?, Object?>>()
+            .map(
+              (raw) => RepairPart(
+                id: _string(raw['id'], 'part-$id'),
+                productId: _string(raw['productId']),
+                productName: _string(raw['productName']),
+                quantity: Quantity.fromMilliUnits(
+                  _int(raw['quantityMilliUnits']),
                 ),
-              )
-              .toList(growable: false)
+                unitPrice: Money(
+                  minorUnits: _int(raw['unitPriceMinorUnits']),
+                  currency: _string(raw['currency'], currency),
+                ),
+                unitCost: Money(
+                  minorUnits: _int(raw['unitCostMinorUnits']),
+                  currency: _string(raw['currency'], currency),
+                ),
+                source: _string(raw['source'], 'products'),
+              ),
+            )
+            .toList(growable: false)
         : const <RepairPart>[];
 
     final rawRequiredStatus = data['requiredPartsStatus'];
@@ -61,8 +61,7 @@ abstract final class RepairFirestoreMapper {
       deviceModel: _string(data['deviceModel']),
       problemDescription: _string(data['problemDescription']),
       createdAt: _date(data['createdAt']) ?? DateTime.now().toUtc(),
-      receivedAt:
-          _date(data['receivedAt']) ??
+      receivedAt: _date(data['receivedAt']) ??
           _date(data['createdAt']) ??
           DateTime.now().toUtc(),
       expectedDeliveryDate:
@@ -168,8 +167,8 @@ abstract final class RepairFirestoreMapper {
     return value is int
         ? value
         : value is num
-        ? value.toInt()
-        : 0;
+            ? value.toInt()
+            : 0;
   }
 
   static T _enumValue<T extends Enum>(List<T> values, String name, T fallback) {

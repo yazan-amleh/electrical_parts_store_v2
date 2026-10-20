@@ -112,8 +112,8 @@ abstract final class PurchaseOrderFirestoreMapper {
     return value is int
         ? value
         : value is num
-        ? value.toInt()
-        : fallback;
+            ? value.toInt()
+            : fallback;
   }
 
   static DateTime? _date(Object? value) {

@@ -10,7 +10,7 @@ import '../mappers/product_firestore_mapper.dart';
 
 class FirestoreProductRepository implements ProductRepository {
   FirestoreProductRepository({required FirebaseFirestore firestore})
-    : _firestore = firestore;
+      : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 

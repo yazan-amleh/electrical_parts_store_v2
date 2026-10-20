@@ -10,7 +10,7 @@ import '../mappers/category_firestore_mapper.dart';
 
 class FirestoreCategoryRepository implements CategoryRepository {
   FirestoreCategoryRepository({required FirebaseFirestore firestore})
-    : _firestore = firestore;
+      : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 
@@ -29,15 +29,14 @@ class FirestoreCategoryRepository implements CategoryRepository {
       }
 
       final snapshot = await query.get();
-      final categories =
-          snapshot.docs
-              .map(CategoryFirestoreMapper.fromSnapshot)
-              .where((category) => category.storeId == context.storeId)
-              .toList()
-            ..sort((left, right) {
-              final order = left.sortOrder.compareTo(right.sortOrder);
-              return order == 0 ? left.name.compareTo(right.name) : order;
-            });
+      final categories = snapshot.docs
+          .map(CategoryFirestoreMapper.fromSnapshot)
+          .where((category) => category.storeId == context.storeId)
+          .toList()
+        ..sort((left, right) {
+          final order = left.sortOrder.compareTo(right.sortOrder);
+          return order == 0 ? left.name.compareTo(right.name) : order;
+        });
       return Success<List<Category>>(categories);
     } on FirebaseException catch (error) {
       return FailureResult<List<Category>>(

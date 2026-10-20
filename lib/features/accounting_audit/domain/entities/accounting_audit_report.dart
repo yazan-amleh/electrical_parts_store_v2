@@ -101,20 +101,20 @@ class AccountingAuditReport {
     final rawIssues = map['issues'];
     final issues = rawIssues is List
         ? rawIssues
-              .whereType<Map<Object?, Object?>>()
-              .map(
-                (issue) => AccountingAuditIssue.fromMap(
-                  Map<String, dynamic>.from(issue),
-                ),
-              )
-              .toList(growable: false)
+            .whereType<Map<Object?, Object?>>()
+            .map(
+              (issue) => AccountingAuditIssue.fromMap(
+                Map<String, dynamic>.from(issue),
+              ),
+            )
+            .toList(growable: false)
         : const <AccountingAuditIssue>[];
 
     return AccountingAuditReport(
       storeId: map['storeId'] as String? ?? '',
       generatedAt:
           DateTime.tryParse(map['generatedAt'] as String? ?? '')?.toUtc() ??
-          DateTime.now().toUtc(),
+              DateTime.now().toUtc(),
       accountsChecked: _int(checked['accounts']),
       journalEntriesChecked: _int(checked['journalEntries']),
       journalLinesChecked: _int(checked['journalLines']),

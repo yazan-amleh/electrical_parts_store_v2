@@ -126,9 +126,8 @@ class _LedgerPageState extends State<LedgerPage> {
               ),
             ),
             OutlinedButton.icon(
-              onPressed: _isLoadingLedger
-                  ? null
-                  : () => _loadLedger(account.id),
+              onPressed:
+                  _isLoadingLedger ? null : () => _loadLedger(account.id),
               icon: const Icon(Icons.refresh),
               label: const Text('تحديث'),
             ),
@@ -249,13 +248,11 @@ class _LedgerPageState extends State<LedgerPage> {
     }
 
     if (result is Success<List<Account>>) {
-      final accounts = result.value
-          .where((account) => account.canPost)
-          .toList();
+      final accounts =
+          result.value.where((account) => account.canPost).toList();
       setState(() {
         _accounts = accounts;
-        _selectedAccountId =
-            _selectedAccountId != null &&
+        _selectedAccountId = _selectedAccountId != null &&
                 accounts.any((account) => account.id == _selectedAccountId)
             ? _selectedAccountId
             : accounts.firstOrNull?.id;

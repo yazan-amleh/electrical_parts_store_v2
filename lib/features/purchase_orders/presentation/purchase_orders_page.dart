@@ -55,17 +55,14 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
   @override
   Widget build(BuildContext context) {
     final search = _searchController.text.trim().toLowerCase();
-    final orders = _orders
-        .where((order) {
-          final matchesSearch =
-              search.isEmpty ||
-              order.orderNumber.toLowerCase().contains(search) ||
-              order.supplierName.toLowerCase().contains(search);
-          final matchesStatus =
-              _statusFilter == null || order.status == _statusFilter;
-          return matchesSearch && matchesStatus;
-        })
-        .toList(growable: false);
+    final orders = _orders.where((order) {
+      final matchesSearch = search.isEmpty ||
+          order.orderNumber.toLowerCase().contains(search) ||
+          order.supplierName.toLowerCase().contains(search);
+      final matchesStatus =
+          _statusFilter == null || order.status == _statusFilter;
+      return matchesSearch && matchesStatus;
+    }).toList(growable: false);
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -433,8 +430,8 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
   void _showResult<T>(Result<T> result, {required String successMessage}) {
     final message = result is FailureResult<T>
         ? result.failure is QueuedFailure
-              ? 'تم حفظ العملية للطابور وستُنفذ عند عودة الاتصال.'
-              : result.failure.message
+            ? 'تم حفظ العملية للطابور وستُنفذ عند عودة الاتصال.'
+            : result.failure.message
         : successMessage;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()

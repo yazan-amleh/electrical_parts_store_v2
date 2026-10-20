@@ -22,7 +22,7 @@ final class InfrastructureFailure extends Failure {
 
 final class QueuedFailure extends Failure {
   const QueuedFailure({required this.commandId})
-    : super('The command was queued for later processing.');
+      : super('The command was queued for later processing.');
 
   final String commandId;
 }

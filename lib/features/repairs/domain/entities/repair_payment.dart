@@ -19,8 +19,8 @@ class RepairPayment {
     this.chequeNumber,
     this.bankName,
     this.dueDate,
-  }) : postedAt = postedAt.toUtc(),
-       dueDate = dueDate?.toUtc() {
+  })  : postedAt = postedAt.toUtc(),
+        dueDate = dueDate?.toUtc() {
     _ensureIdentifier(id, 'Repair payment id');
     _ensureIdentifier(storeId, 'Repair payment store id');
     _ensureIdentifier(repairId, 'Repair id');

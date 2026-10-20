@@ -80,9 +80,8 @@ abstract final class RepairCommandMapper {
       'problemDescription': repair.problemDescription,
       'createdAt': repair.createdAt.toUtc().toIso8601String(),
       'receivedAt': repair.receivedAt.toUtc().toIso8601String(),
-      'expectedDeliveryDate': repair.expectedDeliveryDate
-          .toUtc()
-          .toIso8601String(),
+      'expectedDeliveryDate':
+          repair.expectedDeliveryDate.toUtc().toIso8601String(),
       'status': repair.status.name,
       'estimatedCostMinorUnits': repair.estimatedCost.minorUnits,
       'laborCostMinorUnits': repair.laborCost.minorUnits,

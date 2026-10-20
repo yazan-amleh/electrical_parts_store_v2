@@ -548,8 +548,7 @@ class _PartyEditorDialogState extends State<_PartyEditorDialog> {
     try {
       final existing = widget.initialParty;
       final party = Party(
-        id:
-            existing?.id ??
+        id: existing?.id ??
             ['party-', DateTime.now().microsecondsSinceEpoch].join(),
         storeId: widget.storeId,
         type: widget.type,

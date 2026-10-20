@@ -82,13 +82,12 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
 
   Widget _buildSummary(BuildContext context, AccountingAuditReport report) {
     final color = report.isHealthy ? Colors.green : Colors.red;
-    final icon = report.isHealthy
-        ? Icons.check_circle_outline
-        : Icons.error_outline;
+    final icon =
+        report.isHealthy ? Icons.check_circle_outline : Icons.error_outline;
     final title = report.isHealthy
         ? report.warningCount == 0
-              ? 'المحاسبة متطابقة'
-              : 'المحاسبة متطابقة مع تنبيهات'
+            ? 'المحاسبة متطابقة'
+            : 'المحاسبة متطابقة مع تنبيهات'
         : 'يوجد فرق محاسبي يحتاج إلى معالجة';
 
     return Card(
@@ -105,7 +104,9 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
                 children: [
                   Text(
                     title,
-                    style: Theme.of(context).textTheme.titleLarge
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
                         ?.copyWith(color: color, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),

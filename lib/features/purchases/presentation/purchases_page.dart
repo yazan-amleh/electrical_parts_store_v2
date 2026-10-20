@@ -559,9 +559,8 @@ class _PurchasesPageState extends State<PurchasesPage> {
           )
           .toList(growable: false),
       tax: tax,
-      supplierId: _paymentMethod == PurchasePaymentMethod.credit
-          ? supplierId
-          : null,
+      supplierId:
+          _paymentMethod == PurchasePaymentMethod.credit ? supplierId : null,
       description: 'شراء من شاشة المشتريات',
     );
 

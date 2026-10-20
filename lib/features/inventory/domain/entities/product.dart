@@ -30,10 +30,9 @@ class Product {
     this.expiryDate,
     this.isActive = true,
     List<ProductUnit> units = const [],
-  }) : inventoryValue =
-           inventoryValue ??
-           _defaultInventoryValue(purchasePrice, quantityOnHand),
-       units = List.unmodifiable(units) {
+  })  : inventoryValue = inventoryValue ??
+            _defaultInventoryValue(purchasePrice, quantityOnHand),
+        units = List.unmodifiable(units) {
     if (id.trim().isEmpty ||
         storeId.trim().isEmpty ||
         name.trim().isEmpty ||

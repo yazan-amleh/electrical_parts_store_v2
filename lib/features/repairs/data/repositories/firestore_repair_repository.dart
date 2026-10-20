@@ -20,9 +20,9 @@ class FirestoreRepairRepository implements RepairRepository {
     required FirebaseFirestore firestore,
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
-  }) : _firestore = firestore,
-       _functions = functions,
-       _commandQueue = commandQueue;
+  })  : _firestore = firestore,
+        _functions = functions,
+        _commandQueue = commandQueue;
 
   final FirebaseFirestore _firestore;
   final firebase_functions.FirebaseFunctions _functions;
@@ -42,12 +42,11 @@ class FirestoreRepairRepository implements RepairRepository {
         query = query.where('status', isEqualTo: status.name);
       }
       final snapshot = await query.get();
-      final repairs =
-          snapshot.docs
-              .map(RepairFirestoreMapper.requestFromSnapshot)
-              .where((repair) => repair.storeId == context.storeId)
-              .toList()
-            ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+      final repairs = snapshot.docs
+          .map(RepairFirestoreMapper.requestFromSnapshot)
+          .where((repair) => repair.storeId == context.storeId)
+          .toList()
+        ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
       return Success<List<RepairRequest>>(repairs);
     } on FirebaseException catch (error) {
       return FailureResult<List<RepairRequest>>(
@@ -295,16 +294,15 @@ class FirestoreRepairRepository implements RepairRepository {
         _firestore,
         context.storeId,
       ).where('repairId', isEqualTo: repairId).get();
-      final payments =
-          snapshot.docs
-              .map(RepairFirestoreMapper.paymentFromSnapshot)
-              .where(
-                (payment) =>
-                    payment.storeId == context.storeId &&
-                    payment.repairId == repairId,
-              )
-              .toList()
-            ..sort((left, right) => right.postedAt.compareTo(left.postedAt));
+      final payments = snapshot.docs
+          .map(RepairFirestoreMapper.paymentFromSnapshot)
+          .where(
+            (payment) =>
+                payment.storeId == context.storeId &&
+                payment.repairId == repairId,
+          )
+          .toList()
+        ..sort((left, right) => right.postedAt.compareTo(left.postedAt));
       return Success<List<RepairPayment>>(payments);
     } on FirebaseException catch (error) {
       return FailureResult<List<RepairPayment>>(

@@ -17,7 +17,7 @@ class TrialBalanceLine {
 
 class TrialBalance {
   TrialBalance({required Iterable<TrialBalanceLine> lines})
-    : lines = List.unmodifiable(lines);
+      : lines = List.unmodifiable(lines);
 
   final List<TrialBalanceLine> lines;
 

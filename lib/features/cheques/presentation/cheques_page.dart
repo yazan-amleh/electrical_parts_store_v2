@@ -229,7 +229,7 @@ class _ChequesPageState extends State<ChequesPage> {
                       onPressed: isBusy
                           ? null
                           : () =>
-                                _settle(cheque, ChequeSettlementAction.bounce),
+                              _settle(cheque, ChequeSettlementAction.bounce),
                       icon: const Icon(Icons.undo_outlined),
                       label: const Text('ارتجاع'),
                     ),
@@ -256,11 +256,11 @@ class _ChequesPageState extends State<ChequesPage> {
         content: Text(
           action == ChequeSettlementAction.clear
               ? (isCustomer
-                    ? 'سيُنقل الشيك من قيد التحصيل إلى البنك.'
-                    : 'سيُنقل الشيك من الشيكات الصادرة إلى البنك.')
+                  ? 'سيُنقل الشيك من قيد التحصيل إلى البنك.'
+                  : 'سيُنقل الشيك من الشيكات الصادرة إلى البنك.')
               : (isCustomer
-                    ? 'سيُعاد المبلغ على ذمة العميل ويُسجّل قيد الارتجاع.'
-                    : 'ستعود الذمة على المورد ويُسجّل قيد ارتجاع الشيك.'),
+                  ? 'سيُعاد المبلغ على ذمة العميل ويُسجّل قيد الارتجاع.'
+                  : 'ستعود الذمة على المورد ويُسجّل قيد ارتجاع الشيك.'),
         ),
         actions: [
           TextButton(
@@ -303,11 +303,11 @@ class _ChequesPageState extends State<ChequesPage> {
       _showMessage(
         action == ChequeSettlementAction.clear
             ? (isCustomer
-                  ? 'تم تحصيل الشيك ونقله إلى البنك.'
-                  : 'تم صرف الشيك ونقله من الالتزام إلى البنك.')
+                ? 'تم تحصيل الشيك ونقله إلى البنك.'
+                : 'تم صرف الشيك ونقله من الالتزام إلى البنك.')
             : (isCustomer
-                  ? 'تم تسجيل ارتجاع الشيك وإعادته على ذمة العميل.'
-                  : 'تم تسجيل ارتجاع الشيك وإعادته على ذمة المورد.'),
+                ? 'تم تسجيل ارتجاع الشيك وإعادته على ذمة العميل.'
+                : 'تم تسجيل ارتجاع الشيك وإعادته على ذمة المورد.'),
       );
       await _load();
     }

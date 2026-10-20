@@ -411,8 +411,7 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
     try {
       Navigator.of(context).pop(
         Category(
-          id:
-              initial?.id ??
+          id: initial?.id ??
               'category-${DateTime.now().microsecondsSinceEpoch}',
           storeId: widget.storeId,
           name: name,

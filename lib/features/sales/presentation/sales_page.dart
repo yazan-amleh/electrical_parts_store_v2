@@ -508,9 +508,8 @@ class _SalesPageState extends State<SalesPage> {
           )
           .toList(growable: false),
       tax: Money.zero(currency: _currency),
-      customerId: _paymentMethod == SalePaymentMethod.credit
-          ? customerId
-          : null,
+      customerId:
+          _paymentMethod == SalePaymentMethod.credit ? customerId : null,
       description: 'بيع من نقطة البيع',
     );
 

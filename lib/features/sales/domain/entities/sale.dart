@@ -15,8 +15,8 @@ class Sale {
     required this.tax,
     this.customerId,
     this.description,
-  }) : postedAt = postedAt.toUtc(),
-       lines = List.unmodifiable(lines) {
+  })  : postedAt = postedAt.toUtc(),
+        lines = List.unmodifiable(lines) {
     _ensureSafeIdentifier(id, 'Sale id');
     if (storeId.trim().isEmpty) {
       throw ArgumentError('Sale store id is required.');

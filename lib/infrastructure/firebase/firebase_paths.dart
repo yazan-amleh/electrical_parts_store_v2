@@ -86,7 +86,7 @@ abstract final class FirebasePaths {
   }
 
   static CollectionReference<Map<String, dynamic>>
-  offerOrderConfirmationIdempotency(
+      offerOrderConfirmationIdempotency(
     FirebaseFirestore firestore,
     String storeId,
   ) {
@@ -111,7 +111,8 @@ abstract final class FirebasePaths {
   }
 
   static CollectionReference<Map<String, dynamic>>
-  purchaseOrderReceiptIdempotency(FirebaseFirestore firestore, String storeId) {
+      purchaseOrderReceiptIdempotency(
+          FirebaseFirestore firestore, String storeId) {
     return store(
       firestore,
       storeId,

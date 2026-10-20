@@ -19,9 +19,9 @@ class FirestoreInventoryRepository implements InventoryRepository {
     required FirebaseFirestore firestore,
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
-  }) : _firestore = firestore,
-       _functions = functions,
-       _commandQueue = commandQueue;
+  })  : _firestore = firestore,
+        _functions = functions,
+        _commandQueue = commandQueue;
 
   final FirebaseFirestore _firestore;
   final firebase_functions.FirebaseFunctions _functions;

@@ -17,9 +17,9 @@ class FirestoreAccountTransferRepository implements AccountTransferRepository {
     CommandQueueRepository? commandQueue,
     AccountTransferPostingPlanner planner =
         const AccountTransferPostingPlanner(),
-  }) : _functions = functions,
-       _commandQueue = commandQueue,
-       _planner = planner;
+  })  : _functions = functions,
+        _commandQueue = commandQueue,
+        _planner = planner;
 
   final firebase_functions.FirebaseFunctions _functions;
   final CommandQueueRepository? _commandQueue;

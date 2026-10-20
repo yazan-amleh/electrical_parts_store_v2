@@ -16,9 +16,9 @@ class FirestoreExpenseRepository implements ExpenseRepository {
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
     ExpensePostingPlanner planner = const ExpensePostingPlanner(),
-  }) : _functions = functions,
-       _commandQueue = commandQueue,
-       _planner = planner;
+  })  : _functions = functions,
+        _commandQueue = commandQueue,
+        _planner = planner;
 
   final firebase_functions.FirebaseFunctions _functions;
   final CommandQueueRepository? _commandQueue;

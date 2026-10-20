@@ -16,9 +16,9 @@ class FirestorePartyPaymentRepository implements PartyPaymentRepository {
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
     PartyPaymentPostingPlanner planner = const PartyPaymentPostingPlanner(),
-  }) : _functions = functions,
-       _planner = planner,
-       _commandQueue = commandQueue;
+  })  : _functions = functions,
+        _planner = planner,
+        _commandQueue = commandQueue;
 
   final firebase_functions.FirebaseFunctions _functions;
   final PartyPaymentPostingPlanner _planner;

@@ -14,10 +14,10 @@ class QueuedCommand {
     DateTime? nextAttemptAt,
     DateTime? leaseUntil,
     this.lastError,
-  }) : payload = Map.unmodifiable(Map<String, dynamic>.from(payload)),
-       createdAt = createdAt.toUtc(),
-       nextAttemptAt = nextAttemptAt?.toUtc(),
-       leaseUntil = leaseUntil?.toUtc() {
+  })  : payload = Map.unmodifiable(Map<String, dynamic>.from(payload)),
+        createdAt = createdAt.toUtc(),
+        nextAttemptAt = nextAttemptAt?.toUtc(),
+        leaseUntil = leaseUntil?.toUtc() {
     _ensureSafeIdentifier(id, 'Queued command id');
     _ensureSafeIdentifier(storeId, 'Queued command store id');
     _ensureSafeIdentifier(createdBy, 'Queued command creator');
@@ -64,8 +64,8 @@ class QueuedCommand {
       attemptCount: attemptCount + 1,
       nextAttemptAt: null,
       leaseUntil: (now ?? DateTime.now()).toUtc().add(
-        const Duration(minutes: 5),
-      ),
+            const Duration(minutes: 5),
+          ),
       lastError: null,
     );
   }

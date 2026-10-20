@@ -12,7 +12,7 @@ import '../mappers/party_ledger_entry_firestore_mapper.dart';
 
 class FirestorePartyLedgerRepository implements PartyLedgerRepository {
   FirestorePartyLedgerRepository({required FirebaseFirestore firestore})
-    : _firestore = firestore;
+      : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 
@@ -103,15 +103,14 @@ class FirestorePartyLedgerRepository implements PartyLedgerRepository {
       }
 
       final data = snapshot.data() ?? const <String, dynamic>{};
-      final storedCurrency = data['currency'] is String
-          ? data['currency'] as String
-          : currency;
+      final storedCurrency =
+          data['currency'] is String ? data['currency'] as String : currency;
       final rawBalance = data['balanceMinorUnits'];
       final balance = rawBalance is int
           ? rawBalance
           : rawBalance is num
-          ? rawBalance.toInt()
-          : 0;
+              ? rawBalance.toInt()
+              : 0;
       return Success<Money>(
         Money(minorUnits: balance, currency: storedCurrency),
       );
