@@ -467,7 +467,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
           _csvValue(row.$2.revenue.currency),
         ].join(','),
     ];
-    await Clipboard.setData(ClipboardData(text: rows.join('\\n')));
+    await Clipboard.setData(ClipboardData(text: rows.join('\n')));
     if (mounted) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
