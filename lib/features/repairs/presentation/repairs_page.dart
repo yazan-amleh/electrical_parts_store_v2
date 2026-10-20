@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
 import '../../../../core/idempotency/idempotency_key.dart';
 import '../../../../core/money/money.dart';
@@ -22,10 +23,12 @@ import '../domain/enums/repair_payment_kind.dart';
 import '../domain/enums/repair_priority.dart';
 import '../domain/enums/repair_status.dart';
 import '../domain/repositories/repair_repository.dart';
+import '../domain/services/repair_document_builder.dart';
 
 class RepairsPage extends StatefulWidget {
   const RepairsPage({
     required this.repository,
+    this.documentBuilder,
     required this.productRepository,
     required this.partyRepository,
     required this.user,
@@ -34,6 +37,7 @@ class RepairsPage extends StatefulWidget {
   });
 
   final RepairRepository? repository;
+  final RepairDocumentBuilder? documentBuilder;
   final ProductRepository? productRepository;
   final PartyRepository? partyRepository;
   final AuthenticatedUser user;
@@ -124,7 +128,9 @@ class _RepairsPageState extends State<RepairsPage> {
       context: context,
       builder: (_) => _RepairDialog(
         repository: repository,
+        documentBuilder: widget.documentBuilder,
         productRepository: widget.productRepository,
+        partyRepository: widget.partyRepository,
         storeContext: _storeContext,
         initialRepair: repair,
       ),
@@ -292,13 +298,17 @@ class _RepairTile extends StatelessWidget {
 class _RepairDialog extends StatefulWidget {
   const _RepairDialog({
     required this.repository,
+    required this.documentBuilder,
     required this.productRepository,
+    required this.partyRepository,
     required this.storeContext,
     required this.initialRepair,
   });
 
   final RepairRepository repository;
+  final RepairDocumentBuilder? documentBuilder;
   final ProductRepository? productRepository;
+  final PartyRepository? partyRepository;
   final StoreContext storeContext;
   final RepairRequest initialRepair;
 
@@ -309,14 +319,93 @@ class _RepairDialog extends StatefulWidget {
 class _RepairDialogState extends State<_RepairDialog> {
   late RepairRequest _repair;
   List<RepairPayment> _payments = const [];
+  Party? _customer;
   bool _busy = false;
+  bool _isExporting = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
     _repair = widget.initialRepair;
+    _loadCustomer();
     _loadPayments();
+  }
+
+  Future<void> _loadCustomer() async {
+    final repository = widget.partyRepository;
+    if (repository == null) {
+      return;
+    }
+    final result = await repository.getParty(
+      context: widget.storeContext,
+      partyId: _repair.customerId,
+    );
+    if (mounted && result is Success<Party>) {
+      setState(() => _customer = result.value);
+    }
+  }
+
+  Future<void> _exportRepair({required bool share}) async {
+    final builder = widget.documentBuilder;
+    if (builder == null) {
+      _setError('تصدير مستندات الصيانة غير موصول بهذه البيئة.');
+      return;
+    }
+    setState(() => _isExporting = true);
+    try {
+      final bytes = await builder.buildRepairRequest(
+        repair: _repair,
+        storeName: widget.storeContext.storeId,
+        customerName: _customer?.name ?? _repair.customerId,
+        customerPhone: _customer?.phone,
+      );
+      final filename = 'repair_' + _repair.id;
+      if (share) {
+        await Printing.sharePdf(bytes: bytes, filename: filename + '.pdf');
+      } else {
+        await Printing.layoutPdf(onLayout: (_) async => bytes);
+      }
+    } catch (error) {
+      _setError('تعذر تجهيز مستند الصيانة: ' + error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting = false);
+      }
+    }
+  }
+
+  Future<void> _exportPayment(
+    RepairPayment payment, {
+    required bool share,
+  }) async {
+    final builder = widget.documentBuilder;
+    if (builder == null) {
+      _setError('تصدير إيصالات الصيانة غير موصول بهذه البيئة.');
+      return;
+    }
+    setState(() => _isExporting = true);
+    try {
+      final bytes = await builder.buildPaymentReceipt(
+        payment: payment,
+        repair: _repair,
+        storeName: widget.storeContext.storeId,
+        customerName: _customer?.name ?? _repair.customerId,
+        customerPhone: _customer?.phone,
+      );
+      final filename = 'repair_receipt_' + payment.id;
+      if (share) {
+        await Printing.sharePdf(bytes: bytes, filename: filename + '.pdf');
+      } else {
+        await Printing.layoutPdf(onLayout: (_) async => bytes);
+      }
+    } catch (error) {
+      _setError('تعذر تجهيز إيصال الدفع: ' + error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting = false);
+      }
+    }
   }
 
   Future<void> _loadPayments() async {
@@ -520,7 +609,17 @@ class _RepairDialogState extends State<_RepairDialog> {
               ),
             ),
             IconButton(
-              onPressed: _busy ? null : _reload,
+              onPressed: _isExporting ? null : () => _exportRepair(share: false),
+              icon: const Icon(Icons.print_outlined),
+              tooltip: 'طباعة طلب الصيانة',
+            ),
+            IconButton(
+              onPressed: _isExporting ? null : () => _exportRepair(share: true),
+              icon: const Icon(Icons.share_outlined),
+              tooltip: 'مشاركة طلب الصيانة',
+            ),
+            IconButton(
+              onPressed: _busy || _isExporting ? null : _reload,
               icon: const Icon(Icons.refresh),
             ),
           ],
@@ -621,7 +720,22 @@ class _RepairDialogState extends State<_RepairDialog> {
                         '${_paymentLabel(payment.paymentMethod)} — '
                         '${_dateText(payment.postedAt)}',
                       ),
-                      trailing: Text(payment.amount.formatted),
+                      trailing: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(payment.amount.formatted),
+                          IconButton(
+                            onPressed: _isExporting
+                                ? null
+                                : () => _exportPayment(
+                                      payment,
+                                      share: false,
+                                    ),
+                            icon: const Icon(Icons.receipt_long_outlined),
+                            tooltip: 'طباعة إيصال الدفع',
+                          ),
+                        ],
+                      ),
                     ),
                 Wrap(
                   spacing: 8,
@@ -646,7 +760,9 @@ class _RepairDialogState extends State<_RepairDialog> {
         ),
         actions: [
           TextButton(
-            onPressed: _busy ? null : () => Navigator.of(context).pop(),
+            onPressed: _busy || _isExporting
+                ? null
+                : () => Navigator.of(context).pop(),
             child: const Text('إغلاق'),
           ),
           if (!_repair.isInvoiced && _repair.status != RepairStatus.cancelled)
