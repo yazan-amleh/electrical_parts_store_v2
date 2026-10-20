@@ -5,7 +5,7 @@ import 'package:electrical_parts_store_v2/features/reports/domain/entities/opera
 
 void main() {
   test('operational report derives gross and operating result', () {
-    const report = OperationalReport(
+    final report = OperationalReport(
       from: DateTime.utc(2026, 1, 1),
       to: DateTime.utc(2026, 1, 31),
       salesRevenue: Money(minorUnits: 10000),
