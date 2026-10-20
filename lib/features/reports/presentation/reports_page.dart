@@ -158,8 +158,7 @@ class _ReportsPageState extends State<ReportsPage> {
                   label: const Text('نسخ CSV'),
                 ),
                 OutlinedButton.icon(
-                  onPressed:
-                      _report == null ||
+                  onPressed: _report == null ||
                           widget.documentBuilder == null ||
                           _isExporting
                       ? null
