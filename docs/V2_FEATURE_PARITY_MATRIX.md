@@ -30,7 +30,7 @@ This matrix keeps the V1 surface visible while V2 is rebuilt on a new data set. 
 | Area | Status | Scope |
 | --- | --- | --- |
 | Report export and printing | Partial | CSV clipboard export is wired; PDF/print adapters remain |
-| Advanced product/category/customer sales analytics | Planned | Detail queries and grouped report projections |
+| Advanced product/category/customer sales analytics | Implemented | Sales analytics page with product, category, customer and payment-method aggregation; large-period pagination remains |
 | Chat and notifications | Planned | Only after the V1 behavior and ownership rules are specified |
 | Store settings and user administration UI | Complete | Store profile, members, roles and preferences (owner transfer/invitations remain separate) |
 | Full responsive UI parity review | Planned | Compare every V1 workflow on phone and desktop |
