@@ -63,9 +63,7 @@ class _ChequesPageState extends State<ChequesPage> {
   @override
   Widget build(BuildContext context) {
     if (widget.repository == null) {
-      return const Center(
-        child: Text('مستودع الشيكات غير موصول بهذه البيئة.'),
-      );
+      return const Center(child: Text('مستودع الشيكات غير موصول بهذه البيئة.'));
     }
 
     return Directionality(
@@ -102,10 +100,7 @@ class _ChequesPageState extends State<ChequesPage> {
                         value: 'cleared',
                         child: Text('تم التحصيل'),
                       ),
-                      DropdownMenuItem(
-                        value: 'bounced',
-                        child: Text('مرتجع'),
-                      ),
+                      DropdownMenuItem(value: 'bounced', child: Text('مرتجع')),
                     ],
                     onChanged: (value) {
                       if (value != null) {
@@ -210,10 +205,7 @@ class _ChequesPageState extends State<ChequesPage> {
                     child: FilledButton.icon(
                       onPressed: isBusy
                           ? null
-                          : () => _settle(
-                                cheque,
-                                ChequeSettlementAction.clear,
-                              ),
+                          : () => _settle(cheque, ChequeSettlementAction.clear),
                       icon: isBusy
                           ? const SizedBox(
                               width: 16,
@@ -229,10 +221,8 @@ class _ChequesPageState extends State<ChequesPage> {
                     child: OutlinedButton.icon(
                       onPressed: isBusy
                           ? null
-                          : () => _settle(
-                                cheque,
-                                ChequeSettlementAction.bounce,
-                              ),
+                          : () =>
+                                _settle(cheque, ChequeSettlementAction.bounce),
                       icon: const Icon(Icons.undo_outlined),
                       label: const Text('ارتجاع'),
                     ),
@@ -246,16 +236,15 @@ class _ChequesPageState extends State<ChequesPage> {
     );
   }
 
-  Future<void> _settle(
-    Cheque cheque,
-    ChequeSettlementAction action,
-  ) async {
+  Future<void> _settle(Cheque cheque, ChequeSettlementAction action) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(action == ChequeSettlementAction.clear
-            ? 'تأكيد تحصيل الشيك'
-            : 'تأكيد ارتجاع الشيك'),
+        title: Text(
+          action == ChequeSettlementAction.clear
+              ? 'تأكيد تحصيل الشيك'
+              : 'تأكيد ارتجاع الشيك',
+        ),
         content: Text(
           action == ChequeSettlementAction.clear
               ? 'سيُنقل الشيك من قيد التحصيل إلى البنك.'
@@ -282,9 +271,7 @@ class _ChequesPageState extends State<ChequesPage> {
       context: _context,
       chequeId: cheque.id,
       action: action,
-      bankAccountId: action == ChequeSettlementAction.clear
-          ? '1121'
-          : null,
+      bankAccountId: action == ChequeSettlementAction.clear ? '1121' : null,
     );
     if (!mounted) {
       return;
