@@ -82,14 +82,19 @@ void main() {
       plan.journalEntry.lines.map((line) => line.accountId),
       containsAll(<String>['1110', '4100', '2120', '5100', '1150']),
     );
-    expect(plan.inventoryMovements.single.quantityDelta,
-        const Quantity.fromMilliUnits(-2000));
-    expect(plan.inventoryMovements.single.totalCost,
-        const Money(minorUnits: 1600));
+    expect(
+      plan.inventoryMovements.single.quantityDelta,
+      const Quantity.fromMilliUnits(-2000),
+    );
+    expect(
+      plan.inventoryMovements.single.totalCost,
+      const Money(minorUnits: 1600),
+    );
   });
 
-  test('credit purchase planner posts inventory, input tax, and supplier payable',
-      () {
+  test(
+    'credit purchase planner posts inventory, input tax, and supplier payable',
+    () {
     final purchase = Purchase(
       id: 'purchase-1',
       storeId: context.storeId,
@@ -119,10 +124,14 @@ void main() {
       plan.journalEntry.lines.map((line) => line.accountId),
       containsAll(<String>['1150', '1170', '2110']),
     );
-    expect(plan.inventoryMovements.single.quantityDelta,
-        const Quantity.fromMilliUnits(2000));
-    expect(plan.inventoryMovements.single.totalCost,
-        const Money(minorUnits: 1900));
+    expect(
+      plan.inventoryMovements.single.quantityDelta,
+      const Quantity.fromMilliUnits(2000),
+    );
+    expect(
+      plan.inventoryMovements.single.totalCost,
+      const Money(minorUnits: 1900),
+    );
   });
 
   test('customer receipt credits receivables and debits settlement', () {
@@ -148,12 +157,22 @@ void main() {
     expect(result, isA<Success<PartyPaymentPostingPlan>>());
     final plan = (result as Success<PartyPaymentPostingPlan>).value;
     expect(plan.journalEntry.isBalanced, isTrue);
-    expect(plan.journalEntry.lines.first.debit,
-        const Money(minorUnits: 500));
-    expect(plan.journalEntry.lines.last.credit,
-        const Money(minorUnits: 500));
-    expect(plan.partyLedgerEntry.debit, const Money.zero());
-    expect(plan.partyLedgerEntry.credit, const Money(minorUnits: 500));
+    expect(
+      plan.journalEntry.lines.first.debit,
+      const Money(minorUnits: 500),
+    );
+    expect(
+      plan.journalEntry.lines.last.credit,
+      const Money(minorUnits: 500),
+    );
+    expect(
+      plan.partyLedgerEntry.debit,
+      const Money.zero(),
+    );
+    expect(
+      plan.partyLedgerEntry.credit,
+      const Money(minorUnits: 500),
+    );
   });
 
   test('supplier payment debits payables and credits settlement', () {
@@ -179,10 +198,14 @@ void main() {
     expect(result, isA<Success<PartyPaymentPostingPlan>>());
     final plan = (result as Success<PartyPaymentPostingPlan>).value;
     expect(plan.journalEntry.isBalanced, isTrue);
-    expect(plan.journalEntry.lines.first.credit,
-        const Money(minorUnits: 500));
-    expect(plan.journalEntry.lines.last.debit,
-        const Money(minorUnits: 500));
+    expect(
+      plan.journalEntry.lines.first.credit,
+      const Money(minorUnits: 500),
+    );
+    expect(
+      plan.journalEntry.lines.last.debit,
+      const Money(minorUnits: 500),
+    );
     expect(plan.partyLedgerEntry.debit, const Money(minorUnits: 500));
     expect(plan.partyLedgerEntry.credit, const Money.zero());
   });
