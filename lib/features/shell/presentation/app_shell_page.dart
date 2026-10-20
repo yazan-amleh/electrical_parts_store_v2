@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/app_dependencies.dart';
 import '../../dashboard/presentation/dashboard_page.dart';
 import '../../categories/domain/repositories/category_repository.dart';
+import '../../categories/domain/services/category_inventory_document_builder.dart;
 import '../../categories/presentation/categories_page.dart';
 import '../../accounting/domain/repositories/accounting_query_repository.dart';
 import '../../accounting/domain/repositories/accounting_repository.dart';
@@ -337,6 +338,8 @@ class _AppShellPageState extends State<AppShellPage> {
           user: widget.user,
           productRepository: widget.dependencies.productRepository,
           categoryRepository: widget.dependencies.categoryRepository,
+          categoryInventoryDocumentBuilder:
+              widget.dependencies.categoryInventoryDocumentBuilder,
           inventoryRepository: widget.dependencies.inventoryRepository,
           saleRepository: widget.dependencies.saleRepository,
           purchaseRepository: widget.dependencies.purchaseRepository,
@@ -456,6 +459,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.user,
     required this.productRepository,
     required this.categoryRepository,
+    required this.categoryInventoryDocumentBuilder,
     required this.inventoryRepository,
     required this.saleRepository,
     required this.purchaseRepository,
@@ -482,6 +486,8 @@ class _ModuleLandingPage extends StatelessWidget {
   final AuthenticatedUser user;
   final ProductRepository? productRepository;
   final CategoryRepository? categoryRepository;
+  final CategoryInventoryDocumentBuilder?
+      categoryInventoryDocumentBuilder;
   final InventoryRepository? inventoryRepository;
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
@@ -601,6 +607,8 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'categories') {
       return CategoriesPage(
         repository: categoryRepository,
+        productRepository: productRepository,
+        documentBuilder: categoryInventoryDocumentBuilder,
         user: user,
         membership: membership,
       );
