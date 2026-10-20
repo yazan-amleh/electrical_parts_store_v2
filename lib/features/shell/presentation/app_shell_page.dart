@@ -183,7 +183,7 @@ class _AppShellPageState extends State<AppShellPage> {
           icon: Icons.assessment_outlined,
           description: 'ميزان المراجعة وقائمة الدخل والمركز المالي.',
           capabilities: ['ميزان مراجعة', 'دخل', 'مركز مالي'],
-          foundationReady: false,
+          foundationReady: true,
         ),
         _Module(
           id: 'expenses',
@@ -211,7 +211,7 @@ class _AppShellPageState extends State<AppShellPage> {
           label: 'الشيكات',
           icon: Icons.payments_outlined,
           description: 'تسجيل الشيكات ومتابعة حالتها ضمن دورة التحصيل.',
-          capabilities: ['شيكات واردة', 'تحصيل', 'ارتجاع'],
+          capabilities: ['شيكات واردة', 'شيكات صادرة', 'تحصيل', 'ارتجاع'],
           foundationReady: true,
         ),
       ],
