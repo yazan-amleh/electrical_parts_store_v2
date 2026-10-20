@@ -5036,9 +5036,24 @@ function parseChequeSettlementCommand(rawCommand) {
     invalid('Unsupported cheque settlement action.');
   }
   const accounts = asObject(command.accounts, 'accounts');
+  const checksAccountId = safeId(
+    accounts.checksAccountId,
+    'checksAccountId',
+  );
+  const customerReceivableAccountId = safeId(
+    accounts.customerReceivableAccountId,
+    'customerReceivableAccountId',
+  );
   const bankAccountId = action === 'clear'
     ? safeId(accounts.bankAccountId, 'bankAccountId')
     : null;
+  const accountIds = [
+    checksAccountId,
+    action === 'clear' ? bankAccountId : customerReceivableAccountId,
+  ];
+  if (new Set(accountIds).size !== accountIds.length) {
+    invalid('Cheque settlement accounts must be different.');
+  }
   return {
     storeId: safeId(command.storeId, 'storeId'),
     chequeId: safeId(command.chequeId, 'chequeId'),
@@ -5046,11 +5061,8 @@ function parseChequeSettlementCommand(rawCommand) {
     idempotencyKey: safeId(command.idempotencyKey, 'idempotencyKey'),
     postedAt: parseDate(command.postedAt, 'postedAt'),
     accounts: {
-      checksAccountId: safeId(accounts.checksAccountId, 'checksAccountId'),
-      customerReceivableAccountId: safeId(
-        accounts.customerReceivableAccountId,
-        'customerReceivableAccountId',
-      ),
+      checksAccountId,
+      customerReceivableAccountId,
       bankAccountId,
     },
   };
@@ -5197,6 +5209,31 @@ async function settleChequeInTransaction(transaction, userId, command) {
     );
   }
 
+  let bouncedPartyLedgerRef;
+  let bouncedPartyBalanceRef;
+  let bouncedPartyBalance = {};
+  if (command.action === 'bounce') {
+    const partyLedgerId = command.chequeId + '-bounce';
+    bouncedPartyLedgerRef = storeRef
+      .collection('party_ledger_entries')
+      .doc(partyLedgerId);
+    bouncedPartyBalanceRef = storeRef
+      .collection('party_balances')
+      .doc('customer-' + cheque.partyId);
+    const bouncedLedgerSnapshot = await transaction.get(
+      bouncedPartyLedgerRef,
+    );
+    if (bouncedLedgerSnapshot.exists) {
+      conflict('The bounced cheque ledger entry already exists.');
+    }
+    const bouncedBalanceSnapshot = await transaction.get(
+      bouncedPartyBalanceRef,
+    );
+    bouncedPartyBalance = bouncedBalanceSnapshot.exists
+      ? bouncedBalanceSnapshot.data()
+      : {};
+  }
+
   const debitAccountId = command.action === 'clear'
     ? command.accounts.bankAccountId
     : command.accounts.customerReceivableAccountId;
@@ -5260,26 +5297,9 @@ async function settleChequeInTransaction(transaction, userId, command) {
   }
 
   if (command.action === 'bounce') {
-    const partyLedgerId = command.chequeId + '-bounce';
-    const partyLedgerRef = storeRef
-      .collection('party_ledger_entries')
-      .doc(partyLedgerId);
-    const partyBalanceRef = storeRef
-      .collection('party_balances')
-      .doc('customer-' + cheque.partyId);
-    const [ledgerSnapshot, partyBalanceSnapshot] = await Promise.all([
-      transaction.get(partyLedgerRef),
-      transaction.get(partyBalanceRef),
-    ]);
-    if (ledgerSnapshot.exists) {
-      conflict('The bounced cheque ledger entry already exists.');
-    }
-    const balance = partyBalanceSnapshot.exists
-      ? partyBalanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    transaction.set(partyLedgerRef, {
+    const currentDebit = storedInt(bouncedPartyBalance.debitMinorUnits, 0);
+    const currentCredit = storedInt(bouncedPartyBalance.creditMinorUnits, 0);
+    transaction.set(bouncedPartyLedgerRef, {
       storeId: command.storeId,
       partyType: 'customer',
       partyId: cheque.partyId,
@@ -5291,7 +5311,7 @@ async function settleChequeInTransaction(transaction, userId, command) {
       description: 'Bounced cheque returned to customer receivable',
       postedAt: Timestamp.fromDate(command.postedAt),
     });
-    transaction.set(partyBalanceRef, {
+    transaction.set(bouncedPartyBalanceRef, {
       storeId: command.storeId,
       partyType: 'customer',
       partyId: cheque.partyId,
