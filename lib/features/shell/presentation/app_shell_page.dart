@@ -14,6 +14,7 @@ import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../auth/domain/enums/store_role.dart';
 import '../../parties/domain/enums/party_type.dart';
+import '../../parties/domain/repositories/party_ledger_repository.dart';
 import '../../parties/domain/repositories/party_repository.dart';
 import '../../parties/presentation/party_directory_page.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
@@ -317,6 +318,7 @@ class _AppShellPageState extends State<AppShellPage> {
           accountingRepository: widget.dependencies.accountingRepository,
           partyPaymentRepository: widget.dependencies.partyPaymentRepository,
           partyRepository: widget.dependencies.partyRepository,
+          partyLedgerRepository: widget.dependencies.partyLedgerRepository,
           accountTransferRepository:
               widget.dependencies.accountTransferRepository,
           accountingQueryRepository:
@@ -432,6 +434,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.accountingRepository,
     required this.partyPaymentRepository,
     required this.partyRepository,
+    required this.partyLedgerRepository,
     required this.accountTransferRepository,
     required this.accountingQueryRepository,
     required this.membership,
@@ -450,6 +453,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final AccountingRepository? accountingRepository;
   final PartyPaymentRepository? partyPaymentRepository;
   final PartyRepository? partyRepository;
+  final PartyLedgerRepository? partyLedgerRepository;
   final AccountTransferRepository? accountTransferRepository;
   final AccountingQueryRepository? accountingQueryRepository;
   final StoreMembership membership;
