@@ -36,8 +36,10 @@ class PartyPayment {
       throw ArgumentError('Party payment currency is required.');
     }
     if (paymentMethod == PartyPaymentMethod.cheque) {
-      if (partyType != PartyType.customer) {
-        throw ArgumentError('Cheques are currently supported for customers.');
+      if (partyType != PartyType.customer && partyType != PartyType.supplier) {
+        throw ArgumentError(
+          'Cheques are supported for customers and suppliers.',
+        );
       }
       final number = chequeNumber;
       if (number == null || number.trim().isEmpty) {
