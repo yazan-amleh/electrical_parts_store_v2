@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../lib/core/idempotency/idempotency_key.dart';
-import '../../lib/core/money/money.dart';
-import '../../lib/features/bookings/domain/entities/booking.dart';
-import '../../lib/features/bookings/domain/entities/booking_expense.dart';
-import '../../lib/features/bookings/domain/entities/booking_payment.dart';
-import '../../lib/features/bookings/domain/enums/booking_enums.dart';
+import 'package:electrical_parts_store_v2/core/idempotency/idempotency_key.dart';
+import 'package:electrical_parts_store_v2/core/money/money.dart';
+import 'package:electrical_parts_store_v2/features/bookings/domain/entities/booking.dart';
+import 'package:electrical_parts_store_v2/features/bookings/domain/entities/booking_expense.dart';
+import 'package:electrical_parts_store_v2/features/bookings/domain/entities/booking_payment.dart';
+import 'package:electrical_parts_store_v2/features/bookings/domain/enums/booking_enums.dart';
 
 Booking _booking({
   int total = 10000,
