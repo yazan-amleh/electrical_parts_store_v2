@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -120,10 +118,7 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Text(
-            'صفحة ' +
-                context.pageNumber.toString() +
-                ' من ' +
-                context.pagesCount.toString(),
+            'صفحة ${context.pageNumber} من ${context.pagesCount}',
             style: pw.TextStyle(
               font: fonts.regular,
               fontSize: 8,
@@ -151,10 +146,7 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
     final content = <pw.Widget>[
       _buildTitle(
         title: 'التقرير التشغيلي',
-        subtitle: 'الفترة: ' +
-            _formatDate(report.from) +
-            ' - ' +
-            _formatDate(report.to),
+        subtitle: 'الفترة: ${_formatDate(report.from)} - ${_formatDate(report.to)}',
         storeName: storeName,
         fonts: fonts,
       ),
@@ -204,10 +196,7 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
     final content = <pw.Widget>[
       _buildTitle(
         title: 'تحليلات المبيعات',
-        subtitle: 'الفترة: ' +
-            _formatDate(analytics.from) +
-            ' - ' +
-            _formatDate(analytics.to),
+        subtitle: 'الفترة: ${_formatDate(analytics.from)} - ${_formatDate(analytics.to)}',
         storeName: storeName,
         fonts: fonts,
       ),
@@ -407,7 +396,7 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
         _tableRow([
           _formatDate(transaction.postedAt),
           _sourceLabel(transaction.source),
-          transaction.description ?? 'مستند ' + transaction.id,
+          transaction.description ?? 'مستند ${transaction.id}',
           transaction.paymentMethod == null
               ? '—'
               : _paymentLabel(transaction.paymentMethod!),
@@ -549,11 +538,9 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
 
   String _formatDate(DateTime value) {
     final date = value.toUtc();
-    return date.year.toString().padLeft(4, '0') +
-        '/' +
-        date.month.toString().padLeft(2, '0') +
-        '/' +
-        date.day.toString().padLeft(2, '0');
+    return '${date.year.toString().padLeft(4, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.day.toString().padLeft(2, '0')}';
   }
 
   String _formatQuantity(int milliUnits) {
@@ -563,9 +550,9 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
     final fraction = (absolute % 1000).toString().padLeft(3, '0');
     final trimmedFraction = fraction.replaceFirst(RegExp(r'0+$'), '');
     if (trimmedFraction.isEmpty) {
-      return sign + major.toString();
+      return '$sign$major';
     }
-    return sign + major.toString() + '.' + trimmedFraction;
+    return '$sign$major.$trimmedFraction';
   }
 
   String _paymentLabel(String value) {
