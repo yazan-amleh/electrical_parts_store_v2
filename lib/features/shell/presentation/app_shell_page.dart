@@ -51,7 +51,6 @@ import '../../chat/domain/repositories/chat_attachment_repository.dart';
 import '../../chat/domain/repositories/chat_repository.dart';
 import '../../chat/presentation/chat_page.dart';
 import '../../settings/domain/repositories/settings_repository.dart';
-import '../../notifications/domain/repositories/notification_repository.dart';
 import '../../settings/presentation/settings_page.dart';
 
 class AppShellPage extends StatefulWidget {
