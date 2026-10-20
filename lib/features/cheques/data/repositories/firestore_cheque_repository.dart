@@ -84,7 +84,9 @@ class FirestoreChequeRepository implements ChequeRepository {
       'postedAt': DateTime.now().toUtc().toIso8601String(),
       'accounts': <String, dynamic>{
         'checksAccountId': '1130',
+        'issuedChecksAccountId': '2210',
         'customerReceivableAccountId': '1140',
+        'supplierPayableAccountId': '2110',
         'bankAccountId': bankAccountId,
       },
     };
