@@ -12,7 +12,7 @@ import '../mappers/report_firestore_mapper.dart';
 
 class FirestoreReportsRepository implements ReportsRepository {
   FirestoreReportsRepository({required FirebaseFirestore firestore})
-    : _firestore = firestore;
+      : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 
@@ -461,8 +461,8 @@ class FirestoreReportsRepository implements ReportsRepository {
     return value is int
         ? value
         : value is num
-        ? value.toInt()
-        : fallback;
+            ? value.toInt()
+            : fallback;
   }
 
   static void _increment(Map<String, int> values, String key) {
