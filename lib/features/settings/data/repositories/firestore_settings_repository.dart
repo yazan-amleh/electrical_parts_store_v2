@@ -82,12 +82,35 @@ class FirestoreSettingsRepository implements SettingsRepository {
     }
 
     try {
-      await FirebasePaths.store(_firestore, context.storeId).update({
-        'name': profile.name.trim(),
-        'currency': profile.currency.trim().toUpperCase(),
-        'phone': profile.phone.trim(),
-        'address': profile.address.trim(),
-        'updatedAt': FieldValue.serverTimestamp(),
+      final storeRef = FirebasePaths.store(_firestore, context.storeId);
+      await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(storeRef);
+        if (!snapshot.exists) {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'not-found',
+            message: 'Store profile was not found.',
+          );
+        }
+        final data = snapshot.data() ?? const <String, dynamic>{};
+        final existingCurrency = data['currency'];
+        if (existingCurrency is String &&
+            existingCurrency.trim().isNotEmpty &&
+            existingCurrency.trim().toUpperCase() !=
+                profile.currency.trim().toUpperCase()) {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'failed-precondition',
+            message: 'Store currency cannot change after initialization.',
+          );
+        }
+        transaction.update(storeRef, {
+          'name': profile.name.trim(),
+          'currency': profile.currency.trim().toUpperCase(),
+          'phone': profile.phone.trim(),
+          'address': profile.address.trim(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
       });
       return const Success<void>(null);
     } on FirebaseException catch (error) {
