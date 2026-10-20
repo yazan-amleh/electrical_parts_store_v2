@@ -12,7 +12,7 @@ import '../mappers/report_firestore_mapper.dart';
 
 class FirestoreReportsRepository implements ReportsRepository {
   FirestoreReportsRepository({required FirebaseFirestore firestore})
-      : _firestore = firestore;
+    : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 
@@ -225,10 +225,7 @@ class FirestoreReportsRepository implements ReportsRepository {
       final partyNames = <String, String>{};
       for (final document in snapshots[3].docs) {
         final data = document.data();
-        partyNames[document.id] = _analyticsString(
-          data['name'],
-          document.id,
-        );
+        partyNames[document.id] = _analyticsString(data['name'], document.id);
       }
 
       String? currency;
@@ -264,9 +261,7 @@ class FirestoreReportsRepository implements ReportsRepository {
           data['totalMinorUnits'],
           _analyticsInt(data['amountMinorUnits']),
         );
-        final saleCostMinorUnits = _analyticsInt(
-          data['costTotalMinorUnits'],
-        );
+        final saleCostMinorUnits = _analyticsInt(data['costTotalMinorUnits']);
         salesRevenue += Money(
           minorUnits: saleTotalMinorUnits,
           currency: saleCurrency,
@@ -314,9 +309,7 @@ class FirestoreReportsRepository implements ReportsRepository {
           final productLabel = product?.name ?? fallbackLabel;
           final categoryId = product?.categoryId ?? 'uncategorized';
           final categoryLabel = categoryNames[categoryId] ?? 'غير مصنف';
-          final quantityMilliUnits = _analyticsInt(
-            line['quantityMilliUnits'],
-          );
+          final quantityMilliUnits = _analyticsInt(line['quantityMilliUnits']);
           final factorMilliUnits = _analyticsInt(
             line['unitFactorToBaseMilliUnits'],
             1000,
@@ -363,15 +356,12 @@ class FirestoreReportsRepository implements ReportsRepository {
       }
 
       final analyticsCurrency = currency ?? 'ILS';
-      final sortRows = <_AnalyticsAccumulator>[
-        ...productRows.values,
-      ]..sort(_compareAnalyticsRows);
-      final sortedCategories = <_AnalyticsAccumulator>[
-        ...categoryRows.values,
-      ]..sort(_compareAnalyticsRows);
-      final sortedCustomers = <_AnalyticsAccumulator>[
-        ...customerRows.values,
-      ]..sort(_compareAnalyticsRows);
+      final sortRows = <_AnalyticsAccumulator>[...productRows.values]
+        ..sort(_compareAnalyticsRows);
+      final sortedCategories = <_AnalyticsAccumulator>[...categoryRows.values]
+        ..sort(_compareAnalyticsRows);
+      final sortedCustomers = <_AnalyticsAccumulator>[...customerRows.values]
+        ..sort(_compareAnalyticsRows);
 
       return Success<SalesAnalytics>(
         SalesAnalytics(
@@ -385,9 +375,7 @@ class FirestoreReportsRepository implements ReportsRepository {
               : salesCost,
           salesCount: salesCount,
           paymentMethodCounts: Map.unmodifiable(paymentMethodCounts),
-          productRows: List.unmodifiable(
-            sortRows.map((row) => row.toEntity()),
-          ),
+          productRows: List.unmodifiable(sortRows.map((row) => row.toEntity())),
           categoryRows: List.unmodifiable(
             sortedCategories.map((row) => row.toEntity()),
           ),
@@ -470,7 +458,11 @@ class FirestoreReportsRepository implements ReportsRepository {
   }
 
   static int _analyticsInt(Object? value, [int fallback = 0]) {
-    return value is int ? value : value is num ? value.toInt() : fallback;
+    return value is int
+        ? value
+        : value is num
+        ? value.toInt()
+        : fallback;
   }
 
   static void _increment(Map<String, int> values, String key) {
@@ -479,10 +471,7 @@ class FirestoreReportsRepository implements ReportsRepository {
 }
 
 class _ProductAnalyticsLookup {
-  const _ProductAnalyticsLookup({
-    required this.name,
-    required this.categoryId,
-  });
+  const _ProductAnalyticsLookup({required this.name, required this.categoryId});
 
   final String name;
   final String categoryId;
@@ -510,14 +499,8 @@ class _AnalyticsAccumulator {
       key: key,
       label: label,
       quantityMilliUnits: quantityMilliUnits,
-      revenue: Money(
-        minorUnits: revenueMinorUnits,
-        currency: currency,
-      ),
-      cost: Money(
-        minorUnits: costMinorUnits,
-        currency: currency,
-      ),
+      revenue: Money(minorUnits: revenueMinorUnits, currency: currency),
+      cost: Money(minorUnits: costMinorUnits, currency: currency),
     );
   }
 }
