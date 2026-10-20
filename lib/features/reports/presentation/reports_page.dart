@@ -169,8 +169,7 @@ class _ReportsPageState extends State<ReportsPage> {
                   ),
                 ),
                 OutlinedButton.icon(
-                  onPressed:
-                      _report == null ||
+                  onPressed: _report == null ||
                           widget.documentBuilder == null ||
                           _isExporting
                       ? null
