@@ -159,7 +159,7 @@ class _ReportsPageState extends State<ReportsPage> {
     return OutlinedButton.icon(
       onPressed: onPressed,
       icon: const Icon(Icons.calendar_today_outlined),
-      label: Text('$label: ' + _formatDate(date)),
+      label: Text('$label: ${_formatDate(date)}'),
     );
   }
 
@@ -172,7 +172,7 @@ class _ReportsPageState extends State<ReportsPage> {
           context,
           title: 'المبيعات',
           value: report.salesRevenue,
-          subtitle: report.salesCount.toString() + ' فاتورة',
+          subtitle: '${report.salesCount} فاتورة',
           icon: Icons.point_of_sale_outlined,
         ),
         _metricCard(
@@ -193,7 +193,7 @@ class _ReportsPageState extends State<ReportsPage> {
           context,
           title: 'المصروفات',
           value: report.expensesTotal,
-          subtitle: report.expensesCount.toString() + ' مصروف',
+          subtitle: '${report.expensesCount} مصروف',
           icon: Icons.receipt_long_outlined,
         ),
         _metricCard(
@@ -207,7 +207,7 @@ class _ReportsPageState extends State<ReportsPage> {
           context,
           title: 'المشتريات',
           value: report.purchasesTotal,
-          subtitle: report.purchasesCount.toString() + ' فاتورة',
+          subtitle: '${report.purchasesCount} فاتورة',
           icon: Icons.shopping_cart_outlined,
         ),
       ],
@@ -284,9 +284,7 @@ class _ReportsPageState extends State<ReportsPage> {
                     Chip(
                       avatar: const Icon(Icons.payments_outlined, size: 18),
                       label: Text(
-                        _paymentLabel(entry.key) +
-                            ': ' +
-                            entry.value.toString(),
+                        '${_paymentLabel(entry.key)}: ${entry.value}',
                       ),
                     ),
                 ],
@@ -404,7 +402,7 @@ class _ReportsPageState extends State<ReportsPage> {
                           DataCell(
                             Text(
                               transaction.description ??
-                                  'مستند ' + transaction.id,
+                                  'مستند ${transaction.id}',
                             ),
                           ),
                           DataCell(
