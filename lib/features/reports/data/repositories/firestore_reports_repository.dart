@@ -214,10 +214,10 @@ class FirestoreReportsRepository implements ReportsRepository {
       );
       final lookupSnapshots =
           await Future.wait<QuerySnapshot<Map<String, dynamic>>>([
-        FirebasePaths.products(_firestore, context.storeId).get(),
-        FirebasePaths.categories(_firestore, context.storeId).get(),
-        FirebasePaths.parties(_firestore, context.storeId).get(),
-      ]);
+            FirebasePaths.products(_firestore, context.storeId).get(),
+            FirebasePaths.categories(_firestore, context.storeId).get(),
+            FirebasePaths.parties(_firestore, context.storeId).get(),
+          ]);
       final salesPage = await salesPageFuture;
 
       final productLookup = <String, _ProductAnalyticsLookup>{};
@@ -431,8 +431,7 @@ class FirestoreReportsRepository implements ReportsRepository {
 
     while (documents.length < maxDocuments) {
       final remaining = maxDocuments - documents.length;
-      final currentPageSize =
-          remaining < pageSize ? remaining : pageSize;
+      final currentPageSize = remaining < pageSize ? remaining : pageSize;
       Query<Map<String, dynamic>> query = collection
           .where('postedAt', isGreaterThanOrEqualTo: start)
           .where('postedAt', isLessThanOrEqualTo: end)
