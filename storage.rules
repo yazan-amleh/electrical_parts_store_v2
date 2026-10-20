@@ -1,0 +1,46 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isChatParticipant(storeId, roomId) {
+      return signedIn() &&
+        firestore.get(
+          /databases/(default)/documents/stores/$(storeId)/chatRooms/$(roomId)
+        ).data.storeId == storeId &&
+        firestore.get(
+          /databases/(default)/documents/stores/$(storeId)/chatRooms/$(roomId)
+        ).data.participantIds.hasAny([request.auth.uid]);
+    }
+
+    function isAllowedContentType() {
+      return request.resource.contentType.matches('image/.*') ||
+        request.resource.contentType in [
+          'application/pdf',
+          'text/plain',
+          'application/zip',
+          'application/octet-stream',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ];
+    }
+
+    match /stores/{storeId}/chatRooms/{roomId}/attachments/{userId}/{fileName} {
+      allow read: if isChatParticipant(storeId, roomId);
+      allow create: if isChatParticipant(storeId, roomId) &&
+        userId == request.auth.uid &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        isAllowedContentType();
+      allow update: if false;
+      allow delete: if isChatParticipant(storeId, roomId) &&
+        userId == request.auth.uid;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
