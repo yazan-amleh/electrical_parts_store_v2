@@ -129,7 +129,10 @@ class PdfRepairDocumentBuilder implements RepairDocumentBuilder {
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Text(
-            'صفحة ' + context.pageNumber.toString() + ' من ' + context.pagesCount.toString(),
+            'صفحة ' +
+                context.pageNumber.toString() +
+                ' من ' +
+                context.pagesCount.toString(),
             style: pw.TextStyle(
               font: fonts.regular,
               fontSize: 8,
@@ -554,7 +557,9 @@ class PdfRepairDocumentBuilder implements RepairDocumentBuilder {
     final major = absolute ~/ 1000;
     final fraction = (absolute % 1000).toString().padLeft(3, '0');
     final trimmed = fraction.replaceFirst(RegExp(r'0+$'), '');
-    return trimmed.isEmpty ? sign + major.toString() : sign + major.toString() + '.' + trimmed;
+    return trimmed.isEmpty
+        ? sign + major.toString()
+        : sign + major.toString() + '.' + trimmed;
   }
 
   String _paymentMethodLabel(PartyPaymentMethod method) {
