@@ -8,6 +8,7 @@ import '../features/accounting/data/repositories/firestore_accounting_query_repo
 import '../features/accounting/data/repositories/firestore_accounting_repository.dart';
 import '../features/accounting_audit/data/repositories/firestore_accounting_audit_repository.dart';
 import '../features/categories/data/repositories/firestore_category_repository.dart';
+import '../features/categories/data/exporters/pdf_category_inventory_document_builder.dart';
 import '../features/cheques/data/repositories/firestore_cheque_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
 import '../features/auth/data/repositories/firebase_auth_repository.dart';
@@ -38,6 +39,8 @@ abstract final class AppBootstrap {
       return AppDependencies(
         runtime: runtime,
         reportDocumentBuilder: PdfReportDocumentBuilder(),
+        categoryInventoryDocumentBuilder:
+            PdfCategoryInventoryDocumentBuilder(),
         repairDocumentBuilder: PdfRepairDocumentBuilder(),
       );
     }
@@ -126,6 +129,8 @@ abstract final class AppBootstrap {
       ),
       reportsRepository: FirestoreReportsRepository(firestore: firestore),
       reportDocumentBuilder: PdfReportDocumentBuilder(),
+      categoryInventoryDocumentBuilder:
+          PdfCategoryInventoryDocumentBuilder(),
       repairDocumentBuilder: PdfRepairDocumentBuilder(),
       settingsRepository: FirestoreSettingsRepository(firestore: firestore),
     );
