@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:printing/printing.dart';
 
 import '../../../core/money/money.dart';
 import '../../../core/result/result.dart';
@@ -10,10 +11,12 @@ import '../../inventory/domain/entities/product.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
 import '../domain/entities/operational_report.dart';
 import '../domain/repositories/reports_repository.dart';
+import '../domain/services/report_document_builder.dart';
 
 class ReportsPage extends StatefulWidget {
   const ReportsPage({
     required this.repository,
+    required this.documentBuilder,
     required this.productRepository,
     required this.user,
     required this.membership,
@@ -21,6 +24,7 @@ class ReportsPage extends StatefulWidget {
   });
 
   final ReportsRepository? repository;
+  final ReportDocumentBuilder? documentBuilder;
   final ProductRepository? productRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
@@ -35,6 +39,7 @@ class _ReportsPageState extends State<ReportsPage> {
   OperationalReport? _report;
   List<Product> _products = const <Product>[];
   bool _isLoading = true;
+  bool _isExporting = false;
   String? _errorMessage;
 
   StoreContext get _context {
@@ -151,6 +156,24 @@ class _ReportsPageState extends State<ReportsPage> {
                   onPressed: _report == null ? null : _copyCsv,
                   icon: const Icon(Icons.content_copy_outlined),
                   label: const Text('نسخ CSV'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _report == null ||
+                          widget.documentBuilder == null ||
+                          _isExporting
+                      ? null
+                      : () => _runPdfExport(share: false),
+                  icon: const Icon(Icons.print_outlined),
+                  label: Text(_isExporting ? 'جارٍ تجهيز PDF...' : 'PDF / طباعة'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _report == null ||
+                          widget.documentBuilder == null ||
+                          _isExporting
+                      ? null
+                      : () => _runPdfExport(share: true),
+                  icon: const Icon(Icons.share_outlined),
+                  label: const Text('مشاركة PDF'),
                 ),
               ],
             ),
@@ -532,6 +555,41 @@ class _ReportsPageState extends State<ReportsPage> {
       }
       _isLoading = false;
     });
+  }
+
+  Future<void> _runPdfExport({required bool share}) async {
+    final report = _report;
+    final builder = widget.documentBuilder;
+    if (report == null || builder == null) {
+      _showMessage('تصدير PDF غير موصول بهذه البيئة.');
+      return;
+    }
+
+    setState(() => _isExporting = true);
+    try {
+      final bytes = await builder.buildOperationalReport(
+        report: report,
+        storeName: widget.membership.storeId,
+      );
+      final filename =
+          'operational_report_' + _formatDate(_from) + '_' + _formatDate(_to);
+      if (share) {
+        await Printing.sharePdf(
+          bytes: bytes,
+          filename: filename + '.pdf',
+        );
+      } else {
+        await Printing.layoutPdf(
+          onLayout: (_) async => bytes,
+        );
+      }
+    } catch (error) {
+      _showMessage('تعذر تجهيز PDF: ' + error.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting = false);
+      }
+    }
   }
 
   Future<void> _copyCsv() async {
