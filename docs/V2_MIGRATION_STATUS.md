@@ -25,10 +25,11 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 ## Release gates still open
 
 1. Complete remaining UI parity and responsive review.
-2. Add export/print adapters without changing accounting facts.
-3. Finish PDF/print report adapters and the remaining advanced analytics.
-4. Expand emulator scenarios, including concurrent retries and cheque bounce.
-5. Run a clean-data acceptance pass with representative store workflows.
-6. Configure the separate V2 Firebase project, then deploy only after the rules and functions review is approved.
+2. Finish PDF/print report adapters, pagination/aggregation for large reports,
+   and the remaining advanced analytics.
+3. Expand emulator scenarios, including concurrent retries and cheque bounce.
+4. Run a clean-data acceptance pass with representative store workflows.
+5. Configure the separate V2 Firebase project, then deploy only after the
+   rules and functions review is approved.
 
 No V1 customer or transaction migration is implied by this document. Migration, if desired after year-end, will be a separate audited project.
