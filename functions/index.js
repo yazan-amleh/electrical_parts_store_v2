@@ -1731,6 +1731,7 @@ async function postPartyPaymentInTransaction(
   const partyBalanceRef = storeRef
     .collection('party_balances')
     .doc(partyBalanceId);
+  const partyRef = storeRef.collection('parties').doc(command.payment.partyId);
 
   const membershipSnapshot = await transaction.get(memberRef);
   assertMembership(
@@ -1779,6 +1780,14 @@ async function postPartyPaymentInTransaction(
   if (existingPartyLedgerSnapshot.exists) {
     conflict('A party ledger entry for this payment already exists.');
   }
+
+  const partySnapshot = await transaction.get(partyRef);
+  assertParty(
+    partySnapshot,
+    command.storeId,
+    command.payment.partyId,
+    command.payment.partyType,
+  );
 
   const accountIds = [
     command.accounts.settlementAccountId,
@@ -2203,6 +2212,9 @@ async function postPurchaseInTransaction(
   const supplierBalanceRef = isCreditPurchase
     ? storeRef.collection('party_balances').doc(supplierBalanceId)
     : null;
+  const supplierRef = isCreditPurchase
+    ? storeRef.collection('parties').doc(command.purchase.supplierId)
+    : null;
 
   const membershipSnapshot = await transaction.get(memberRef);
   assertMembership(
@@ -2244,9 +2256,17 @@ async function postPurchaseInTransaction(
     conflict('The journal idempotency key already exists.');
   }
 
+  let supplierSnapshot = null;
   let supplierLedgerSnapshot = null;
   let supplierBalanceSnapshot = null;
   if (isCreditPurchase) {
+    supplierSnapshot = await transaction.get(supplierRef);
+    assertParty(
+      supplierSnapshot,
+      command.storeId,
+      command.purchase.supplierId,
+      'supplier',
+    );
     supplierLedgerSnapshot = await transaction.get(supplierLedgerRef);
     if (supplierLedgerSnapshot.exists) {
       conflict('A supplier ledger entry for this purchase already exists.');
@@ -3379,6 +3399,9 @@ async function postSaleInTransaction(
   const customerBalanceRef = isCreditSale
     ? storeRef.collection('party_balances').doc(customerBalanceId)
     : null;
+  const customerRef = isCreditSale
+    ? storeRef.collection('parties').doc(command.sale.customerId)
+    : null;
 
   const membershipSnapshot = await transaction.get(memberRef);
   assertMembership(
@@ -3420,9 +3443,17 @@ async function postSaleInTransaction(
     conflict('The journal idempotency key already exists.');
   }
 
+  let customerSnapshot = null;
   let customerLedgerSnapshot = null;
   let customerBalanceSnapshot = null;
   if (isCreditSale) {
+    customerSnapshot = await transaction.get(customerRef);
+    assertParty(
+      customerSnapshot,
+      command.storeId,
+      command.sale.customerId,
+      'customer',
+    );
     customerLedgerSnapshot = await transaction.get(customerLedgerRef);
     if (customerLedgerSnapshot.exists) {
       conflict('A customer ledger entry for this sale already exists.');
@@ -4025,6 +4056,39 @@ function assertMembership(
   }
   if (member.isActive !== true || !roles.has(member.role)) {
     deny('The user cannot ' + action + ' in this store.');
+  }
+}
+
+function assertParty(
+  snapshot,
+  storeId,
+  partyId,
+  expectedType,
+) {
+  if (!snapshot || !snapshot.exists) {
+    invalid(
+      expectedType === 'customer'
+        ? 'Customer was not found.'
+        : 'Supplier was not found.',
+    );
+  }
+  const party = snapshot.data();
+  if (party.storeId !== storeId) {
+    deny('Party belongs to another store.');
+  }
+  if (party.partyType !== expectedType) {
+    invalid(
+      expectedType === 'customer'
+        ? 'The selected party is not a customer.'
+        : 'The selected party is not a supplier.',
+    );
+  }
+  if (party.isActive === false) {
+    invalid(
+      expectedType === 'customer'
+        ? 'Inactive customers cannot be used.'
+        : 'Inactive suppliers cannot be used.',
+    );
   }
 }
 
