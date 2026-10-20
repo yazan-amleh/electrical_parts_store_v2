@@ -165,7 +165,6 @@ class FirestoreReportsRepository implements ReportsRepository {
     }
   }
 
-
   @override
   Future<Result<SalesAnalytics>> getSalesAnalytics({
     required StoreContext context,
@@ -188,8 +187,7 @@ class FirestoreReportsRepository implements ReportsRepository {
     final end = Timestamp.fromDate(to.toUtc());
 
     try {
-      final snapshots =
-          await Future.wait<QuerySnapshot<Map<String, dynamic>>>([
+      final snapshots = await Future.wait<QuerySnapshot<Map<String, dynamic>>>([
         FirebasePaths.sales(_firestore, context.storeId)
             .where('postedAt', isGreaterThanOrEqualTo: start)
             .where('postedAt', isLessThanOrEqualTo: end)
@@ -334,8 +332,8 @@ class FirestoreReportsRepository implements ReportsRepository {
                 ) -
                 _analyticsInt(line['discountMinorUnits']),
           );
-          final isService = line['isService'] is bool &&
-              line['isService'] as bool;
+          final isService =
+              line['isService'] is bool && line['isService'] as bool;
           final lineCostMinorUnits = isService
               ? 0
               : _scaled(
@@ -472,11 +470,7 @@ class FirestoreReportsRepository implements ReportsRepository {
   }
 
   static int _analyticsInt(Object? value, [int fallback = 0]) {
-    return value is int
-        ? value
-        : value is num
-            ? value.toInt()
-            : fallback;
+    return value is int ? value : value is num ? value.toInt() : fallback;
   }
 
   static void _increment(Map<String, int> values, String key) {
