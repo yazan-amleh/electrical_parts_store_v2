@@ -115,11 +115,11 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'آخر فحص: \${_formatDate(report.generatedAt)}',
+                    'آخر فحص: ${_formatDate(report.generatedAt)}',
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'الأخطاء: \${report.errorCount} — التنبيهات: \${report.warningCount}',
+                    'الأخطاء: ${report.errorCount} — التنبيهات: ${report.warningCount}',
                   ),
                 ],
               ),
@@ -156,7 +156,7 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
             for (final entry in metrics.entries)
               Chip(
                 avatar: const Icon(Icons.fact_check_outlined, size: 18),
-                label: Text('\${entry.key}: \${entry.value}'),
+                label: Text('${entry.key}: ${entry.value}'),
               ),
           ],
         ),
@@ -205,7 +205,7 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
                     ),
                     title: Text(issue.message),
                     subtitle: Text(
-                      '\${issue.scope} — \${issue.referenceId}',
+                      '${issue.scope} — ${issue.referenceId}',
                     ),
                   );
                 },
@@ -219,15 +219,15 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('رمز الفحص: \${report.issues[index].code}'),
+                      Text('رمز الفحص: ${report.issues[index].code}'),
                       if (report.issues[index].expected != null ||
                           report.issues[index].actual != null) ...[
                         const SizedBox(height: 6),
                         Text(
-                          'المتوقع: \${_formatValue(report.issues[index], report.issues[index].expected)}',
+                          'المتوقع: ${_formatValue(report.issues[index], report.issues[index].expected)}',
                         ),
                         Text(
-                          'المخزن: \${_formatValue(report.issues[index], report.issues[index].actual)}',
+                          'المخزن: ${_formatValue(report.issues[index], report.issues[index].actual)}',
                         ),
                       ],
                     ],
@@ -312,16 +312,16 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
     }
     if (issue.valueKind == 'milliUnits') {
       final sign = value < 0 ? '-' : '';
-      return '\$sign\${(value.abs() / 1000).toStringAsFixed(3)}';
+      return '\$sign${(value.abs() / 1000).toStringAsFixed(3)}';
     }
     return value.toString();
   }
 
   String _formatDate(DateTime value) {
     final local = value.toLocal();
-    return '\${local.year}-\${local.month.toString().padLeft(2, '0')}-'
-        '\${local.day.toString().padLeft(2, '0')} '
-        '\${local.hour.toString().padLeft(2, '0')}:'
-        '\${local.minute.toString().padLeft(2, '0')}';
+    return '${local.year}-${local.month.toString().padLeft(2, '0')}-'
+        '${local.day.toString().padLeft(2, '0')} '
+        '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}';
   }
 }
