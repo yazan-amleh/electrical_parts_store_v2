@@ -171,8 +171,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                   label: const Text('نسخ CSV'),
                 ),
                 OutlinedButton.icon(
-                  onPressed:
-                      _analytics == null ||
+                  onPressed: _analytics == null ||
                           widget.documentBuilder == null ||
                           _isExporting
                       ? null
