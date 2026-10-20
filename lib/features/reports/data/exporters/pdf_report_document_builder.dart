@@ -8,7 +8,7 @@ import '../../domain/services/report_document_builder.dart';
 
 class PdfReportDocumentBuilder implements ReportDocumentBuilder {
   PdfReportDocumentBuilder({AssetBundle? assetBundle})
-    : _assetBundle = assetBundle ?? rootBundle;
+      : _assetBundle = assetBundle ?? rootBundle;
 
   final AssetBundle _assetBundle;
   _PdfFonts? _fonts;
