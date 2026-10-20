@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/app_dependencies.dart';
 import '../../dashboard/presentation/dashboard_page.dart';
 import '../../categories/domain/repositories/category_repository.dart';
-import '../../categories/domain/services/category_inventory_document_builder.dart;
+import '../../categories/domain/services/category_inventory_document_builder.dart';
 import '../../categories/presentation/categories_page.dart';
 import '../../accounting/domain/repositories/accounting_query_repository.dart';
 import '../../accounting/domain/repositories/accounting_repository.dart';
