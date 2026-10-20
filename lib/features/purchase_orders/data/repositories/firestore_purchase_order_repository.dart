@@ -20,9 +20,9 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
     required FirebaseFirestore firestore,
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
-  })  : _firestore = firestore,
-        _functions = functions,
-        _commandQueue = commandQueue;
+  }) : _firestore = firestore,
+       _functions = functions,
+       _commandQueue = commandQueue;
 
   final FirebaseFirestore _firestore;
   final firebase_functions.FirebaseFunctions _functions;
@@ -37,11 +37,12 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
         _firestore,
         context.storeId,
       ).get();
-      final orders = snapshot.docs
-          .map(PurchaseOrderFirestoreMapper.fromSnapshot)
-          .where((order) => order.storeId == context.storeId)
-          .toList()
-        ..sort((left, right) => right.orderedAt.compareTo(left.orderedAt));
+      final orders =
+          snapshot.docs
+              .map(PurchaseOrderFirestoreMapper.fromSnapshot)
+              .where((order) => order.storeId == context.storeId)
+              .toList()
+            ..sort((left, right) => right.orderedAt.compareTo(left.orderedAt));
       return Success<List<PurchaseOrder>>(orders);
     } on FirebaseException catch (error) {
       return FailureResult<List<PurchaseOrder>>(
@@ -206,9 +207,7 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
     return QueuedFailure(commandId: commandId);
   }
 
-  Failure _mapFailure(
-    firebase_functions.FirebaseFunctionsException error,
-  ) {
+  Failure _mapFailure(firebase_functions.FirebaseFunctionsException error) {
     switch (error.code) {
       case 'permission-denied':
       case 'unauthenticated':
@@ -217,9 +216,7 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
         );
       case 'invalid-argument':
       case 'failed-precondition':
-        return ValidationFailure(
-          error.message ?? 'Purchase order is invalid.',
-        );
+        return ValidationFailure(error.message ?? 'Purchase order is invalid.');
       case 'already-exists':
       case 'aborted':
         return ConflictFailure(

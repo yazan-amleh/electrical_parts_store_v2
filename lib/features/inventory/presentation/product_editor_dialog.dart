@@ -91,7 +91,10 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _textField(
-                  _nameController, 'اسم الصنف', Icons.inventory_2_outlined),
+                _nameController,
+                'اسم الصنف',
+                Icons.inventory_2_outlined,
+              ),
               _buildCategoryField(),
               Row(
                 children: [
@@ -146,11 +149,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
                 ],
               ),
               _textField(_skuController, 'SKU', Icons.qr_code_2_outlined),
-              _textField(
-                _barcodeController,
-                'الباركود',
-                Icons.barcode_reader,
-              ),
+              _textField(_barcodeController, 'الباركود', Icons.barcode_reader),
               _textField(
                 _descriptionController,
                 'الوصف',
@@ -206,7 +205,8 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
     }
 
     final currentId = _selectedCategoryId;
-    final hasCurrent = currentId != null &&
+    final hasCurrent =
+        currentId != null &&
         widget.categories.any((category) => category.id == currentId);
     final items = <DropdownMenuItem<String>>[
       if (!hasCurrent && currentId != null && currentId.isNotEmpty)
@@ -253,10 +253,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
         keyboardType: decimal
             ? const TextInputType.numberWithOptions(decimal: true)
             : null,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon),
-        ),
+        decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
       ),
     );
   }
@@ -338,7 +335,8 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
 
     try {
       final product = _initialProduct;
-      final productId = product?.id ??
+      final productId =
+          product?.id ??
           ['product-', DateTime.now().microsecondsSinceEpoch].join();
       Navigator.of(context).pop(
         Product(
@@ -352,7 +350,8 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
               product?.quantityOnHand ?? const Quantity.fromMilliUnits(0),
           minimumQuantity: minimumQuantity,
           categoryId: categoryId,
-          inventoryValue: product?.inventoryValue ??
+          inventoryValue:
+              product?.inventoryValue ??
               Money.zero(currency: purchasePrice.currency),
           supplierId: product?.supplierId,
           imageUrl: product?.imageUrl ?? '',

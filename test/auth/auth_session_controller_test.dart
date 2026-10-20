@@ -13,10 +13,7 @@ import 'package:electrical_parts_store_v2/features/auth/domain/repositories/auth
 import 'package:electrical_parts_store_v2/features/auth/domain/repositories/store_membership_repository.dart';
 
 void main() {
-  const user = AuthenticatedUser(
-    id: 'user-1',
-    email: 'user@example.com',
-  );
+  const user = AuthenticatedUser(id: 'user-1', email: 'user@example.com');
   const membership = StoreMembership(
     storeId: 'store-1',
     userId: 'user-1',
@@ -34,10 +31,7 @@ void main() {
 
     expect(controller.status, AuthSessionStatus.signedOut);
 
-    await controller.signIn(
-      email: user.email,
-      password: 'password',
-    );
+    await controller.signIn(email: user.email, password: 'password');
 
     expect(controller.status, AuthSessionStatus.ready);
     expect(controller.user, user);
@@ -56,10 +50,7 @@ void main() {
       storeId: '',
     )..start();
 
-    await controller.signIn(
-      email: user.email,
-      password: 'password',
-    );
+    await controller.signIn(email: user.email, password: 'password');
 
     expect(controller.status, AuthSessionStatus.storeNotConfigured);
     expect(controller.membership, isNull);
@@ -80,10 +71,7 @@ void main() {
       storeId: 'store-1',
     )..start();
 
-    await controller.signIn(
-      email: user.email,
-      password: 'password',
-    );
+    await controller.signIn(email: user.email, password: 'password');
 
     expect(controller.status, AuthSessionStatus.failure);
     expect(controller.errorMessage, 'Not a member.');

@@ -86,13 +86,14 @@ abstract final class FirebasePaths {
   }
 
   static CollectionReference<Map<String, dynamic>>
-      offerOrderConfirmationIdempotency(
+  offerOrderConfirmationIdempotency(
     FirebaseFirestore firestore,
     String storeId,
   ) {
-    return store(firestore, storeId).collection(
-      'offer_order_confirmation_idempotency',
-    );
+    return store(
+      firestore,
+      storeId,
+    ).collection('offer_order_confirmation_idempotency');
   }
 
   static CollectionReference<Map<String, dynamic>> purchases(
@@ -110,13 +111,11 @@ abstract final class FirebasePaths {
   }
 
   static CollectionReference<Map<String, dynamic>>
-      purchaseOrderReceiptIdempotency(
-    FirebaseFirestore firestore,
-    String storeId,
-  ) {
-    return store(firestore, storeId).collection(
-      'purchase_order_receipt_idempotency',
-    );
+  purchaseOrderReceiptIdempotency(FirebaseFirestore firestore, String storeId) {
+    return store(
+      firestore,
+      storeId,
+    ).collection('purchase_order_receipt_idempotency');
   }
 
   static CollectionReference<Map<String, dynamic>> purchaseIdempotency(
@@ -144,9 +143,7 @@ abstract final class FirebasePaths {
     FirebaseFirestore firestore,
     String storeId,
   ) {
-    return store(firestore, storeId).collection(
-      'account_transfer_idempotency',
-    );
+    return store(firestore, storeId).collection('account_transfer_idempotency');
   }
 
   static CollectionReference<Map<String, dynamic>> expenses(
@@ -191,14 +188,14 @@ abstract final class FirebasePaths {
     return store(firestore, storeId).collection('repair_payment_idempotency');
   }
 
-
   static CollectionReference<Map<String, dynamic>> chequeSettlementIdempotency(
     FirebaseFirestore firestore,
     String storeId,
   ) {
-    return store(firestore, storeId).collection(
-      'cheque_settlement_idempotency',
-    );
+    return store(
+      firestore,
+      storeId,
+    ).collection('cheque_settlement_idempotency');
   }
 
   static CollectionReference<Map<String, dynamic>> partyPaymentIdempotency(

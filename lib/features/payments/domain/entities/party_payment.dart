@@ -18,8 +18,8 @@ class PartyPayment {
     this.chequeNumber,
     this.bankName,
     DateTime? dueDate,
-  })  : postedAt = postedAt.toUtc(),
-        dueDate = dueDate?.toUtc() {
+  }) : postedAt = postedAt.toUtc(),
+       dueDate = dueDate?.toUtc() {
     _ensureSafeIdentifier(id, 'Party payment id');
     _ensureSafeIdentifier(storeId, 'Store id');
     _ensureSafeIdentifier(partyId, 'Party id');

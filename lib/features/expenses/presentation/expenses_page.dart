@@ -144,16 +144,17 @@ class _ExpensesPageState extends State<ExpensesPage> {
                         initialValue: _paymentMethod,
                         decoration: const InputDecoration(
                           labelText: 'طريقة الدفع',
-                          prefixIcon:
-                              Icon(Icons.account_balance_wallet_outlined),
+                          prefixIcon: Icon(
+                            Icons.account_balance_wallet_outlined,
+                          ),
                         ),
                         items: ExpensePaymentMethod.values
                             .map(
                               (method) =>
                                   DropdownMenuItem<ExpensePaymentMethod>(
-                                value: method,
-                                child: Text(method.arabicLabel),
-                              ),
+                                    value: method,
+                                    child: Text(method.arabicLabel),
+                                  ),
                             )
                             .toList(growable: false),
                         onChanged: _isPosting
@@ -192,9 +193,9 @@ class _ExpensesPageState extends State<ExpensesPage> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
@@ -258,10 +259,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
     final fraction = parts.length == 1 || parts[1].isEmpty
         ? 0
         : int.parse(parts[1].padRight(2, '0'));
-    return Money(
-      minorUnits: major * 100 + fraction,
-      currency: _currency,
-    );
+    return Money(minorUnits: major * 100 + fraction, currency: _currency);
   }
 
   Future<void> _postExpense() async {
@@ -298,8 +296,9 @@ class _ExpensesPageState extends State<ExpensesPage> {
       expenseAccountId: _expenseAccountId,
       amount: amount,
       tax: tax,
-      supplierId:
-          _paymentMethod == ExpensePaymentMethod.credit ? supplierId : null,
+      supplierId: _paymentMethod == ExpensePaymentMethod.credit
+          ? supplierId
+          : null,
       description: _descriptionController.text.trim().isEmpty
           ? null
           : _descriptionController.text.trim(),

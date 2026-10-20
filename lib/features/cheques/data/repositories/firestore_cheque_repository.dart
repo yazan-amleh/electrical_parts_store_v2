@@ -19,9 +19,9 @@ class FirestoreChequeRepository implements ChequeRepository {
     required FirebaseFirestore firestore,
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
-  })  : _firestore = firestore,
-        _functions = functions,
-        _commandQueue = commandQueue;
+  }) : _firestore = firestore,
+       _functions = functions,
+       _commandQueue = commandQueue;
 
   final FirebaseFirestore _firestore;
   final firebase_functions.FirebaseFunctions _functions;
@@ -37,13 +37,18 @@ class FirestoreChequeRepository implements ChequeRepository {
         _firestore,
         context.storeId,
       ).where('paymentMethod', isEqualTo: 'cheque').limit(500).get();
-      final cheques = snapshot.docs
-          .map(ChequeFirestoreMapper.fromSnapshot)
-          .where((cheque) =>
-              cheque.storeId == context.storeId &&
-              (status == null || cheque.status == status))
-          .toList()
-        ..sort((left, right) => right.receivedAt.compareTo(left.receivedAt));
+      final cheques =
+          snapshot.docs
+              .map(ChequeFirestoreMapper.fromSnapshot)
+              .where(
+                (cheque) =>
+                    cheque.storeId == context.storeId &&
+                    (status == null || cheque.status == status),
+              )
+              .toList()
+            ..sort(
+              (left, right) => right.receivedAt.compareTo(left.receivedAt),
+            );
       return Success<List<Cheque>>(cheques);
     } on FirebaseException catch (error) {
       return FailureResult<List<Cheque>>(
@@ -98,8 +103,8 @@ class FirestoreChequeRepository implements ChequeRepository {
       final statusName = data['status'] is String
           ? data['status'] as String
           : action == ChequeSettlementAction.clear
-              ? ChequeStatus.cleared.name
-              : ChequeStatus.bounced.name;
+          ? ChequeStatus.cleared.name
+          : ChequeStatus.bounced.name;
       final status = ChequeStatus.values.firstWhere(
         (candidate) => candidate.name == statusName,
         orElse: () => ChequeStatus.pending,

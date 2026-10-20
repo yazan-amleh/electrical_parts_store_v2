@@ -16,9 +16,9 @@ class FirestorePartyPaymentRepository implements PartyPaymentRepository {
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
     PartyPaymentPostingPlanner planner = const PartyPaymentPostingPlanner(),
-  })  : _functions = functions,
-        _planner = planner,
-        _commandQueue = commandQueue;
+  }) : _functions = functions,
+       _planner = planner,
+       _commandQueue = commandQueue;
 
   final firebase_functions.FirebaseFunctions _functions;
   final PartyPaymentPostingPlanner _planner;
@@ -89,9 +89,7 @@ class FirestorePartyPaymentRepository implements PartyPaymentRepository {
     }
   }
 
-  Failure _mapFailure(
-    firebase_functions.FirebaseFunctionsException error,
-  ) {
+  Failure _mapFailure(firebase_functions.FirebaseFunctionsException error) {
     switch (error.code) {
       case 'permission-denied':
       case 'unauthenticated':
@@ -100,9 +98,7 @@ class FirestorePartyPaymentRepository implements PartyPaymentRepository {
         );
       case 'invalid-argument':
       case 'failed-precondition':
-        return ValidationFailure(
-          error.message ?? 'Party payment is invalid.',
-        );
+        return ValidationFailure(error.message ?? 'Party payment is invalid.');
       case 'already-exists':
       case 'aborted':
         return ConflictFailure(

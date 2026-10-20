@@ -11,9 +11,8 @@ import '../../domain/repositories/party_ledger_repository.dart';
 import '../mappers/party_ledger_entry_firestore_mapper.dart';
 
 class FirestorePartyLedgerRepository implements PartyLedgerRepository {
-  FirestorePartyLedgerRepository({
-    required FirebaseFirestore firestore,
-  }) : _firestore = firestore;
+  FirestorePartyLedgerRepository({required FirebaseFirestore firestore})
+    : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 
@@ -38,14 +37,12 @@ class FirestorePartyLedgerRepository implements PartyLedgerRepository {
     }
 
     try {
-      Query<Map<String, dynamic>> query = FirebasePaths.partyLedgerEntries(
-        _firestore,
-        context.storeId,
-      )
-          .where('partyType', isEqualTo: partyType.name)
-          .where('partyId', isEqualTo: partyId)
-          .orderBy('postedAt')
-          .limit(limit);
+      Query<Map<String, dynamic>> query =
+          FirebasePaths.partyLedgerEntries(_firestore, context.storeId)
+              .where('partyType', isEqualTo: partyType.name)
+              .where('partyId', isEqualTo: partyId)
+              .orderBy('postedAt')
+              .limit(limit);
 
       if (from != null) {
         query = query.where(
@@ -106,14 +103,15 @@ class FirestorePartyLedgerRepository implements PartyLedgerRepository {
       }
 
       final data = snapshot.data() ?? const <String, dynamic>{};
-      final storedCurrency =
-          data['currency'] is String ? data['currency'] as String : currency;
+      final storedCurrency = data['currency'] is String
+          ? data['currency'] as String
+          : currency;
       final rawBalance = data['balanceMinorUnits'];
       final balance = rawBalance is int
           ? rawBalance
           : rawBalance is num
-              ? rawBalance.toInt()
-              : 0;
+          ? rawBalance.toInt()
+          : 0;
       return Success<Money>(
         Money(minorUnits: balance, currency: storedCurrency),
       );
@@ -122,9 +120,7 @@ class FirestorePartyLedgerRepository implements PartyLedgerRepository {
         InfrastructureFailure(error.message ?? error.code),
       );
     } catch (error) {
-      return FailureResult<Money>(
-        InfrastructureFailure(error.toString()),
-      );
+      return FailureResult<Money>(InfrastructureFailure(error.toString()));
     }
   }
 }

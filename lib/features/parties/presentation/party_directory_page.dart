@@ -440,7 +440,10 @@ class _PartyEditorDialogState extends State<_PartyEditorDialog> {
               _field(_nameController, 'الاسم', Icons.person_outline),
               _field(_phoneController, 'الهاتف', Icons.phone_outlined),
               _field(
-                  _emailController, 'البريد الإلكتروني', Icons.email_outlined),
+                _emailController,
+                'البريد الإلكتروني',
+                Icons.email_outlined,
+              ),
               _field(
                 _addressController,
                 'العنوان',
@@ -472,9 +475,7 @@ class _PartyEditorDialogState extends State<_PartyEditorDialog> {
               if (_errorMessage != null)
                 Text(
                   _errorMessage!,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
             ],
           ),
@@ -509,10 +510,7 @@ class _PartyEditorDialogState extends State<_PartyEditorDialog> {
             ? const TextInputType.numberWithOptions(decimal: true)
             : null,
         maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon),
-        ),
+        decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
       ),
     );
   }
@@ -550,7 +548,8 @@ class _PartyEditorDialogState extends State<_PartyEditorDialog> {
     try {
       final existing = widget.initialParty;
       final party = Party(
-        id: existing?.id ??
+        id:
+            existing?.id ??
             ['party-', DateTime.now().microsecondsSinceEpoch].join(),
         storeId: widget.storeId,
         type: widget.type,

@@ -1,8 +1,4 @@
-enum AppEnvironment {
-  development,
-  staging,
-  production,
-}
+enum AppEnvironment { development, staging, production }
 
 class AppRuntimeConfig {
   const AppRuntimeConfig({
@@ -24,18 +20,12 @@ class AppRuntimeConfig {
 
     return AppRuntimeConfig(
       environment: environment,
-      useFirebase: bool.fromEnvironment(
-        'USE_FIREBASE',
-        defaultValue: false,
-      ),
+      useFirebase: bool.fromEnvironment('USE_FIREBASE', defaultValue: false),
       firebaseProjectId: String.fromEnvironment(
         'FIREBASE_PROJECT_ID',
         defaultValue: '',
       ),
-      storeId: String.fromEnvironment(
-        'STORE_ID',
-        defaultValue: '',
-      ),
+      storeId: String.fromEnvironment('STORE_ID', defaultValue: ''),
     );
   }
 

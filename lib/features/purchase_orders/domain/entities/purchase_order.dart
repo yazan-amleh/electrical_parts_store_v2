@@ -16,9 +16,9 @@ class PurchaseOrder {
     this.notes,
     this.receiptId,
     DateTime? completedAt,
-  })  : orderedAt = orderedAt.toUtc(),
-        lines = List.unmodifiable(lines),
-        completedAt = completedAt?.toUtc() {
+  }) : orderedAt = orderedAt.toUtc(),
+       lines = List.unmodifiable(lines),
+       completedAt = completedAt?.toUtc() {
     _ensureIdentifier(id, 'Purchase order id');
     _ensureIdentifier(storeId, 'Purchase order store id');
     _ensureIdentifier(supplierId, 'Purchase order supplier id');

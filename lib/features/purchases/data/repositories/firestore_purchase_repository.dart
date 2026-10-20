@@ -16,9 +16,9 @@ class FirestorePurchaseRepository implements PurchaseRepository {
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
     PurchasePostingPlanner planner = const PurchasePostingPlanner(),
-  })  : _functions = functions,
-        _planner = planner,
-        _commandQueue = commandQueue;
+  }) : _functions = functions,
+       _planner = planner,
+       _commandQueue = commandQueue;
 
   final firebase_functions.FirebaseFunctions _functions;
   final PurchasePostingPlanner _planner;
@@ -44,10 +44,7 @@ class FirestorePurchaseRepository implements PurchaseRepository {
     try {
       final callable = _functions.httpsCallable('postPurchase');
       final response = await callable.call<Map<String, dynamic>>(
-        PurchaseCommandMapper.toRequest(
-          purchase: purchase,
-          accounts: accounts,
-        ),
+        PurchaseCommandMapper.toRequest(purchase: purchase, accounts: accounts),
       );
       final data = response.data;
       if (data['purchaseId'] != purchase.id) {
@@ -89,9 +86,7 @@ class FirestorePurchaseRepository implements PurchaseRepository {
     }
   }
 
-  Failure _mapFailure(
-    firebase_functions.FirebaseFunctionsException error,
-  ) {
+  Failure _mapFailure(firebase_functions.FirebaseFunctionsException error) {
     switch (error.code) {
       case 'permission-denied':
       case 'unauthenticated':

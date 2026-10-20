@@ -26,9 +26,7 @@ class FirestoreAccountingAuditRepository implements AccountingAuditRepository {
     try {
       final response = await _functions
           .httpsCallable('auditAccountingIntegrity')
-          .call<Map<String, dynamic>>({
-        'storeId': context.storeId,
-      });
+          .call<Map<String, dynamic>>({'storeId': context.storeId});
       return Success<AccountingAuditReport>(
         AccountingAuditReport.fromMap(response.data),
       );

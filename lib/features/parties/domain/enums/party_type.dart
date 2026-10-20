@@ -1,4 +1,1 @@
-enum PartyType {
-  customer,
-  supplier,
-}
+enum PartyType { customer, supplier }

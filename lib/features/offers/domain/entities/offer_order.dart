@@ -20,10 +20,10 @@ class OfferOrder {
     this.journalEntryId,
     this.paymentMethod,
     this.confirmedAt,
-  })  : lines = List.unmodifiable(lines),
-        createdAt = createdAt.toUtc(),
-        globalDiscount = globalDiscount ?? const Money.zero(),
-        idempotencyKey = IdempotencyKey(id) {
+  }) : lines = List.unmodifiable(lines),
+       createdAt = createdAt.toUtc(),
+       globalDiscount = globalDiscount ?? const Money.zero(),
+       idempotencyKey = IdempotencyKey(id) {
     _ensureIdentifier(id, 'Offer order id');
     _ensureIdentifier(storeId, 'Offer order store id');
     _ensureIdentifier(orderNumber, 'Offer order number');
@@ -68,9 +68,9 @@ class OfferOrder {
   String get currency => lines.first.currency;
 
   Money get lineFinalTotal => lines.fold(
-        Money.zero(currency: currency),
-        (total, line) => total + line.finalTotal,
-      );
+    Money.zero(currency: currency),
+    (total, line) => total + line.finalTotal,
+  );
 
   Money get total => lineFinalTotal - globalDiscount;
 

@@ -57,10 +57,8 @@ class _OffersPageState extends State<OffersPage> {
   bool _isLoading = true;
   String? _errorMessage;
 
-  StoreContext get _context => StoreContext(
-        storeId: widget.membership.storeId,
-        userId: widget.user.id,
-      );
+  StoreContext get _context =>
+      StoreContext(storeId: widget.membership.storeId, userId: widget.user.id);
 
   @override
   void initState() {
@@ -189,10 +187,10 @@ class _OffersPageState extends State<OffersPage> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _errorMessage != null
-                    ? _buildError()
-                    : _showOrders
-                        ? _buildOrders(orders)
-                        : _buildOffers(offers),
+                ? _buildError()
+                : _showOrders
+                ? _buildOrders(orders)
+                : _buildOffers(offers),
           ),
         ],
       ),
@@ -403,8 +401,9 @@ class _OffersPageState extends State<OffersPage> {
       return;
     }
     final customers = (parties as Success<List<Party>>).value;
-    final activeOffers =
-        _offers.where((offer) => offer.isCurrentlyActive).toList();
+    final activeOffers = _offers
+        .where((offer) => offer.isCurrentlyActive)
+        .toList();
     if (activeOffers.isEmpty || customers.isEmpty) {
       _showMessage('يلزم وجود عرض نشط وعميل واحد على الأقل.');
       return;
@@ -421,8 +420,10 @@ class _OffersPageState extends State<OffersPage> {
     if (order == null || !mounted) {
       return;
     }
-    final saveResult =
-        await repository.createOfferOrder(context: _context, order: order);
+    final saveResult = await repository.createOfferOrder(
+      context: _context,
+      order: order,
+    );
     if (!mounted) {
       return;
     }
@@ -610,8 +611,8 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
             : Money(
                 minorUnits:
                     product.wholesalePrice.minorUnits > original.minorUnits
-                        ? original.minorUnits
-                        : product.wholesalePrice.minorUnits,
+                    ? original.minorUnits
+                    : product.wholesalePrice.minorUnits,
                 currency: original.currency,
               );
         _selected[product.id] = _OfferDraft(
@@ -643,7 +644,8 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
           throw ArgumentError('تحقق من أسعار العرض.');
         }
         final quantity = Quantity.fromString(
-            draft.quantityController.text.replaceAll(',', '.'));
+          draft.quantityController.text.replaceAll(',', '.'),
+        );
         lines.add(
           OfferLine(
             id: 'offer-line-${draft.product.id}',
@@ -660,7 +662,8 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
           ),
         );
       }
-      final discount = _parseMoney(_globalDiscountController.text, _currency) ??
+      final discount =
+          _parseMoney(_globalDiscountController.text, _currency) ??
           Money.zero(currency: _currency);
       final stamp = DateTime.now().microsecondsSinceEpoch;
       final offer = Offer(
@@ -682,8 +685,12 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
         Navigator.pop(context, offer);
       }
     } catch (error) {
-      setState(() => _errorMessage =
-          error.toString().replaceFirst('Invalid argument(s): ', ''));
+      setState(
+        () => _errorMessage = error.toString().replaceFirst(
+          'Invalid argument(s): ',
+          '',
+        ),
+      );
     }
   }
 
@@ -719,8 +726,9 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
               ),
               TextField(
                 controller: _globalDiscountController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(
                   labelText: 'خصم إضافي على كامل العرض',
                 ),
@@ -756,8 +764,9 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
                     _errorMessage!,
-                    style:
-                        TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                 ),
             ],
@@ -769,10 +778,7 @@ class _CreateOfferDialogState extends State<_CreateOfferDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('إلغاء'),
         ),
-        FilledButton(
-          onPressed: _save,
-          child: const Text('حفظ'),
-        ),
+        FilledButton(onPressed: _save, child: const Text('حفظ')),
       ],
     );
   }
@@ -794,10 +800,10 @@ class _OfferDraft {
     required this.product,
     required Money finalPrice,
     required this.priceType,
-  })  : priceController = TextEditingController(
-          text: (finalPrice.minorUnits / 100).toStringAsFixed(2),
-        ),
-        quantityController = TextEditingController(text: '1');
+  }) : priceController = TextEditingController(
+         text: (finalPrice.minorUnits / 100).toStringAsFixed(2),
+       ),
+       quantityController = TextEditingController(text: '1');
 
   final Product product;
   final TextEditingController priceController;
@@ -833,8 +839,9 @@ class _OfferDraftEditor extends StatelessWidget {
               width: 100,
               child: TextField(
                 controller: draft.quantityController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(labelText: 'الكمية'),
                 onChanged: (_) => onChanged(),
               ),
@@ -844,8 +851,9 @@ class _OfferDraftEditor extends StatelessWidget {
               width: 130,
               child: TextField(
                 controller: draft.priceController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: InputDecoration(labelText: 'السعر $currency'),
                 onChanged: (_) => onChanged(),
               ),
@@ -861,10 +869,7 @@ class _OfferDraftEditor extends StatelessWidget {
               },
               items: [
                 for (final type in OfferPriceType.values)
-                  DropdownMenuItem(
-                    value: type,
-                    child: Text(type.arabicLabel),
-                  ),
+                  DropdownMenuItem(value: type, child: Text(type.arabicLabel)),
               ],
             ),
           ],
@@ -955,10 +960,7 @@ class _CreateOfferOrderDialogState extends State<_CreateOfferOrderDialog> {
             decoration: const InputDecoration(labelText: 'العميل'),
             items: [
               for (final customer in widget.customers)
-                DropdownMenuItem(
-                  value: customer,
-                  child: Text(customer.name),
-                ),
+                DropdownMenuItem(value: customer, child: Text(customer.name)),
             ],
             onChanged: (value) => setState(() => _customer = value),
           ),
@@ -976,10 +978,7 @@ class _CreateOfferOrderDialogState extends State<_CreateOfferOrderDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('إلغاء'),
         ),
-        FilledButton(
-          onPressed: _save,
-          child: const Text('إنشاء'),
-        ),
+        FilledButton(onPressed: _save, child: const Text('إنشاء')),
       ],
     );
   }
@@ -1003,12 +1002,10 @@ Money? _parseMoney(String raw, String currency) {
       (fractionText.isNotEmpty && int.tryParse(fractionText) == null)) {
     return null;
   }
-  final fraction =
-      fractionText.isEmpty ? 0 : int.parse(fractionText.padRight(2, '0'));
-  return Money(
-    minorUnits: major * 100 + fraction,
-    currency: currency,
-  );
+  final fraction = fractionText.isEmpty
+      ? 0
+      : int.parse(fractionText.padRight(2, '0'));
+  return Money(minorUnits: major * 100 + fraction, currency: currency);
 }
 
 extension on SalePaymentMethod {

@@ -37,10 +37,7 @@ abstract final class OfferCommandMapper {
     required String storeId,
     required String offerId,
   }) {
-    return <String, dynamic>{
-      'storeId': storeId,
-      'offerId': offerId,
-    };
+    return <String, dynamic>{'storeId': storeId, 'offerId': offerId};
   }
 
   static Map<String, dynamic> createOrderRequest(OfferOrder order) {
@@ -83,10 +80,7 @@ abstract final class OfferCommandMapper {
     required String storeId,
     required String orderId,
   }) {
-    return <String, dynamic>{
-      'storeId': storeId,
-      'orderId': orderId,
-    };
+    return <String, dynamic>{'storeId': storeId, 'orderId': orderId};
   }
 
   static Map<String, dynamic> _offerMap(Offer offer) {

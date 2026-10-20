@@ -50,10 +50,7 @@ class PartyPaymentPostingPlanner {
       final entry = JournalEntry(
         id: _lineId(payment.id, 'journal'),
         storeId: payment.storeId,
-        idempotencyKey: _scopeKey(
-          payment.idempotencyKey.value,
-          'journal',
-        ),
+        idempotencyKey: _scopeKey(payment.idempotencyKey.value, 'journal'),
         postedAt: payment.postedAt,
         sourceType: payment.sourceType,
         description: payment.description,

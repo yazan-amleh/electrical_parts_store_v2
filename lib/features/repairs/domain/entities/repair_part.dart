@@ -40,8 +40,7 @@ class RepairPart {
 
   static Money _multiply(Money amount, Quantity quantity) {
     final numerator = amount.minorUnits * quantity.milliUnits;
-    final minorUnits =
-        (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
+    final minorUnits = (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
     return Money(minorUnits: minorUnits, currency: amount.currency);
   }
 

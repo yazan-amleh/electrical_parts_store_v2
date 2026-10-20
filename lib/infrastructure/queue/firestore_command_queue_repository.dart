@@ -9,9 +9,8 @@ import '../firebase/firebase_paths.dart';
 import 'queued_command_firestore_mapper.dart';
 
 class FirestoreCommandQueueRepository implements CommandQueueRepository {
-  FirestoreCommandQueueRepository({
-    required FirebaseFirestore firestore,
-  }) : _firestore = firestore;
+  FirestoreCommandQueueRepository({required FirebaseFirestore firestore})
+    : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 
@@ -33,9 +32,7 @@ class FirestoreCommandQueueRepository implements CommandQueueRepository {
       await FirebasePaths.commandOutbox(
         _firestore,
         context.storeId,
-      ).doc(command.id).set(
-            QueuedCommandFirestoreMapper.toMap(command),
-          );
+      ).doc(command.id).set(QueuedCommandFirestoreMapper.toMap(command));
       return Success<QueuedCommand>(command);
     } on FirebaseException catch (error) {
       return FailureResult<QueuedCommand>(
@@ -61,21 +58,19 @@ class FirestoreCommandQueueRepository implements CommandQueueRepository {
     }
 
     try {
-      final snapshot = await FirebasePaths.commandOutbox(
-        _firestore,
-        context.storeId,
-      )
-          .where('createdBy', isEqualTo: context.userId)
-          .where(
-            'status',
-            whereIn: <String>[
-              QueuedCommandStatus.pending.name,
-              QueuedCommandStatus.processing.name,
-            ],
-          )
-          .orderBy('createdAt')
-          .limit(limit)
-          .get();
+      final snapshot =
+          await FirebasePaths.commandOutbox(_firestore, context.storeId)
+              .where('createdBy', isEqualTo: context.userId)
+              .where(
+                'status',
+                whereIn: <String>[
+                  QueuedCommandStatus.pending.name,
+                  QueuedCommandStatus.processing.name,
+                ],
+              )
+              .orderBy('createdAt')
+              .limit(limit)
+              .get();
 
       final currentTime = (now ?? DateTime.now()).toUtc();
       return Success<List<QueuedCommand>>(

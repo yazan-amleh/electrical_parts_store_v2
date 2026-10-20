@@ -4,9 +4,7 @@ import '../../domain/entities/account.dart';
 import '../../domain/enums/accounting_enums.dart';
 
 abstract final class AccountFirestoreMapper {
-  static Account fromSnapshot(
-    DocumentSnapshot<Map<String, dynamic>> snapshot,
-  ) {
+  static Account fromSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot) {
     final data = snapshot.data() ?? const <String, dynamic>{};
 
     return Account(
@@ -56,11 +54,7 @@ abstract final class AccountFirestoreMapper {
     };
   }
 
-  static T _enumValue<T extends Enum>(
-    Object? raw,
-    List<T> values,
-    T fallback,
-  ) {
+  static T _enumValue<T extends Enum>(Object? raw, List<T> values, T fallback) {
     final name = raw is String ? raw : '';
     return values.firstWhere(
       (value) => value.name == name,
@@ -76,7 +70,7 @@ abstract final class AccountFirestoreMapper {
     return value is int
         ? value
         : value is num
-            ? value.toInt()
-            : fallback;
+        ? value.toInt()
+        : fallback;
   }
 }

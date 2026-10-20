@@ -37,21 +37,21 @@ class RepairRequest {
     this.invoiceJournalEntryId,
     Money? invoicedTotal,
     Money? costOfParts,
-  })  : createdAt = createdAt.toUtc(),
-        receivedAt = receivedAt.toUtc(),
-        expectedDeliveryDate = expectedDeliveryDate.toUtc(),
-        completedAt = completedAt?.toUtc(),
-        actualDeliveryDate = actualDeliveryDate?.toUtc(),
-        estimatedCost = estimatedCost ?? Money.zero(),
-        laborCost = laborCost ?? Money.zero(),
-        parts = List.unmodifiable(parts),
-        requiredParts = List.unmodifiable(requiredParts),
-        requiredPartsStatus = Map.unmodifiable(requiredPartsStatus),
-        deviceImages = List.unmodifiable(deviceImages),
-        advancePaid = advancePaid ?? Money.zero(),
-        paid = paid ?? Money.zero(),
-        invoicedTotal = invoicedTotal ?? Money.zero(),
-        costOfParts = costOfParts ?? Money.zero() {
+  }) : createdAt = createdAt.toUtc(),
+       receivedAt = receivedAt.toUtc(),
+       expectedDeliveryDate = expectedDeliveryDate.toUtc(),
+       completedAt = completedAt?.toUtc(),
+       actualDeliveryDate = actualDeliveryDate?.toUtc(),
+       estimatedCost = estimatedCost ?? Money.zero(),
+       laborCost = laborCost ?? Money.zero(),
+       parts = List.unmodifiable(parts),
+       requiredParts = List.unmodifiable(requiredParts),
+       requiredPartsStatus = Map.unmodifiable(requiredPartsStatus),
+       deviceImages = List.unmodifiable(deviceImages),
+       advancePaid = advancePaid ?? Money.zero(),
+       paid = paid ?? Money.zero(),
+       invoicedTotal = invoicedTotal ?? Money.zero(),
+       costOfParts = costOfParts ?? Money.zero() {
     _ensureIdentifier(id, 'Repair id');
     _ensureIdentifier(storeId, 'Repair store id');
     _ensureIdentifier(customerId, 'Repair customer id');
@@ -142,7 +142,8 @@ class RepairRequest {
   }
 
   bool get isInvoiced => invoiceJournalEntryId != null;
-  bool get isPaid => !invoicedTotal.isZero && paid.minorUnits >= invoicedTotal.minorUnits;
+  bool get isPaid =>
+      !invoicedTotal.isZero && paid.minorUnits >= invoicedTotal.minorUnits;
 
   RepairRequest copyWith({
     String? id,
@@ -185,8 +186,7 @@ class RepairRequest {
       problemDescription: problemDescription ?? this.problemDescription,
       createdAt: createdAt ?? this.createdAt,
       receivedAt: receivedAt ?? this.receivedAt,
-      expectedDeliveryDate:
-          expectedDeliveryDate ?? this.expectedDeliveryDate,
+      expectedDeliveryDate: expectedDeliveryDate ?? this.expectedDeliveryDate,
       status: status ?? this.status,
       estimatedCost: estimatedCost ?? this.estimatedCost,
       laborCost: laborCost ?? this.laborCost,
@@ -195,11 +195,9 @@ class RepairRequest {
       serialNumber: serialNumber ?? this.serialNumber,
       priority: priority ?? this.priority,
       deviceCondition: deviceCondition ?? this.deviceCondition,
-      deviceConditionNotes:
-          deviceConditionNotes ?? this.deviceConditionNotes,
+      deviceConditionNotes: deviceConditionNotes ?? this.deviceConditionNotes,
       requiredParts: requiredParts ?? this.requiredParts,
-      requiredPartsStatus:
-          requiredPartsStatus ?? this.requiredPartsStatus,
+      requiredPartsStatus: requiredPartsStatus ?? this.requiredPartsStatus,
       deviceImages: deviceImages ?? this.deviceImages,
       completedAt: completedAt ?? this.completedAt,
       actualDeliveryDate: actualDeliveryDate ?? this.actualDeliveryDate,

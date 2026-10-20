@@ -20,9 +20,7 @@ class ExpensePostingPlanner {
   }) {
     if (expense.storeId != context.storeId) {
       return const FailureResult<ExpensePostingPlan>(
-        AuthorizationFailure(
-          'Expense does not belong to the active store.',
-        ),
+        AuthorizationFailure('Expense does not belong to the active store.'),
       );
     }
 
@@ -67,10 +65,7 @@ class ExpensePostingPlanner {
       final entry = JournalEntry(
         id: _lineId(expense.id, 'journal'),
         storeId: expense.storeId,
-        idempotencyKey: _scopeKey(
-          expense.idempotencyKey.value,
-          'journal',
-        ),
+        idempotencyKey: _scopeKey(expense.idempotencyKey.value, 'journal'),
         postedAt: expense.postedAt,
         sourceType: expense.sourceType,
         description: expense.description,

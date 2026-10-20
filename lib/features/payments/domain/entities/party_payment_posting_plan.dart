@@ -28,9 +28,7 @@ class PartyPaymentPostingAccounts {
         throw ArgumentError('Party payment account id is required.');
       }
       if (accountId.contains('/')) {
-        throw ArgumentError(
-          'Party payment account id cannot contain a slash.',
-        );
+        throw ArgumentError('Party payment account id cannot contain a slash.');
       }
     }
   }

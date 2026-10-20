@@ -139,10 +139,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'تسجيل حركة',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('تسجيل حركة', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
             DropdownButtonFormField<Product>(
               initialValue: product,
@@ -212,14 +209,8 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
                   prefixIcon: Icon(Icons.compare_arrows_outlined),
                 ),
                 items: const [
-                  DropdownMenuItem(
-                    value: true,
-                    child: Text('زيادة الكمية'),
-                  ),
-                  DropdownMenuItem(
-                    value: false,
-                    child: Text('نقصان الكمية'),
-                  ),
+                  DropdownMenuItem(value: true, child: Text('زيادة الكمية')),
+                  DropdownMenuItem(value: false, child: Text('نقصان الكمية')),
                 ],
                 onChanged: _isPosting
                     ? null
@@ -281,9 +272,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
               const SizedBox(height: 8),
               Text(
                 _errorMessage!,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                ),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
             const SizedBox(height: 12),
@@ -325,10 +314,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'آخر الحركات',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
+            Text('آخر الحركات', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             for (final movement in _movements)
               ListTile(
@@ -343,7 +329,8 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
                 ),
                 title: Text(_movementTypeLabel(movement.type)),
                 subtitle: Text(
-                    "${_dateLabel(movement.occurredAt)} • ${movement.sourceType.isEmpty ? 'حركة يدوية' : movement.sourceType}"),
+                  "${_dateLabel(movement.occurredAt)} • ${movement.sourceType.isEmpty ? 'حركة يدوية' : movement.sourceType}",
+                ),
                 trailing: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -458,7 +445,8 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
       return;
     }
 
-    final direction = _movementType == InventoryMovementType.purchaseReturn ||
+    final direction =
+        _movementType == InventoryMovementType.purchaseReturn ||
             (_movementType == InventoryMovementType.adjustment &&
                 !_increaseOnAdjustment)
         ? -1

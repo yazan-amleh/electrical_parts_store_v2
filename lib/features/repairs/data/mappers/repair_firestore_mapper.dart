@@ -22,27 +22,27 @@ abstract final class RepairFirestoreMapper {
     final rawParts = data['parts'];
     final parts = rawParts is List
         ? rawParts
-            .whereType<Map<Object?, Object?>>()
-            .map(
-              (raw) => RepairPart(
-                id: _string(raw['id'], 'part-$id'),
-                productId: _string(raw['productId']),
-                productName: _string(raw['productName']),
-                quantity: Quantity.fromMilliUnits(
-                  _int(raw['quantityMilliUnits']),
+              .whereType<Map<Object?, Object?>>()
+              .map(
+                (raw) => RepairPart(
+                  id: _string(raw['id'], 'part-$id'),
+                  productId: _string(raw['productId']),
+                  productName: _string(raw['productName']),
+                  quantity: Quantity.fromMilliUnits(
+                    _int(raw['quantityMilliUnits']),
+                  ),
+                  unitPrice: Money(
+                    minorUnits: _int(raw['unitPriceMinorUnits']),
+                    currency: _string(raw['currency'], currency),
+                  ),
+                  unitCost: Money(
+                    minorUnits: _int(raw['unitCostMinorUnits']),
+                    currency: _string(raw['currency'], currency),
+                  ),
+                  source: _string(raw['source'], 'products'),
                 ),
-                unitPrice: Money(
-                  minorUnits: _int(raw['unitPriceMinorUnits']),
-                  currency: _string(raw['currency'], currency),
-                ),
-                unitCost: Money(
-                  minorUnits: _int(raw['unitCostMinorUnits']),
-                  currency: _string(raw['currency'], currency),
-                ),
-                source: _string(raw['source'], 'products'),
-              ),
-            )
-            .toList(growable: false)
+              )
+              .toList(growable: false)
         : const <RepairPart>[];
 
     final rawRequiredStatus = data['requiredPartsStatus'];
@@ -55,15 +55,14 @@ abstract final class RepairFirestoreMapper {
     return RepairRequest(
       id: id,
       storeId: _string(data['storeId']),
-      idempotencyKey: IdempotencyKey(
-        _string(data['idempotencyKey'], id),
-      ),
+      idempotencyKey: IdempotencyKey(_string(data['idempotencyKey'], id)),
       customerId: _string(data['customerId']),
       deviceName: _string(data['deviceName']),
       deviceModel: _string(data['deviceModel']),
       problemDescription: _string(data['problemDescription']),
       createdAt: _date(data['createdAt']) ?? DateTime.now().toUtc(),
-      receivedAt: _date(data['receivedAt']) ??
+      receivedAt:
+          _date(data['receivedAt']) ??
           _date(data['createdAt']) ??
           DateTime.now().toUtc(),
       expectedDeliveryDate:
@@ -137,15 +136,8 @@ abstract final class RepairFirestoreMapper {
     );
   }
 
-  static Money _money(
-    Map<String, dynamic> data,
-    String key,
-    String currency,
-  ) {
-    return Money(
-      minorUnits: _int(data[key]),
-      currency: currency,
-    );
+  static Money _money(Map<String, dynamic> data, String key, String currency) {
+    return Money(minorUnits: _int(data[key]), currency: currency);
   }
 
   static List<String> _strings(Object? value) {
@@ -176,15 +168,11 @@ abstract final class RepairFirestoreMapper {
     return value is int
         ? value
         : value is num
-            ? value.toInt()
-            : 0;
+        ? value.toInt()
+        : 0;
   }
 
-  static T _enumValue<T extends Enum>(
-    List<T> values,
-    String name,
-    T fallback,
-  ) {
+  static T _enumValue<T extends Enum>(List<T> values, String name, T fallback) {
     return values.firstWhere(
       (candidate) => candidate.name == name,
       orElse: () => fallback,

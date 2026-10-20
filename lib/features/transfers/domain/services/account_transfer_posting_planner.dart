@@ -27,10 +27,7 @@ class AccountTransferPostingPlanner {
       final entry = JournalEntry(
         id: _lineId(transfer.id, 'journal'),
         storeId: transfer.storeId,
-        idempotencyKey: _scopeKey(
-          transfer.idempotencyKey.value,
-          'journal',
-        ),
+        idempotencyKey: _scopeKey(transfer.idempotencyKey.value, 'journal'),
         postedAt: transfer.postedAt,
         sourceType: transfer.sourceType,
         description: transfer.description,
@@ -53,10 +50,7 @@ class AccountTransferPostingPlanner {
       );
 
       return Success<AccountTransferPostingPlan>(
-        AccountTransferPostingPlan(
-          transfer: transfer,
-          journalEntry: entry,
-        ),
+        AccountTransferPostingPlan(transfer: transfer, journalEntry: entry),
       );
     } on ArgumentError catch (error) {
       return FailureResult<AccountTransferPostingPlan>(

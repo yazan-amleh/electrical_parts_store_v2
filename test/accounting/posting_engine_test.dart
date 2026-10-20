@@ -71,24 +71,16 @@ void main() {
   });
 
   test('does not post the same idempotency key twice', () async {
-    final repository = InMemoryAccountingRepository(
-      accounts: [cash, sales],
-    );
+    final repository = InMemoryAccountingRepository(accounts: [cash, sales]);
     const context = StoreContext(storeId: 'store-1', userId: 'user-1');
     final entry = saleEntry('entry-2');
 
     expect(
-      (await repository.postJournalEntry(
-        context: context,
-        entry: entry,
-      )),
+      (await repository.postJournalEntry(context: context, entry: entry)),
       isA<Success<JournalEntry>>(),
     );
     expect(
-      (await repository.postJournalEntry(
-        context: context,
-        entry: entry,
-      )),
+      (await repository.postJournalEntry(context: context, entry: entry)),
       isA<Success<JournalEntry>>(),
     );
 
@@ -134,10 +126,7 @@ void main() {
           ),
         ],
       ),
-      accounts: <String, Account>{
-        'other-cash': otherStoreCash,
-        'sales': sales,
-      },
+      accounts: <String, Account>{'other-cash': otherStoreCash, 'sales': sales},
     );
 
     expect(result, isA<FailureResult<PostingResult>>());

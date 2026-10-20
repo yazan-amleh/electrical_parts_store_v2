@@ -9,9 +9,8 @@ import '../../domain/repositories/category_repository.dart';
 import '../mappers/category_firestore_mapper.dart';
 
 class FirestoreCategoryRepository implements CategoryRepository {
-  FirestoreCategoryRepository({
-    required FirebaseFirestore firestore,
-  }) : _firestore = firestore;
+  FirestoreCategoryRepository({required FirebaseFirestore firestore})
+    : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 
@@ -30,14 +29,15 @@ class FirestoreCategoryRepository implements CategoryRepository {
       }
 
       final snapshot = await query.get();
-      final categories = snapshot.docs
-          .map(CategoryFirestoreMapper.fromSnapshot)
-          .where((category) => category.storeId == context.storeId)
-          .toList()
-        ..sort((left, right) {
-          final order = left.sortOrder.compareTo(right.sortOrder);
-          return order == 0 ? left.name.compareTo(right.name) : order;
-        });
+      final categories =
+          snapshot.docs
+              .map(CategoryFirestoreMapper.fromSnapshot)
+              .where((category) => category.storeId == context.storeId)
+              .toList()
+            ..sort((left, right) {
+              final order = left.sortOrder.compareTo(right.sortOrder);
+              return order == 0 ? left.name.compareTo(right.name) : order;
+            });
       return Success<List<Category>>(categories);
     } on FirebaseException catch (error) {
       return FailureResult<List<Category>>(
@@ -77,54 +77,48 @@ class FirestoreCategoryRepository implements CategoryRepository {
     }
 
     try {
-      return await _firestore.runTransaction<Result<void>>(
-        (transaction) async {
-          final categoryReference = FirebasePaths.categories(
+      return await _firestore.runTransaction<Result<void>>((transaction) async {
+        final categoryReference = FirebasePaths.categories(
+          _firestore,
+          context.storeId,
+        ).doc(category.id);
+        final existingSnapshot = await transaction.get(categoryReference);
+        if (existingSnapshot.exists) {
+          final existing = CategoryFirestoreMapper.fromSnapshot(
+            existingSnapshot,
+          );
+          if (existing.storeId != context.storeId) {
+            return const FailureResult<void>(
+              AuthorizationFailure('Category belongs to another store.'),
+            );
+          }
+        }
+
+        if (category.parentId != null) {
+          final parentReference = FirebasePaths.categories(
             _firestore,
             context.storeId,
-          ).doc(category.id);
-          final existingSnapshot = await transaction.get(categoryReference);
-          if (existingSnapshot.exists) {
-            final existing = CategoryFirestoreMapper.fromSnapshot(
-              existingSnapshot,
+          ).doc(category.parentId);
+          final parentSnapshot = await transaction.get(parentReference);
+          if (!parentSnapshot.exists) {
+            return const FailureResult<void>(
+              ValidationFailure('Parent category was not found.'),
             );
-            if (existing.storeId != context.storeId) {
-              return const FailureResult<void>(
-                AuthorizationFailure(
-                  'Category belongs to another store.',
-                ),
-              );
-            }
           }
+        }
 
-          if (category.parentId != null) {
-            final parentReference = FirebasePaths.categories(
-              _firestore,
-              context.storeId,
-            ).doc(category.parentId);
-            final parentSnapshot = await transaction.get(parentReference);
-            if (!parentSnapshot.exists) {
-              return const FailureResult<void>(
-                ValidationFailure('Parent category was not found.'),
-              );
-            }
-          }
-
-          transaction.set(
-            categoryReference,
-            CategoryFirestoreMapper.toMap(category),
-          );
-          return const Success<void>(null);
-        },
-      );
+        transaction.set(
+          categoryReference,
+          CategoryFirestoreMapper.toMap(category),
+        );
+        return const Success<void>(null);
+      });
     } on FirebaseException catch (error) {
       return FailureResult<void>(
         InfrastructureFailure(error.message ?? error.code),
       );
     } catch (error) {
-      return FailureResult<void>(
-        InfrastructureFailure(error.toString()),
-      );
+      return FailureResult<void>(InfrastructureFailure(error.toString()));
     }
   }
 }

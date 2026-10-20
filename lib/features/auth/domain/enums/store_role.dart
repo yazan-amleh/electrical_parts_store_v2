@@ -1,11 +1,4 @@
-enum StoreRole {
-  owner,
-  admin,
-  accountant,
-  sales,
-  warehouse,
-  viewer,
-}
+enum StoreRole { owner, admin, accountant, sales, warehouse, viewer }
 
 extension StoreRoleCapabilities on StoreRole {
   bool get canManageStore {

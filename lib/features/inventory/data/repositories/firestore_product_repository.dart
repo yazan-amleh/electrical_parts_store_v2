@@ -9,9 +9,8 @@ import '../../domain/repositories/product_repository.dart';
 import '../mappers/product_firestore_mapper.dart';
 
 class FirestoreProductRepository implements ProductRepository {
-  FirestoreProductRepository({
-    required FirebaseFirestore firestore,
-  }) : _firestore = firestore;
+  FirestoreProductRepository({required FirebaseFirestore firestore})
+    : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 
@@ -76,9 +75,7 @@ class FirestoreProductRepository implements ProductRepository {
         InfrastructureFailure(error.message ?? error.code),
       );
     } catch (error) {
-      return FailureResult<Product>(
-        InfrastructureFailure(error.toString()),
-      );
+      return FailureResult<Product>(InfrastructureFailure(error.toString()));
     }
   }
 
@@ -99,56 +96,53 @@ class FirestoreProductRepository implements ProductRepository {
     }
 
     try {
-      return await _firestore.runTransaction<Result<void>>(
-        (transaction) async {
-          final productReference = FirebasePaths.products(
-            _firestore,
-            context.storeId,
-          ).doc(product.id);
-          final existingSnapshot = await transaction.get(productReference);
+      return await _firestore.runTransaction<Result<void>>((transaction) async {
+        final productReference = FirebasePaths.products(
+          _firestore,
+          context.storeId,
+        ).doc(product.id);
+        final existingSnapshot = await transaction.get(productReference);
 
-          if (existingSnapshot.exists) {
-            final existingProduct =
-                ProductFirestoreMapper.fromSnapshot(existingSnapshot);
-            if (existingProduct.storeId != context.storeId) {
-              return const FailureResult<void>(
-                AuthorizationFailure('Product belongs to another store.'),
-              );
-            }
-            if (existingProduct.quantityOnHand != product.quantityOnHand ||
-                existingProduct.inventoryValue != product.inventoryValue) {
-              return const FailureResult<void>(
-                ValidationFailure(
-                  'Stock and inventory value changes must be posted as '
-                  'inventory movements.',
-                ),
-              );
-            }
-          } else if (!product.quantityOnHand.isZero ||
-              !product.inventoryValue.isZero) {
+        if (existingSnapshot.exists) {
+          final existingProduct = ProductFirestoreMapper.fromSnapshot(
+            existingSnapshot,
+          );
+          if (existingProduct.storeId != context.storeId) {
+            return const FailureResult<void>(
+              AuthorizationFailure('Product belongs to another store.'),
+            );
+          }
+          if (existingProduct.quantityOnHand != product.quantityOnHand ||
+              existingProduct.inventoryValue != product.inventoryValue) {
             return const FailureResult<void>(
               ValidationFailure(
-                'Opening stock and value must be posted as an inventory '
-                'movement.',
+                'Stock and inventory value changes must be posted as '
+                'inventory movements.',
               ),
             );
           }
-
-          transaction.set(
-            productReference,
-            ProductFirestoreMapper.toMap(product),
+        } else if (!product.quantityOnHand.isZero ||
+            !product.inventoryValue.isZero) {
+          return const FailureResult<void>(
+            ValidationFailure(
+              'Opening stock and value must be posted as an inventory '
+              'movement.',
+            ),
           );
-          return const Success<void>(null);
-        },
-      );
+        }
+
+        transaction.set(
+          productReference,
+          ProductFirestoreMapper.toMap(product),
+        );
+        return const Success<void>(null);
+      });
     } on FirebaseException catch (error) {
       return FailureResult<void>(
         InfrastructureFailure(error.message ?? error.code),
       );
     } catch (error) {
-      return FailureResult<void>(
-        InfrastructureFailure(error.toString()),
-      );
+      return FailureResult<void>(InfrastructureFailure(error.toString()));
     }
   }
 }

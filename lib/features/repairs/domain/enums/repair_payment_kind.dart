@@ -1,7 +1,4 @@
-enum RepairPaymentKind {
-  advance,
-  settlement,
-}
+enum RepairPaymentKind { advance, settlement }
 
 extension RepairPaymentKindLabel on RepairPaymentKind {
   String get arabicLabel {

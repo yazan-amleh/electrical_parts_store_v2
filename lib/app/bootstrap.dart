@@ -28,9 +28,7 @@ import '../infrastructure/queue/firestore_command_queue_repository.dart';
 import 'app_dependencies.dart';
 
 abstract final class AppBootstrap {
-  static Future<AppDependencies> initialize({
-    AppRuntimeConfig? config,
-  }) async {
+  static Future<AppDependencies> initialize({AppRuntimeConfig? config}) async {
     final runtime = config ?? AppRuntimeConfig.fromEnvironment();
     if (!runtime.useFirebase) {
       return AppDependencies(runtime: runtime);
@@ -41,16 +39,10 @@ abstract final class AppBootstrap {
     }
 
     final firestore = FirebaseFirestore.instance;
-    final functions = FirebaseFunctions.instanceFor(
-      region: 'europe-west1',
-    );
-    final commandQueue = FirestoreCommandQueueRepository(
-      firestore: firestore,
-    );
+    final functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
+    final commandQueue = FirestoreCommandQueueRepository(firestore: firestore);
     final session = AuthSessionController(
-      authRepository: FirebaseAuthRepository(
-        auth: FirebaseAuth.instance,
-      ),
+      authRepository: FirebaseAuthRepository(auth: FirebaseAuth.instance),
       membershipRepository: FirestoreStoreMembershipRepository(
         firestore: firestore,
       ),
@@ -70,24 +62,21 @@ abstract final class AppBootstrap {
         functions: functions,
         commandQueue: commandQueue,
       ),
-      categoryRepository: FirestoreCategoryRepository(
-        firestore: firestore,
-      ),
+      categoryRepository: FirestoreCategoryRepository(firestore: firestore),
       chequeRepository: FirestoreChequeRepository(
         firestore: firestore,
         functions: functions,
         commandQueue: commandQueue,
       ),
-      accountingQueryRepository:
-          FirestoreAccountingQueryRepository(firestore: firestore),
+      accountingQueryRepository: FirestoreAccountingQueryRepository(
+        firestore: firestore,
+      ),
       inventoryRepository: FirestoreInventoryRepository(
         firestore: firestore,
         functions: functions,
         commandQueue: commandQueue,
       ),
-      productRepository: FirestoreProductRepository(
-        firestore: firestore,
-      ),
+      productRepository: FirestoreProductRepository(firestore: firestore),
       saleRepository: FirestoreSaleRepository(
         functions: functions,
         commandQueue: commandQueue,
@@ -114,9 +103,7 @@ abstract final class AppBootstrap {
         functions: functions,
         commandQueue: commandQueue,
       ),
-      partyRepository: FirestorePartyRepository(
-        firestore: firestore,
-      ),
+      partyRepository: FirestorePartyRepository(firestore: firestore),
       partyLedgerRepository: FirestorePartyLedgerRepository(
         firestore: firestore,
       ),

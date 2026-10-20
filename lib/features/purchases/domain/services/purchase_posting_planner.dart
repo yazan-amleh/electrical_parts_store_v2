@@ -66,10 +66,7 @@ class PurchasePostingPlanner {
       final entry = JournalEntry(
         id: _lineId(purchase.id, 'journal'),
         storeId: purchase.storeId,
-        idempotencyKey: _scopeKey(
-          purchase.idempotencyKey.value,
-          'journal',
-        ),
+        idempotencyKey: _scopeKey(purchase.idempotencyKey.value, 'journal'),
         postedAt: purchase.postedAt,
         sourceType: 'purchase',
         description: purchase.description,
@@ -87,10 +84,7 @@ class PurchasePostingPlanner {
               unitCost: line.unitCost,
               totalCost: line.total,
               idempotencyKey: IdempotencyKey(
-                _lineScopeKey(
-                  purchase.idempotencyKey.value,
-                  line.id,
-                ),
+                _lineScopeKey(purchase.idempotencyKey.value, line.id),
               ),
               sourceType: 'purchase',
               sourceId: purchase.id,

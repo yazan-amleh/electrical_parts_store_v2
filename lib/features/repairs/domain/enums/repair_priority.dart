@@ -1,9 +1,4 @@
-enum RepairPriority {
-  low,
-  normal,
-  high,
-  urgent,
-}
+enum RepairPriority { low, normal, high, urgent }
 
 extension RepairPriorityLabel on RepairPriority {
   String get arabicLabel {

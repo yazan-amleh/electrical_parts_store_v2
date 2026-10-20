@@ -19,9 +19,9 @@ class FirestoreAccountingRepository implements AccountingRepository {
     required FirebaseFirestore firestore,
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
-  })  : _firestore = firestore,
-        _functions = functions,
-        _commandQueue = commandQueue;
+  }) : _firestore = firestore,
+       _functions = functions,
+       _commandQueue = commandQueue;
 
   final FirebaseFirestore _firestore;
   final firebase_functions.FirebaseFunctions _functions;
@@ -41,9 +41,7 @@ class FirestoreAccountingRepository implements AccountingRepository {
     }
     if (entry.id.contains('/') || entry.idempotencyKey.contains('/')) {
       return const FailureResult<JournalEntry>(
-        ValidationFailure(
-          'Journal entry identifiers cannot contain a slash.',
-        ),
+        ValidationFailure('Journal entry identifiers cannot contain a slash.'),
       );
     }
 
@@ -76,9 +74,7 @@ class FirestoreAccountingRepository implements AccountingRepository {
         if (queueFailure != null) {
           return FailureResult<JournalEntry>(queueFailure);
         }
-        return FailureResult<JournalEntry>(
-          QueuedFailure(commandId: commandId),
-        );
+        return FailureResult<JournalEntry>(QueuedFailure(commandId: commandId));
       }
       return FailureResult<JournalEntry>(_mapFailure(error));
     } catch (error) {
@@ -108,9 +104,7 @@ class FirestoreAccountingRepository implements AccountingRepository {
       final account = AccountFirestoreMapper.fromSnapshot(accountSnapshot);
       if (account.storeId != context.storeId) {
         return const FailureResult<Money>(
-          AuthorizationFailure(
-            'Account does not belong to the active store.',
-          ),
+          AuthorizationFailure('Account does not belong to the active store.'),
         );
       }
 
@@ -127,25 +121,18 @@ class FirestoreAccountingRepository implements AccountingRepository {
           : -debitCreditBalance;
 
       return Success<Money>(
-        Money(
-          minorUnits: normalizedBalance,
-          currency: account.currency,
-        ),
+        Money(minorUnits: normalizedBalance, currency: account.currency),
       );
     } on FirebaseException catch (error) {
       return FailureResult<Money>(
         InfrastructureFailure(error.message ?? error.code),
       );
     } catch (error) {
-      return FailureResult<Money>(
-        InfrastructureFailure(error.toString()),
-      );
+      return FailureResult<Money>(InfrastructureFailure(error.toString()));
     }
   }
 
-  Failure _mapFailure(
-    firebase_functions.FirebaseFunctionsException error,
-  ) {
+  Failure _mapFailure(firebase_functions.FirebaseFunctionsException error) {
     switch (error.code) {
       case 'permission-denied':
       case 'unauthenticated':
@@ -154,9 +141,7 @@ class FirestoreAccountingRepository implements AccountingRepository {
         );
       case 'invalid-argument':
       case 'failed-precondition':
-        return ValidationFailure(
-          error.message ?? 'Journal entry is invalid.',
-        );
+        return ValidationFailure(error.message ?? 'Journal entry is invalid.');
       case 'already-exists':
       case 'aborted':
         return ConflictFailure(
@@ -171,7 +156,7 @@ class FirestoreAccountingRepository implements AccountingRepository {
     return value is int
         ? value
         : value is num
-            ? value.toInt()
-            : 0;
+        ? value.toInt()
+        : 0;
   }
 }

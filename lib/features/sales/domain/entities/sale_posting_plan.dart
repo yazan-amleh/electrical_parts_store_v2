@@ -67,9 +67,7 @@ class SalePostingAccounts {
 
     final accountId = settlementAccountId;
     if (accountId == null || accountId.trim().isEmpty) {
-      throw ArgumentError(
-        'A settlement account is required for paid sales.',
-      );
+      throw ArgumentError('A settlement account is required for paid sales.');
     }
     return accountId;
   }

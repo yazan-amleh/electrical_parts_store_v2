@@ -4,10 +4,7 @@ import 'account.dart';
 import 'trial_balance.dart';
 
 class FinancialStatementLine {
-  const FinancialStatementLine({
-    required this.account,
-    required this.amount,
-  });
+  const FinancialStatementLine({required this.account, required this.amount});
 
   final Account account;
   final Money amount;

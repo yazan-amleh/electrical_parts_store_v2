@@ -1,8 +1,4 @@
-enum PurchaseOrderStatus {
-  pending,
-  completed,
-  cancelled,
-}
+enum PurchaseOrderStatus { pending, completed, cancelled }
 
 PurchaseOrderStatus purchaseOrderStatusFromName(String? value) {
   return PurchaseOrderStatus.values.firstWhere(

@@ -24,10 +24,7 @@ abstract final class PurchaseOrderCommandMapper {
     required String storeId,
     required String orderId,
   }) {
-    return <String, dynamic>{
-      'storeId': storeId,
-      'orderId': orderId,
-    };
+    return <String, dynamic>{'storeId': storeId, 'orderId': orderId};
   }
 
   static Map<String, dynamic> receiveRequest({

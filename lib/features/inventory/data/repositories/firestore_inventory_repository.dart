@@ -19,9 +19,9 @@ class FirestoreInventoryRepository implements InventoryRepository {
     required FirebaseFirestore firestore,
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
-  })  : _firestore = firestore,
-        _functions = functions,
-        _commandQueue = commandQueue;
+  }) : _firestore = firestore,
+       _functions = functions,
+       _commandQueue = commandQueue;
 
   final FirebaseFirestore _firestore;
   final firebase_functions.FirebaseFunctions _functions;
@@ -116,9 +116,7 @@ class FirestoreInventoryRepository implements InventoryRepository {
         InfrastructureFailure(error.message ?? error.code),
       );
     } catch (error) {
-      return FailureResult<Quantity>(
-        InfrastructureFailure(error.toString()),
-      );
+      return FailureResult<Quantity>(InfrastructureFailure(error.toString()));
     }
   }
 
@@ -131,7 +129,8 @@ class FirestoreInventoryRepository implements InventoryRepository {
     if (limit <= 0 || limit > 500) {
       return const FailureResult<List<InventoryMovement>>(
         ValidationFailure(
-            'Inventory movement limit must be between 1 and 500.'),
+          'Inventory movement limit must be between 1 and 500.',
+        ),
       );
     }
 
@@ -163,9 +162,7 @@ class FirestoreInventoryRepository implements InventoryRepository {
     }
   }
 
-  Failure _mapFailure(
-    firebase_functions.FirebaseFunctionsException error,
-  ) {
+  Failure _mapFailure(firebase_functions.FirebaseFunctionsException error) {
     switch (error.code) {
       case 'permission-denied':
       case 'unauthenticated':

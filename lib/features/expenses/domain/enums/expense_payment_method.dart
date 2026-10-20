@@ -1,6 +1,1 @@
-enum ExpensePaymentMethod {
-  cash,
-  bank,
-  card,
-  credit,
-}
+enum ExpensePaymentMethod { cash, bank, card, credit }

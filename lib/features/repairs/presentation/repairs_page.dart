@@ -47,10 +47,8 @@ class _RepairsPageState extends State<RepairsPage> {
   Future<Result<List<RepairRequest>>>? _future;
   RepairStatus? _filter;
 
-  StoreContext get _storeContext => StoreContext(
-        storeId: widget.membership.storeId,
-        userId: widget.user.id,
-      );
+  StoreContext get _storeContext =>
+      StoreContext(storeId: widget.membership.storeId, userId: widget.user.id);
 
   @override
   void initState() {
@@ -63,10 +61,7 @@ class _RepairsPageState extends State<RepairsPage> {
     if (repository == null) {
       return;
     }
-    _future = repository.getRepairs(
-      context: _storeContext,
-      status: _filter,
-    );
+    _future = repository.getRepairs(context: _storeContext, status: _filter);
     if (mounted) {
       setState(() {});
     }
@@ -151,7 +146,9 @@ class _RepairsPageState extends State<RepairsPage> {
   @override
   Widget build(BuildContext context) {
     if (widget.repository == null) {
-      return const Center(child: Text('وحدة الصيانة غير مربوطة بمصدر البيانات.'));
+      return const Center(
+        child: Text('وحدة الصيانة غير مربوطة بمصدر البيانات.'),
+      );
     }
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -178,7 +175,10 @@ class _RepairsPageState extends State<RepairsPage> {
             SizedBox(
               height: 56,
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 scrollDirection: Axis.horizontal,
                 children: [
                   ChoiceChip(
@@ -219,7 +219,8 @@ class _RepairsPageState extends State<RepairsPage> {
                   if (result is FailureResult<List<RepairRequest>>) {
                     return Center(child: Text(result.failure.message));
                   }
-                  final repairs = (result as Success<List<RepairRequest>>).value;
+                  final repairs =
+                      (result as Success<List<RepairRequest>>).value;
                   if (repairs.isEmpty) {
                     return const Center(
                       child: Text('لا توجد طلبات صيانة بهذه الحالة.'),
@@ -345,10 +346,12 @@ class _RepairDialogState extends State<_RepairDialog> {
   }
 
   Future<void> _status(RepairStatus next) async {
-    final result = await _run(() => widget.repository.updateRepair(
-          context: widget.storeContext,
-          repair: _repair.copyWith(status: next),
-        ));
+    final result = await _run(
+      () => widget.repository.updateRepair(
+        context: widget.storeContext,
+        repair: _repair.copyWith(status: next),
+      ),
+    );
     if (!mounted || result == null) {
       return;
     }
@@ -387,10 +390,12 @@ class _RepairDialogState extends State<_RepairDialog> {
     if (part == null || !mounted) {
       return;
     }
-    final updated = await _run(() => widget.repository.updateRepair(
-          context: widget.storeContext,
-          repair: _repair.copyWith(parts: [..._repair.parts, part]),
-        ));
+    final updated = await _run(
+      () => widget.repository.updateRepair(
+        context: widget.storeContext,
+        repair: _repair.copyWith(parts: [..._repair.parts, part]),
+      ),
+    );
     if (mounted && updated is Success<RepairRequest>) {
       setState(() => _repair = updated.value);
     }
@@ -418,11 +423,13 @@ class _RepairDialogState extends State<_RepairDialog> {
     if (payment == null || !mounted) {
       return;
     }
-    final result = await _run(() => widget.repository.postPayment(
-          context: widget.storeContext,
-          payment: payment,
-          accounts: const RepairPostingAccounts(),
-        ));
+    final result = await _run(
+      () => widget.repository.postPayment(
+        context: widget.storeContext,
+        payment: payment,
+        accounts: const RepairPostingAccounts(),
+      ),
+    );
     if (mounted && result is Success<RepairPayment>) {
       await _reload();
     }
@@ -432,13 +439,15 @@ class _RepairDialogState extends State<_RepairDialog> {
     if (_repair.isInvoiced || _repair.status == RepairStatus.cancelled) {
       return;
     }
-    final result = await _run(() => widget.repository.deliverRepair(
-          context: widget.storeContext,
-          repairId: _repair.id,
-          idempotencyKey: 'repair-delivery-${_repair.id}',
-          postedAt: DateTime.now().toUtc(),
-          accounts: const RepairPostingAccounts(),
-        ));
+    final result = await _run(
+      () => widget.repository.deliverRepair(
+        context: widget.storeContext,
+        repairId: _repair.id,
+        idempotencyKey: 'repair-delivery-${_repair.id}',
+        postedAt: DateTime.now().toUtc(),
+        accounts: const RepairPostingAccounts(),
+      ),
+    );
     if (mounted && result is Success<RepairRequest>) {
       setState(() => _repair = result.value);
       await _loadPayments();
@@ -492,7 +501,8 @@ class _RepairDialogState extends State<_RepairDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final canEdit = !_busy &&
+    final canEdit =
+        !_busy &&
         !_repair.isInvoiced &&
         _repair.status != RepairStatus.cancelled;
     return Directionality(
@@ -639,8 +649,7 @@ class _RepairDialogState extends State<_RepairDialog> {
             onPressed: _busy ? null : () => Navigator.of(context).pop(),
             child: const Text('إغلاق'),
           ),
-          if (!_repair.isInvoiced &&
-              _repair.status != RepairStatus.cancelled)
+          if (!_repair.isInvoiced && _repair.status != RepairStatus.cancelled)
             FilledButton.icon(
               onPressed: _busy ? null : _deliver,
               icon: const Icon(Icons.receipt_long_outlined),
@@ -659,10 +668,7 @@ class _RepairDialogState extends State<_RepairDialog> {
 }
 
 class _CreateRepairDialog extends StatefulWidget {
-  const _CreateRepairDialog({
-    required this.storeId,
-    required this.customers,
-  });
+  const _CreateRepairDialog({required this.storeId, required this.customers});
 
   final String storeId;
   final List<Party> customers;
@@ -750,9 +756,9 @@ class _CreateRepairDialogState extends State<_CreateRepairDialog> {
       Navigator.of(context).pop(repair);
     } catch (error) {
       setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     }
   }
 
@@ -819,7 +825,9 @@ class _CreateRepairDialogState extends State<_CreateRepairDialog> {
                       Expanded(
                         child: DropdownButtonFormField<RepairPriority>(
                           value: _priority,
-                          decoration: const InputDecoration(labelText: 'الأولوية'),
+                          decoration: const InputDecoration(
+                            labelText: 'الأولوية',
+                          ),
                           items: [
                             for (final value in RepairPriority.values)
                               DropdownMenuItem(
@@ -838,7 +846,9 @@ class _CreateRepairDialogState extends State<_CreateRepairDialog> {
                       Expanded(
                         child: DropdownButtonFormField<DeviceCondition>(
                           value: _condition,
-                          decoration: const InputDecoration(labelText: 'حالة الجهاز'),
+                          decoration: const InputDecoration(
+                            labelText: 'حالة الجهاز',
+                          ),
                           items: [
                             for (final value in DeviceCondition.values)
                               DropdownMenuItem(
@@ -885,10 +895,7 @@ class _CreateRepairDialogState extends State<_CreateRepairDialog> {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('إلغاء'),
           ),
-          FilledButton(
-            onPressed: _submit,
-            child: const Text('تسجيل الاستلام'),
-          ),
+          FilledButton(onPressed: _submit, child: const Text('تسجيل الاستلام')),
         ],
       ),
     );
@@ -981,10 +988,7 @@ class _PartDialogState extends State<_PartDialog> {
                 decoration: const InputDecoration(labelText: 'الصنف'),
                 items: [
                   for (final product in _available)
-                    DropdownMenuItem(
-                      value: product,
-                      child: Text(product.name),
-                    ),
+                    DropdownMenuItem(value: product, child: Text(product.name)),
                 ],
                 onChanged: (product) {
                   if (product != null) {
@@ -999,7 +1003,9 @@ class _PartDialogState extends State<_PartDialog> {
               TextField(
                 controller: _quantity,
                 decoration: const InputDecoration(labelText: 'الكمية'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
               ),
               const SizedBox(height: 10),
               TextField(
@@ -1007,7 +1013,9 @@ class _PartDialogState extends State<_PartDialog> {
                 decoration: InputDecoration(
                   labelText: 'سعر البيع للوحدة (${widget.currency})',
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
               ),
             ],
           ),
@@ -1017,10 +1025,7 @@ class _PartDialogState extends State<_PartDialog> {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('إلغاء'),
           ),
-          FilledButton(
-            onPressed: _submit,
-            child: const Text('إضافة'),
-          ),
+          FilledButton(onPressed: _submit, child: const Text('إضافة')),
         ],
       ),
     );
@@ -1079,8 +1084,9 @@ class _PaymentDialogState extends State<_PaymentDialog> {
           currency: widget.currency,
         ),
         description: widget.kind.arabicLabel,
-        chequeNumber:
-            _method == PartyPaymentMethod.cheque ? _chequeNumber.text : null,
+        chequeNumber: _method == PartyPaymentMethod.cheque
+            ? _chequeNumber.text
+            : null,
         bankName: _method == PartyPaymentMethod.cheque ? _bankName.text : null,
       );
       Navigator.of(context).pop(payment);
@@ -1113,7 +1119,9 @@ class _PaymentDialogState extends State<_PaymentDialog> {
                 decoration: InputDecoration(
                   labelText: 'المبلغ (${widget.currency})',
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<PartyPaymentMethod>(
@@ -1152,10 +1160,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('إلغاء'),
           ),
-          FilledButton(
-            onPressed: _submit,
-            child: const Text('ترحيل'),
-          ),
+          FilledButton(onPressed: _submit, child: const Text('ترحيل')),
         ],
       ),
     );
@@ -1175,9 +1180,7 @@ class _Banner extends StatelessWidget {
       color: Theme.of(context).colorScheme.errorContainer,
       child: Text(
         text,
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onErrorContainer,
-        ),
+        style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
       ),
     );
   }
@@ -1196,11 +1199,12 @@ Widget _field(
     maxLines: maxLines,
     keyboardType: keyboardType,
     decoration: InputDecoration(labelText: label),
-    validator: validator ??
+    validator:
+        validator ??
         (requiredField
             ? (value) => value == null || value.trim().isEmpty
-                ? 'هذا الحقل مطلوب.'
-                : null
+                  ? 'هذا الحقل مطلوب.'
+                  : null
             : null),
   );
 }
@@ -1225,9 +1229,7 @@ int _minor(String value) {
   }
   final pieces = normalized.split('.');
   final major = int.parse(pieces.first);
-  final minor = pieces.length == 1
-      ? 0
-      : int.parse(pieces[1].padRight(2, '0'));
+  final minor = pieces.length == 1 ? 0 : int.parse(pieces[1].padRight(2, '0'));
   return major * 100 + minor;
 }
 

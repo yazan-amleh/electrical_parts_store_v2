@@ -95,8 +95,9 @@ class _AccountTransfersPageState extends State<AccountTransfersPage> {
                               setState(() {
                                 _fromAccountId = value;
                                 if (_toAccountId == value) {
-                                  _toAccountId =
-                                      value == '1110' ? '1121' : '1110';
+                                  _toAccountId = value == '1110'
+                                      ? '1121'
+                                      : '1110';
                                 }
                               });
                             },
@@ -193,10 +194,7 @@ class _AccountTransfersPageState extends State<AccountTransfersPage> {
     final fraction = parts.length == 1 || parts[1].isEmpty
         ? 0
         : int.parse(parts[1].padRight(2, '0'));
-    return Money(
-      minorUnits: major * 100 + fraction,
-      currency: _currency,
-    );
+    return Money(minorUnits: major * 100 + fraction, currency: _currency);
   }
 
   Future<void> _postTransfer() async {

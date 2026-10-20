@@ -4,9 +4,8 @@ import '../tenancy/store_context.dart';
 import 'command_queue_repository.dart';
 import 'queued_command.dart';
 
-typedef QueuedCommandExecutor = Future<Result<void>> Function(
-  QueuedCommand command,
-);
+typedef QueuedCommandExecutor =
+    Future<Result<void>> Function(QueuedCommand command);
 
 class CommandQueueProcessor {
   const CommandQueueProcessor({
@@ -99,9 +98,8 @@ class CommandQueueProcessor {
     }
 
     final delaySeconds = (attempt * 15).clamp(15, 300).toInt();
-    return command.processing(now: now).retryAt(
-          now.add(Duration(seconds: delaySeconds)),
-          failure.message,
-        );
+    return command
+        .processing(now: now)
+        .retryAt(now.add(Duration(seconds: delaySeconds)), failure.message);
   }
 }

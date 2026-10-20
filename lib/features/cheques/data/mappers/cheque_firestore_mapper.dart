@@ -52,8 +52,8 @@ abstract final class ChequeFirestoreMapper {
     return value is int
         ? value
         : value is num
-            ? value.toInt()
-            : 0;
+        ? value.toInt()
+        : 0;
   }
 
   static String _string(Object? value, [String fallback = '']) {

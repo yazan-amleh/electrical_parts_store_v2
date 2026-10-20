@@ -1,8 +1,4 @@
-enum OfferOrderStatus {
-  pending,
-  confirmed,
-  cancelled,
-}
+enum OfferOrderStatus { pending, confirmed, cancelled }
 
 OfferOrderStatus offerOrderStatusFromName(String? value) {
   return OfferOrderStatus.values.firstWhere(

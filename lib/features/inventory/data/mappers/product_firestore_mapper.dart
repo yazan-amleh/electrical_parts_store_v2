@@ -6,9 +6,7 @@ import '../../domain/entities/product.dart';
 import '../../domain/entities/product_unit.dart';
 
 abstract final class ProductFirestoreMapper {
-  static Product fromSnapshot(
-    DocumentSnapshot<Map<String, dynamic>> snapshot,
-  ) {
+  static Product fromSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot) {
     final data = snapshot.data() ?? const <String, dynamic>{};
     final storeId = _string(data['storeId'], '');
     final currency = _string(data['currency'], 'ILS');
@@ -57,8 +55,9 @@ abstract final class ProductFirestoreMapper {
       baseUnitId: data['baseUnitId'] as String?,
       baseUnitName: data['baseUnitName'] as String?,
       isService: data['isService'] is bool ? data['isService'] as bool : false,
-      discountable:
-          data['discountable'] is bool ? data['discountable'] as bool : true,
+      discountable: data['discountable'] is bool
+          ? data['discountable'] as bool
+          : true,
       expiryDate: _date(data['expiryDate']),
       isActive: data['isActive'] is bool ? data['isActive'] as bool : true,
       units: _units(
@@ -189,14 +188,11 @@ abstract final class ProductFirestoreMapper {
     return value is int
         ? value
         : value is num
-            ? value.toInt()
-            : fallback;
+        ? value.toInt()
+        : fallback;
   }
 
-  static int _defaultInventoryValue(
-    Money purchasePrice,
-    Quantity quantity,
-  ) {
+  static int _defaultInventoryValue(Money purchasePrice, Quantity quantity) {
     final numerator = purchasePrice.minorUnits * quantity.milliUnits;
     return (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
   }

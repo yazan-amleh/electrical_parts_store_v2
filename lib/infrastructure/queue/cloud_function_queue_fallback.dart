@@ -7,9 +7,7 @@ import '../../core/result/result.dart';
 import '../../core/tenancy/store_context.dart';
 
 abstract final class CloudFunctionQueueFallback {
-  static bool isTransient(
-    firebase_functions.FirebaseFunctionsException error,
-  ) {
+  static bool isTransient(firebase_functions.FirebaseFunctionsException error) {
     return <String>{
       'aborted',
       'deadline-exceeded',

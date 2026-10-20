@@ -21,9 +21,9 @@ class FirestoreOfferRepository implements OfferRepository {
     required FirebaseFirestore firestore,
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
-  })  : _firestore = firestore,
-        _functions = functions,
-        _commandQueue = commandQueue;
+  }) : _firestore = firestore,
+       _functions = functions,
+       _commandQueue = commandQueue;
 
   final FirebaseFirestore _firestore;
   final firebase_functions.FirebaseFunctions _functions;
@@ -35,15 +35,20 @@ class FirestoreOfferRepository implements OfferRepository {
     bool includeInactive = true,
   }) async {
     try {
-      final snapshot =
-          await FirebasePaths.offers(_firestore, context.storeId).get();
-      final offers = snapshot.docs
-          .map(OfferFirestoreMapper.fromSnapshot)
-          .where((offer) =>
-              offer.storeId == context.storeId &&
-              (includeInactive || offer.isActive))
-          .toList()
-        ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+      final snapshot = await FirebasePaths.offers(
+        _firestore,
+        context.storeId,
+      ).get();
+      final offers =
+          snapshot.docs
+              .map(OfferFirestoreMapper.fromSnapshot)
+              .where(
+                (offer) =>
+                    offer.storeId == context.storeId &&
+                    (includeInactive || offer.isActive),
+              )
+              .toList()
+            ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
       return Success<List<Offer>>(offers);
     } on FirebaseException catch (error) {
       return FailureResult<List<Offer>>(
@@ -51,7 +56,8 @@ class FirestoreOfferRepository implements OfferRepository {
       );
     } catch (error) {
       return FailureResult<List<Offer>>(
-          InfrastructureFailure(error.toString()));
+        InfrastructureFailure(error.toString()),
+      );
     }
   }
 
@@ -156,15 +162,20 @@ class FirestoreOfferRepository implements OfferRepository {
     String? offerId,
   }) async {
     try {
-      final snapshot =
-          await FirebasePaths.offerOrders(_firestore, context.storeId).get();
-      final orders = snapshot.docs
-          .map(OfferFirestoreMapper.orderFromSnapshot)
-          .where((order) =>
-              order.storeId == context.storeId &&
-              (offerId == null || order.offerId == offerId))
-          .toList()
-        ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+      final snapshot = await FirebasePaths.offerOrders(
+        _firestore,
+        context.storeId,
+      ).get();
+      final orders =
+          snapshot.docs
+              .map(OfferFirestoreMapper.orderFromSnapshot)
+              .where(
+                (order) =>
+                    order.storeId == context.storeId &&
+                    (offerId == null || order.offerId == offerId),
+              )
+              .toList()
+            ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
       return Success<List<OfferOrder>>(orders);
     } on FirebaseException catch (error) {
       return FailureResult<List<OfferOrder>>(
@@ -172,7 +183,8 @@ class FirestoreOfferRepository implements OfferRepository {
       );
     } catch (error) {
       return FailureResult<List<OfferOrder>>(
-          InfrastructureFailure(error.toString()));
+        InfrastructureFailure(error.toString()),
+      );
     }
   }
 
@@ -331,9 +343,7 @@ class FirestoreOfferRepository implements OfferRepository {
     return QueuedFailure(commandId: commandId);
   }
 
-  Failure _mapFailure(
-    firebase_functions.FirebaseFunctionsException error,
-  ) {
+  Failure _mapFailure(firebase_functions.FirebaseFunctionsException error) {
     switch (error.code) {
       case 'permission-denied':
       case 'unauthenticated':

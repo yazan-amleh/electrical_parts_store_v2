@@ -19,14 +19,16 @@ class RepairPayment {
     this.chequeNumber,
     this.bankName,
     this.dueDate,
-  })  : postedAt = postedAt.toUtc(),
-        dueDate = dueDate?.toUtc() {
+  }) : postedAt = postedAt.toUtc(),
+       dueDate = dueDate?.toUtc() {
     _ensureIdentifier(id, 'Repair payment id');
     _ensureIdentifier(storeId, 'Repair payment store id');
     _ensureIdentifier(repairId, 'Repair id');
     _ensureIdentifier(customerId, 'Repair customer id');
     if (idempotencyKey.value.contains('/')) {
-      throw ArgumentError('Repair payment idempotency key cannot contain a slash.');
+      throw ArgumentError(
+        'Repair payment idempotency key cannot contain a slash.',
+      );
     }
     if (amount.isNegative || amount.isZero) {
       throw ArgumentError('Repair payment amount must be greater than zero.');

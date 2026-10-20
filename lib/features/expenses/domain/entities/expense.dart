@@ -21,9 +21,7 @@ class Expense {
     _ensureSafeIdentifier(expenseAccountId, 'Expense account id');
 
     if (idempotencyKey.value.contains('/')) {
-      throw ArgumentError(
-        'Expense idempotency key cannot contain a slash.',
-      );
+      throw ArgumentError('Expense idempotency key cannot contain a slash.');
     }
     if (amount.isNegative || amount.isZero) {
       throw ArgumentError('Expense amount must be greater than zero.');

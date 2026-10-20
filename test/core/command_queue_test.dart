@@ -31,9 +31,7 @@ void main() {
     await repository.save(context: context, command: command());
     var calls = 0;
 
-    final result = await CommandQueueProcessor(
-      repository: repository,
-    ).drain(
+    final result = await CommandQueueProcessor(repository: repository).drain(
       context: context,
       now: DateTime.utc(2026, 1, 1, 0, 1),
       executor: (queued) async {
@@ -57,9 +55,7 @@ void main() {
     await repository.save(context: context, command: command());
 
     final now = DateTime.utc(2026, 1, 1, 0, 1);
-    final result = await CommandQueueProcessor(
-      repository: repository,
-    ).drain(
+    final result = await CommandQueueProcessor(repository: repository).drain(
       context: context,
       now: now,
       executor: (queued) async {
@@ -82,9 +78,7 @@ void main() {
     final repository = InMemoryCommandQueueRepository();
     await repository.save(context: context, command: command());
 
-    final result = await CommandQueueProcessor(
-      repository: repository,
-    ).drain(
+    final result = await CommandQueueProcessor(repository: repository).drain(
       context: context,
       executor: (queued) async {
         return const FailureResult<void>(
@@ -94,10 +88,7 @@ void main() {
     );
 
     expect(result, isA<Success<int>>());
-    expect(
-      repository.getById('command-1')?.status,
-      QueuedCommandStatus.failed,
-    );
+    expect(repository.getById('command-1')?.status, QueuedCommandStatus.failed);
   });
   test('reclaims a processing command after its lease expires', () async {
     final repository = InMemoryCommandQueueRepository();

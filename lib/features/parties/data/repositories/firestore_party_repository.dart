@@ -11,9 +11,8 @@ import '../../domain/repositories/party_repository.dart';
 import '../mappers/party_firestore_mapper.dart';
 
 class FirestorePartyRepository implements PartyRepository {
-  FirestorePartyRepository({
-    required FirebaseFirestore firestore,
-  }) : _firestore = firestore;
+  FirestorePartyRepository({required FirebaseFirestore firestore})
+    : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 
@@ -33,11 +32,12 @@ class FirestorePartyRepository implements PartyRepository {
       }
 
       final snapshot = await query.get();
-      final parties = snapshot.docs
-          .map(PartyFirestoreMapper.fromSnapshot)
-          .where((party) => party.storeId == context.storeId)
-          .toList()
-        ..sort((left, right) => left.name.compareTo(right.name));
+      final parties =
+          snapshot.docs
+              .map(PartyFirestoreMapper.fromSnapshot)
+              .where((party) => party.storeId == context.storeId)
+              .toList()
+            ..sort((left, right) => left.name.compareTo(right.name));
       return Success<List<Party>>(parties);
     } on FirebaseException catch (error) {
       return FailureResult<List<Party>>(
@@ -84,9 +84,7 @@ class FirestorePartyRepository implements PartyRepository {
         InfrastructureFailure(error.message ?? error.code),
       );
     } catch (error) {
-      return FailureResult<Party>(
-        InfrastructureFailure(error.toString()),
-      );
+      return FailureResult<Party>(InfrastructureFailure(error.toString()));
     }
   }
 
@@ -107,45 +105,39 @@ class FirestorePartyRepository implements PartyRepository {
     }
 
     try {
-      return await _firestore.runTransaction<Result<void>>(
-        (transaction) async {
-          final partyReference = FirebasePaths.parties(
-            _firestore,
-            context.storeId,
-          ).doc(party.id);
-          final existingSnapshot = await transaction.get(partyReference);
-          if (existingSnapshot.exists) {
-            final existingParty =
-                PartyFirestoreMapper.fromSnapshot(existingSnapshot);
-            if (existingParty.storeId != context.storeId) {
-              return const FailureResult<void>(
-                AuthorizationFailure('Party belongs to another store.'),
-              );
-            }
-            if (existingParty.type != party.type) {
-              return const FailureResult<void>(
-                ValidationFailure(
-                  'A party type cannot be changed after creation.',
-                ),
-              );
-            }
-          }
-
-          transaction.set(
-            partyReference,
-            PartyFirestoreMapper.toMap(party),
+      return await _firestore.runTransaction<Result<void>>((transaction) async {
+        final partyReference = FirebasePaths.parties(
+          _firestore,
+          context.storeId,
+        ).doc(party.id);
+        final existingSnapshot = await transaction.get(partyReference);
+        if (existingSnapshot.exists) {
+          final existingParty = PartyFirestoreMapper.fromSnapshot(
+            existingSnapshot,
           );
-          return const Success<void>(null);
-        },
-      );
+          if (existingParty.storeId != context.storeId) {
+            return const FailureResult<void>(
+              AuthorizationFailure('Party belongs to another store.'),
+            );
+          }
+          if (existingParty.type != party.type) {
+            return const FailureResult<void>(
+              ValidationFailure(
+                'A party type cannot be changed after creation.',
+              ),
+            );
+          }
+        }
+
+        transaction.set(partyReference, PartyFirestoreMapper.toMap(party));
+        return const Success<void>(null);
+      });
     } on FirebaseException catch (error) {
       return FailureResult<void>(
         InfrastructureFailure(error.message ?? error.code),
       );
     } catch (error) {
-      return FailureResult<void>(
-        InfrastructureFailure(error.toString()),
-      );
+      return FailureResult<void>(InfrastructureFailure(error.toString()));
     }
   }
 

@@ -1,8 +1,5 @@
 class Money {
-  const Money({
-    required this.minorUnits,
-    this.currency = 'ILS',
-  });
+  const Money({required this.minorUnits, this.currency = 'ILS'});
 
   const Money.zero({this.currency = 'ILS'}) : minorUnits = 0;
 

@@ -1,8 +1,4 @@
-enum OfferPriceType {
-  retail,
-  wholesale,
-  custom,
-}
+enum OfferPriceType { retail, wholesale, custom }
 
 OfferPriceType offerPriceTypeFromName(String? value) {
   return OfferPriceType.values.firstWhere(

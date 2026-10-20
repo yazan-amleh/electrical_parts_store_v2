@@ -80,17 +80,15 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
     );
   }
 
-  Widget _buildSummary(
-    BuildContext context,
-    AccountingAuditReport report,
-  ) {
+  Widget _buildSummary(BuildContext context, AccountingAuditReport report) {
     final color = report.isHealthy ? Colors.green : Colors.red;
-    final icon =
-        report.isHealthy ? Icons.check_circle_outline : Icons.error_outline;
+    final icon = report.isHealthy
+        ? Icons.check_circle_outline
+        : Icons.error_outline;
     final title = report.isHealthy
         ? report.warningCount == 0
-            ? 'المحاسبة متطابقة'
-            : 'المحاسبة متطابقة مع تنبيهات'
+              ? 'المحاسبة متطابقة'
+              : 'المحاسبة متطابقة مع تنبيهات'
         : 'يوجد فرق محاسبي يحتاج إلى معالجة';
 
     return Card(
@@ -108,14 +106,12 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
                   Text(
                     title,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: color,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    'آخر فحص: ${_formatDate(report.generatedAt)}',
-                  ),
+                  Text('آخر فحص: ${_formatDate(report.generatedAt)}'),
                   const SizedBox(height: 4),
                   Text(
                     'الأخطاء: ${report.errorCount} — التنبيهات: ${report.warningCount}',
@@ -163,10 +159,7 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
     );
   }
 
-  Widget _buildIssues(
-    BuildContext context,
-    AccountingAuditReport report,
-  ) {
+  Widget _buildIssues(BuildContext context, AccountingAuditReport report) {
     if (report.issues.isEmpty) {
       return const Card(
         child: Padding(
@@ -203,18 +196,11 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
                       color: issue.isError ? Colors.red : Colors.orange,
                     ),
                     title: Text(issue.message),
-                    subtitle: Text(
-                      '${issue.scope} — ${issue.referenceId}',
-                    ),
+                    subtitle: Text('${issue.scope} — ${issue.referenceId}'),
                   );
                 },
                 body: Padding(
-                  padding: const EdgeInsetsDirectional.fromSTEB(
-                    56,
-                    0,
-                    16,
-                    16,
-                  ),
+                  padding: const EdgeInsetsDirectional.fromSTEB(56, 0, 16, 16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [

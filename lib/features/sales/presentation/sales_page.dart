@@ -125,10 +125,7 @@ class _SalesPageState extends State<SalesPage> {
               children: [
                 const Icon(Icons.inventory_2_outlined),
                 const SizedBox(width: 8),
-                Text(
-                  'الأصناف',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+                Text('الأصناف', style: Theme.of(context).textTheme.titleLarge),
                 const Spacer(),
                 Text('${products.length} صنف'),
               ],
@@ -204,9 +201,7 @@ class _SalesPageState extends State<SalesPage> {
               ),
             ),
             title: Text(product.name),
-            subtitle: Text(
-              '${product.sellingPrice.formatted} • $available',
-            ),
+            subtitle: Text('${product.sellingPrice.formatted} • $available'),
             trailing: IconButton(
               tooltip: 'إضافة',
               onPressed: () => _addProduct(product),
@@ -513,8 +508,9 @@ class _SalesPageState extends State<SalesPage> {
           )
           .toList(growable: false),
       tax: Money.zero(currency: _currency),
-      customerId:
-          _paymentMethod == SalePaymentMethod.credit ? customerId : null,
+      customerId: _paymentMethod == SalePaymentMethod.credit
+          ? customerId
+          : null,
       description: 'بيع من نقطة البيع',
     );
 
@@ -585,10 +581,7 @@ class _SalesPageState extends State<SalesPage> {
 }
 
 class _SaleCartLine {
-  const _SaleCartLine({
-    required this.product,
-    required this.quantity,
-  });
+  const _SaleCartLine({required this.product, required this.quantity});
 
   final Product product;
   final Quantity quantity;
@@ -603,10 +596,7 @@ class _SaleCartLine {
   }
 
   _SaleCartLine copyWith({Quantity? quantity}) {
-    return _SaleCartLine(
-      product: product,
-      quantity: quantity ?? this.quantity,
-    );
+    return _SaleCartLine(product: product, quantity: quantity ?? this.quantity);
   }
 }
 

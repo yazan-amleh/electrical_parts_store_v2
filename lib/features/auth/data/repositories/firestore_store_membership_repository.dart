@@ -9,9 +9,8 @@ import '../../domain/repositories/store_membership_repository.dart';
 import '../mappers/store_membership_firestore_mapper.dart';
 
 class FirestoreStoreMembershipRepository implements StoreMembershipRepository {
-  FirestoreStoreMembershipRepository({
-    required FirebaseFirestore firestore,
-  }) : _firestore = firestore;
+  FirestoreStoreMembershipRepository({required FirebaseFirestore firestore})
+    : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 

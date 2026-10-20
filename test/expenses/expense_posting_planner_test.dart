@@ -55,9 +55,7 @@ void main() {
     final result = const ExpensePostingPlanner().prepare(
       context: context,
       expense: expense,
-      accounts: const ExpensePostingAccounts(
-        supplierPayableAccountId: '2110',
-      ),
+      accounts: const ExpensePostingAccounts(supplierPayableAccountId: '2110'),
     );
 
     expect(result, isA<Success<ExpensePostingPlan>>());
@@ -82,9 +80,7 @@ void main() {
     final result = const ExpensePostingPlanner().prepare(
       context: context,
       expense: expense,
-      accounts: const ExpensePostingAccounts(
-        settlementAccountId: '1110',
-      ),
+      accounts: const ExpensePostingAccounts(settlementAccountId: '1110'),
     );
 
     expect(result, isA<FailureResult<ExpensePostingPlan>>());

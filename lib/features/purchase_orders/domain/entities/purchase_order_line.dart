@@ -64,9 +64,7 @@ class PurchaseOrderLine {
     );
   }
 
-  PurchaseOrderLine copyWith({
-    Quantity? receivedQuantity,
-  }) {
+  PurchaseOrderLine copyWith({Quantity? receivedQuantity}) {
     return PurchaseOrderLine(
       id: id,
       productId: productId,

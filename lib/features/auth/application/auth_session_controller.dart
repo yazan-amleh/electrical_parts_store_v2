@@ -23,9 +23,9 @@ class AuthSessionController extends ChangeNotifier {
     required AuthRepository authRepository,
     required StoreMembershipRepository membershipRepository,
     required String storeId,
-  })  : _authRepository = authRepository,
-        _membershipRepository = membershipRepository,
-        _storeId = storeId.trim();
+  }) : _authRepository = authRepository,
+       _membershipRepository = membershipRepository,
+       _storeId = storeId.trim();
 
   final AuthRepository _authRepository;
   final StoreMembershipRepository _membershipRepository;
@@ -63,14 +63,8 @@ class AuthSessionController extends ChangeNotifier {
     }
   }
 
-  Future<void> signIn({
-    required String email,
-    required String password,
-  }) async {
-    _setState(
-      status: AuthSessionStatus.signingIn,
-      errorMessage: null,
-    );
+  Future<void> signIn({required String email, required String password}) async {
+    _setState(status: AuthSessionStatus.signingIn, errorMessage: null);
 
     final result = await _authRepository.signInWithEmailPassword(
       email: email,
@@ -88,10 +82,7 @@ class AuthSessionController extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    _setState(
-      status: AuthSessionStatus.signingIn,
-      errorMessage: null,
-    );
+    _setState(status: AuthSessionStatus.signingIn, errorMessage: null);
     final result = await _authRepository.signOut();
     if (result is FailureResult<void>) {
       _setFailure(result.failure.message);
@@ -129,10 +120,7 @@ class AuthSessionController extends ChangeNotifier {
 
     _setState(status: AuthSessionStatus.loadingMembership);
     final result = await _membershipRepository.getMembership(
-      context: StoreContext(
-        storeId: _storeId,
-        userId: user.id,
-      ),
+      context: StoreContext(storeId: _storeId, userId: user.id),
     );
 
     if (result is FailureResult<StoreMembership>) {
@@ -147,16 +135,10 @@ class AuthSessionController extends ChangeNotifier {
   }
 
   void _setFailure(String message) {
-    _setState(
-      status: AuthSessionStatus.failure,
-      errorMessage: message,
-    );
+    _setState(status: AuthSessionStatus.failure, errorMessage: message);
   }
 
-  void _setState({
-    required AuthSessionStatus status,
-    String? errorMessage,
-  }) {
+  void _setState({required AuthSessionStatus status, String? errorMessage}) {
     _status = status;
     _errorMessage = errorMessage;
     notifyListeners();

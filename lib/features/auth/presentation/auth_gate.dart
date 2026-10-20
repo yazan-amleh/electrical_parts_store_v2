@@ -7,10 +7,7 @@ import '../application/auth_session_controller.dart';
 import 'login_page.dart';
 
 class AuthGate extends StatelessWidget {
-  const AuthGate({
-    required this.dependencies,
-    super.key,
-  });
+  const AuthGate({required this.dependencies, super.key});
 
   final AppDependencies dependencies;
 
@@ -29,9 +26,7 @@ class AuthGate extends StatelessWidget {
           case AuthSessionStatus.signingIn:
             return LoginPage(controller: controller);
           case AuthSessionStatus.loadingMembership:
-            return const _LoadingPage(
-              message: 'جارٍ تحميل صلاحيات المتجر...',
-            );
+            return const _LoadingPage(message: 'جارٍ تحميل صلاحيات المتجر...');
           case AuthSessionStatus.ready:
             final user = controller.user;
             final membership = controller.membership;
@@ -61,10 +56,7 @@ class AuthGate extends StatelessWidget {
 }
 
 class FirebaseSetupPage extends StatelessWidget {
-  const FirebaseSetupPage({
-    required this.runtime,
-    super.key,
-  });
+  const FirebaseSetupPage({required this.runtime, super.key});
 
   final AppRuntimeConfig runtime;
 

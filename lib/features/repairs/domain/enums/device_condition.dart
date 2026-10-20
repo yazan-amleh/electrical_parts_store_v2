@@ -1,9 +1,4 @@
-enum DeviceCondition {
-  working,
-  intermittent,
-  notWorking,
-  damaged,
-}
+enum DeviceCondition { working, intermittent, notWorking, damaged }
 
 extension DeviceConditionLabel on DeviceCondition {
   String get arabicLabel {

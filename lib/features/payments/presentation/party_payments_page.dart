@@ -128,8 +128,9 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                       enabled: !_isPosting,
                       decoration: InputDecoration(
                         labelText: isCustomer ? 'معرّف العميل' : 'معرّف المورد',
-                        hintText:
-                            isCustomer ? 'أدخل customerId' : 'أدخل supplierId',
+                        hintText: isCustomer
+                            ? 'أدخل customerId'
+                            : 'أدخل supplierId',
                         prefixIcon: Icon(
                           isCustomer
                               ? Icons.person_outline
@@ -155,9 +156,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                       initialValue: _paymentMethod,
                       decoration: const InputDecoration(
                         labelText: 'طريقة الدفع',
-                        prefixIcon: Icon(
-                          Icons.account_balance_wallet_outlined,
-                        ),
+                        prefixIcon: Icon(Icons.account_balance_wallet_outlined),
                       ),
                       items: PartyPaymentMethod.values
                           .map(
@@ -188,9 +187,9 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                         child: Text(
                           isCustomer
                               ? 'يُسجّل الشيك الوارد في حساب الشيكات قيد التحصيل '
-                                  '1130، ولا يزيد الصندوق حتى يتم تحصيله.'
+                                    '1130، ولا يزيد الصندوق حتى يتم تحصيله.'
                               : 'يُسجّل الشيك الصادر في حساب الشيكات الصادرة '
-                                  '2210، ولا ينقص البنك حتى يتم صرفه.',
+                                    '2210، ولا ينقص البنك حتى يتم صرفه.',
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -243,9 +242,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.check_circle_outline),
-                      label: Text(
-                        _isPosting ? 'جارٍ الترحيل...' : actionLabel,
-                      ),
+                      label: Text(_isPosting ? 'جارٍ الترحيل...' : actionLabel),
                     ),
                   ],
                 ),
@@ -277,10 +274,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
     final fraction = parts.length == 1 || parts[1].isEmpty
         ? 0
         : int.parse(parts[1].padRight(2, '0'));
-    return Money(
-      minorUnits: major * 100 + fraction,
-      currency: _currency,
-    );
+    return Money(minorUnits: major * 100 + fraction, currency: _currency);
   }
 
   Future<void> _postPayment() async {

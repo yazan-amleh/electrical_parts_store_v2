@@ -19,9 +19,7 @@ class AccountTransfer {
     _ensureSafeIdentifier(toAccountId, 'Destination account id');
 
     if (fromAccountId == toAccountId) {
-      throw ArgumentError(
-        'Source and destination accounts must be different.',
-      );
+      throw ArgumentError('Source and destination accounts must be different.');
     }
     if (idempotencyKey.value.contains('/')) {
       throw ArgumentError(
@@ -29,9 +27,7 @@ class AccountTransfer {
       );
     }
     if (amount.isNegative || amount.isZero) {
-      throw ArgumentError(
-        'Account transfer amount must be greater than zero.',
-      );
+      throw ArgumentError('Account transfer amount must be greater than zero.');
     }
   }
 

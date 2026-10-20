@@ -13,9 +13,8 @@ import '../../domain/repositories/accounting_query_repository.dart';
 import '../mappers/account_firestore_mapper.dart';
 
 class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
-  FirestoreAccountingQueryRepository({
-    required FirebaseFirestore firestore,
-  }) : _firestore = firestore;
+  FirestoreAccountingQueryRepository({required FirebaseFirestore firestore})
+    : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 
@@ -30,15 +29,18 @@ class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
         context.storeId,
       ).get();
 
-      final accounts = snapshot.docs
-          .map(AccountFirestoreMapper.fromSnapshot)
-          .where((account) => account.storeId == context.storeId)
-          .where((account) => includeInactive || account.isActive)
-          .toList()
-        ..sort((left, right) {
-          final sortOrder = left.sortOrder.compareTo(right.sortOrder);
-          return sortOrder == 0 ? left.code.compareTo(right.code) : sortOrder;
-        });
+      final accounts =
+          snapshot.docs
+              .map(AccountFirestoreMapper.fromSnapshot)
+              .where((account) => account.storeId == context.storeId)
+              .where((account) => includeInactive || account.isActive)
+              .toList()
+            ..sort((left, right) {
+              final sortOrder = left.sortOrder.compareTo(right.sortOrder);
+              return sortOrder == 0
+                  ? left.code.compareTo(right.code)
+                  : sortOrder;
+            });
 
       return Success<List<Account>>(accounts);
     } on FirebaseException catch (error) {
@@ -136,11 +138,7 @@ class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
       }
 
       lines.add(
-        TrialBalanceLine(
-          account: account,
-          debit: debit,
-          credit: credit,
-        ),
+        TrialBalanceLine(account: account, debit: debit, credit: credit),
       );
     }
 
@@ -265,8 +263,8 @@ class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
     return value is int
         ? value
         : value is num
-            ? value.toInt()
-            : 0;
+        ? value.toInt()
+        : 0;
   }
 
   static String? _string(Object? value, {String? fallback}) {

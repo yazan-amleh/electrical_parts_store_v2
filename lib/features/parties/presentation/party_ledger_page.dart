@@ -58,11 +58,7 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
       );
     }
     if (_errorMessage != null) {
-      return SizedBox(
-        width: 760,
-        height: 560,
-        child: _buildErrorState(),
-      );
+      return SizedBox(width: 760, height: 560, child: _buildErrorState());
     }
 
     var running = Money.zero(currency: _balance.currency);
@@ -160,9 +156,11 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
               ],
             ),
             const SizedBox(height: 8),
-            Text(entry.description?.trim().isNotEmpty == true
-                ? entry.description!
-                : 'بدون وصف'),
+            Text(
+              entry.description?.trim().isNotEmpty == true
+                  ? entry.description!
+                  : 'بدون وصف',
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 16,
@@ -180,9 +178,7 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
   }
 
   Widget _amount(String label, Money amount) {
-    return Chip(
-      label: Text('$label: ${amount.formatted}'),
-    );
+    return Chip(label: Text('$label: ${amount.formatted}'));
   }
 
   Widget _buildErrorState() {
@@ -272,10 +268,7 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
 }
 
 class _PartyLedgerRow {
-  const _PartyLedgerRow({
-    required this.entry,
-    required this.runningBalance,
-  });
+  const _PartyLedgerRow({required this.entry, required this.runningBalance});
 
   final PartyLedgerEntry entry;
   final Money runningBalance;

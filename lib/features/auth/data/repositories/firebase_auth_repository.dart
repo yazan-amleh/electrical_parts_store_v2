@@ -6,9 +6,7 @@ import '../../domain/entities/authenticated_user.dart';
 import '../../domain/repositories/auth_repository.dart';
 
 class FirebaseAuthRepository implements AuthRepository {
-  FirebaseAuthRepository({
-    required FirebaseAuth auth,
-  }) : _auth = auth;
+  FirebaseAuthRepository({required FirebaseAuth auth}) : _auth = auth;
 
   final FirebaseAuth _auth;
 
@@ -21,8 +19,8 @@ class FirebaseAuthRepository implements AuthRepository {
   @override
   Stream<AuthenticatedUser?> authStateChanges() {
     return _auth.authStateChanges().map(
-          (user) => user == null ? null : _fromFirebaseUser(user),
-        );
+      (user) => user == null ? null : _fromFirebaseUser(user),
+    );
   }
 
   @override
@@ -45,7 +43,8 @@ class FirebaseAuthRepository implements AuthRepository {
       if (user == null) {
         return const FailureResult<AuthenticatedUser>(
           AuthorizationFailure(
-              'Firebase did not return an authenticated user.'),
+            'Firebase did not return an authenticated user.',
+          ),
         );
       }
 
@@ -67,13 +66,9 @@ class FirebaseAuthRepository implements AuthRepository {
       await _auth.signOut();
       return const Success<void>(null);
     } on FirebaseAuthException catch (error) {
-      return FailureResult<void>(
-        AuthorizationFailure(_authMessage(error)),
-      );
+      return FailureResult<void>(AuthorizationFailure(_authMessage(error)));
     } catch (error) {
-      return FailureResult<void>(
-        InfrastructureFailure(error.toString()),
-      );
+      return FailureResult<void>(InfrastructureFailure(error.toString()));
     }
   }
 

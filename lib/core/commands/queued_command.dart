@@ -1,9 +1,4 @@
-enum QueuedCommandStatus {
-  pending,
-  processing,
-  completed,
-  failed,
-}
+enum QueuedCommandStatus { pending, processing, completed, failed }
 
 class QueuedCommand {
   QueuedCommand({
@@ -19,10 +14,10 @@ class QueuedCommand {
     DateTime? nextAttemptAt,
     DateTime? leaseUntil,
     this.lastError,
-  })  : payload = Map.unmodifiable(Map<String, dynamic>.from(payload)),
-        createdAt = createdAt.toUtc(),
-        nextAttemptAt = nextAttemptAt?.toUtc(),
-        leaseUntil = leaseUntil?.toUtc() {
+  }) : payload = Map.unmodifiable(Map<String, dynamic>.from(payload)),
+       createdAt = createdAt.toUtc(),
+       nextAttemptAt = nextAttemptAt?.toUtc(),
+       leaseUntil = leaseUntil?.toUtc() {
     _ensureSafeIdentifier(id, 'Queued command id');
     _ensureSafeIdentifier(storeId, 'Queued command store id');
     _ensureSafeIdentifier(createdBy, 'Queued command creator');
@@ -68,8 +63,9 @@ class QueuedCommand {
       status: QueuedCommandStatus.processing,
       attemptCount: attemptCount + 1,
       nextAttemptAt: null,
-      leaseUntil:
-          (now ?? DateTime.now()).toUtc().add(const Duration(minutes: 5)),
+      leaseUntil: (now ?? DateTime.now()).toUtc().add(
+        const Duration(minutes: 5),
+      ),
       lastError: null,
     );
   }

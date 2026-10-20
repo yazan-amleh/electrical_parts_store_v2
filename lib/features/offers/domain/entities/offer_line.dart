@@ -32,7 +32,8 @@ class OfferLine {
     }
     if (finalUnitPrice.minorUnits > originalUnitPrice.minorUnits) {
       throw ArgumentError(
-          'Offer final price cannot exceed the original price.');
+        'Offer final price cannot exceed the original price.',
+      );
     }
     if (originalUnitPrice.currency != finalUnitPrice.currency) {
       throw ArgumentError('Offer line prices must use one currency.');

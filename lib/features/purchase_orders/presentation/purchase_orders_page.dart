@@ -49,22 +49,23 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
   bool _isLoading = true;
   String? _errorMessage;
 
-  StoreContext get _context => StoreContext(
-        storeId: widget.membership.storeId,
-        userId: widget.user.id,
-      );
+  StoreContext get _context =>
+      StoreContext(storeId: widget.membership.storeId, userId: widget.user.id);
 
   @override
   Widget build(BuildContext context) {
     final search = _searchController.text.trim().toLowerCase();
-    final orders = _orders.where((order) {
-      final matchesSearch = search.isEmpty ||
-          order.orderNumber.toLowerCase().contains(search) ||
-          order.supplierName.toLowerCase().contains(search);
-      final matchesStatus =
-          _statusFilter == null || order.status == _statusFilter;
-      return matchesSearch && matchesStatus;
-    }).toList(growable: false);
+    final orders = _orders
+        .where((order) {
+          final matchesSearch =
+              search.isEmpty ||
+              order.orderNumber.toLowerCase().contains(search) ||
+              order.supplierName.toLowerCase().contains(search);
+          final matchesStatus =
+              _statusFilter == null || order.status == _statusFilter;
+          return matchesSearch && matchesStatus;
+        })
+        .toList(growable: false);
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -209,8 +210,9 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
     });
 
     final ordersResult = await repository.getPurchaseOrders(context: _context);
-    final productsResult =
-        await productRepository.getProducts(context: _context);
+    final productsResult = await productRepository.getProducts(
+      context: _context,
+    );
     final suppliersResult = await partyRepository.getParties(
       context: _context,
       type: PartyType.supplier,
@@ -431,8 +433,8 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
   void _showResult<T>(Result<T> result, {required String successMessage}) {
     final message = result is FailureResult<T>
         ? result.failure is QueuedFailure
-            ? 'تم حفظ العملية للطابور وستُنفذ عند عودة الاتصال.'
-            : result.failure.message
+              ? 'تم حفظ العملية للطابور وستُنفذ عند عودة الاتصال.'
+              : result.failure.message
         : successMessage;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -497,8 +499,9 @@ class _ReceivePurchaseOrderDialogState
             const SizedBox(height: 12),
             TextField(
               controller: _taxController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 labelText: 'ضريبة المدخلات (اختياري)',
                 hintText: '0.00',
@@ -523,10 +526,7 @@ class _ReceivePurchaseOrderDialogState
             }
             Navigator.pop(
               context,
-              _ReceiveDraft(
-                paymentMethod: _paymentMethod,
-                taxMinorUnits: tax,
-              ),
+              _ReceiveDraft(paymentMethod: _paymentMethod, taxMinorUnits: tax),
             );
           },
           child: const Text('استلام وترحيل'),
@@ -676,10 +676,7 @@ class _CreatePurchaseOrderDialogState
           onPressed: () => Navigator.pop(context),
           child: const Text('رجوع'),
         ),
-        FilledButton(
-          onPressed: _save,
-          child: const Text('حفظ الطلب'),
-        ),
+        FilledButton(onPressed: _save, child: const Text('حفظ الطلب')),
       ],
     );
   }

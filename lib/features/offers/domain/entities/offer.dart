@@ -16,9 +16,9 @@ class Offer {
     this.startDate,
     this.endDate,
     this.imageUrl,
-  })  : lines = List.unmodifiable(lines),
-        createdAt = createdAt.toUtc(),
-        globalDiscount = globalDiscount ?? const Money.zero() {
+  }) : lines = List.unmodifiable(lines),
+       createdAt = createdAt.toUtc(),
+       globalDiscount = globalDiscount ?? const Money.zero() {
     _ensureIdentifier(id, 'Offer id');
     _ensureIdentifier(storeId, 'Offer store id');
     if (offerNumber.trim().isEmpty) {
@@ -64,19 +64,19 @@ class Offer {
   String get currency => lines.first.currency;
 
   Money get originalTotal => lines.fold(
-        Money.zero(currency: currency),
-        (total, line) => total + line.originalTotal,
-      );
+    Money.zero(currency: currency),
+    (total, line) => total + line.originalTotal,
+  );
 
   Money get lineDiscountTotal => lines.fold(
-        Money.zero(currency: currency),
-        (total, line) => total + line.discountTotal,
-      );
+    Money.zero(currency: currency),
+    (total, line) => total + line.discountTotal,
+  );
 
   Money get lineFinalTotal => lines.fold(
-        Money.zero(currency: currency),
-        (total, line) => total + line.finalTotal,
-      );
+    Money.zero(currency: currency),
+    (total, line) => total + line.finalTotal,
+  );
 
   Money get totalDiscount => lineDiscountTotal + globalDiscount;
 

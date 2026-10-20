@@ -87,7 +87,7 @@ abstract final class PartyFirestoreMapper {
     return value is int
         ? value
         : value is num
-            ? value.toInt()
-            : fallback;
+        ? value.toInt()
+        : fallback;
   }
 }

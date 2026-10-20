@@ -11,8 +11,8 @@ class FirebaseCommandQueueProcessor {
     required firebase_functions.FirebaseFunctions functions,
     required CommandQueueRepository repository,
     CommandQueueProcessor? processor,
-  })  : _functions = functions,
-        _processor = processor ?? CommandQueueProcessor(repository: repository);
+  }) : _functions = functions,
+       _processor = processor ?? CommandQueueProcessor(repository: repository);
 
   final firebase_functions.FirebaseFunctions _functions;
   final CommandQueueProcessor _processor;
@@ -34,17 +34,13 @@ class FirebaseCommandQueueProcessor {
         } on firebase_functions.FirebaseFunctionsException catch (error) {
           return FailureResult<void>(_mapFailure(error));
         } catch (error) {
-          return FailureResult<void>(
-            InfrastructureFailure(error.toString()),
-          );
+          return FailureResult<void>(InfrastructureFailure(error.toString()));
         }
       },
     );
   }
 
-  Failure _mapFailure(
-    firebase_functions.FirebaseFunctionsException error,
-  ) {
+  Failure _mapFailure(firebase_functions.FirebaseFunctionsException error) {
     switch (error.code) {
       case 'permission-denied':
       case 'unauthenticated':
@@ -53,9 +49,7 @@ class FirebaseCommandQueueProcessor {
         );
       case 'invalid-argument':
       case 'failed-precondition':
-        return ValidationFailure(
-          error.message ?? 'Queued command is invalid.',
-        );
+        return ValidationFailure(error.message ?? 'Queued command is invalid.');
       case 'already-exists':
         return ConflictFailure(
           error.message ?? 'Queued command conflicts with existing data.',

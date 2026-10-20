@@ -62,7 +62,7 @@ abstract final class InventoryMovementFirestoreMapper {
     return value is int
         ? value
         : value is num
-            ? value.toInt()
-            : fallback;
+        ? value.toInt()
+        : fallback;
   }
 }

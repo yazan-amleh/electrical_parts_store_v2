@@ -16,9 +16,9 @@ class FirestoreSaleRepository implements SaleRepository {
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
     SalePostingPlanner planner = const SalePostingPlanner(),
-  })  : _functions = functions,
-        _planner = planner,
-        _commandQueue = commandQueue;
+  }) : _functions = functions,
+       _planner = planner,
+       _commandQueue = commandQueue;
 
   final firebase_functions.FirebaseFunctions _functions;
   final SalePostingPlanner _planner;
@@ -44,17 +44,12 @@ class FirestoreSaleRepository implements SaleRepository {
     try {
       final callable = _functions.httpsCallable('postSale');
       final response = await callable.call<Map<String, dynamic>>(
-        SaleCommandMapper.toRequest(
-          sale: sale,
-          accounts: accounts,
-        ),
+        SaleCommandMapper.toRequest(sale: sale, accounts: accounts),
       );
       final data = response.data;
       if (data['saleId'] != sale.id) {
         return const FailureResult<SalePostingPlan>(
-          InfrastructureFailure(
-            'The sale service returned another sale id.',
-          ),
+          InfrastructureFailure('The sale service returned another sale id.'),
         );
       }
 
@@ -69,10 +64,7 @@ class FirestoreSaleRepository implements SaleRepository {
           commandId: commandId,
           operation: 'postSale',
           idempotencyKey: sale.idempotencyKey.value,
-          payload: SaleCommandMapper.toRequest(
-            sale: sale,
-            accounts: accounts,
-          ),
+          payload: SaleCommandMapper.toRequest(sale: sale, accounts: accounts),
         );
         if (queueFailure != null) {
           return FailureResult<SalePostingPlan>(queueFailure);
@@ -89,15 +81,11 @@ class FirestoreSaleRepository implements SaleRepository {
     }
   }
 
-  Failure _mapFailure(
-    firebase_functions.FirebaseFunctionsException error,
-  ) {
+  Failure _mapFailure(firebase_functions.FirebaseFunctionsException error) {
     switch (error.code) {
       case 'permission-denied':
       case 'unauthenticated':
-        return AuthorizationFailure(
-          error.message ?? 'Sale is not authorized.',
-        );
+        return AuthorizationFailure(error.message ?? 'Sale is not authorized.');
       case 'invalid-argument':
       case 'failed-precondition':
         return ValidationFailure(error.message ?? 'Sale is invalid.');

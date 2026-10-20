@@ -5,10 +5,7 @@ import 'app_dependencies.dart';
 import 'theme/app_theme.dart';
 
 class V2App extends StatelessWidget {
-  const V2App({
-    required this.dependencies,
-    super.key,
-  });
+  const V2App({required this.dependencies, super.key});
 
   final AppDependencies dependencies;
 

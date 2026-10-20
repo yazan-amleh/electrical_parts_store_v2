@@ -1,9 +1,7 @@
 import '../../domain/entities/account_transfer.dart';
 
 abstract final class AccountTransferCommandMapper {
-  static Map<String, dynamic> toRequest({
-    required AccountTransfer transfer,
-  }) {
+  static Map<String, dynamic> toRequest({required AccountTransfer transfer}) {
     return <String, dynamic>{
       'storeId': transfer.storeId,
       'transfer': <String, dynamic>{

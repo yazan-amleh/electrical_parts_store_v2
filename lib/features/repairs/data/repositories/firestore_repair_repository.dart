@@ -20,9 +20,9 @@ class FirestoreRepairRepository implements RepairRepository {
     required FirebaseFirestore firestore,
     required firebase_functions.FirebaseFunctions functions,
     CommandQueueRepository? commandQueue,
-  })  : _firestore = firestore,
-        _functions = functions,
-        _commandQueue = commandQueue;
+  }) : _firestore = firestore,
+       _functions = functions,
+       _commandQueue = commandQueue;
 
   final FirebaseFirestore _firestore;
   final firebase_functions.FirebaseFunctions _functions;
@@ -34,17 +34,20 @@ class FirestoreRepairRepository implements RepairRepository {
     RepairStatus? status,
   }) async {
     try {
-      Query<Map<String, dynamic>> query =
-          FirebasePaths.repairs(_firestore, context.storeId);
+      Query<Map<String, dynamic>> query = FirebasePaths.repairs(
+        _firestore,
+        context.storeId,
+      );
       if (status != null) {
         query = query.where('status', isEqualTo: status.name);
       }
       final snapshot = await query.get();
-      final repairs = snapshot.docs
-          .map(RepairFirestoreMapper.requestFromSnapshot)
-          .where((repair) => repair.storeId == context.storeId)
-          .toList()
-        ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+      final repairs =
+          snapshot.docs
+              .map(RepairFirestoreMapper.requestFromSnapshot)
+              .where((repair) => repair.storeId == context.storeId)
+              .toList()
+            ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
       return Success<List<RepairRequest>>(repairs);
     } on FirebaseException catch (error) {
       return FailureResult<List<RepairRequest>>(
@@ -69,10 +72,10 @@ class FirestoreRepairRepository implements RepairRepository {
     }
 
     try {
-      final snapshot =
-          await FirebasePaths.repairs(_firestore, context.storeId)
-              .doc(repairId)
-              .get();
+      final snapshot = await FirebasePaths.repairs(
+        _firestore,
+        context.storeId,
+      ).doc(repairId).get();
       if (!snapshot.exists) {
         return const FailureResult<RepairRequest>(
           ValidationFailure('Repair request was not found.'),
@@ -203,10 +206,7 @@ class FirestoreRepairRepository implements RepairRepository {
           InfrastructureFailure('The delivery service returned another id.'),
         );
       }
-      final current = await getRepair(
-        context: context,
-        repairId: repairId,
-      );
+      final current = await getRepair(context: context, repairId: repairId);
       if (current is Success<RepairRequest>) {
         return current;
       }
@@ -295,13 +295,16 @@ class FirestoreRepairRepository implements RepairRepository {
         _firestore,
         context.storeId,
       ).where('repairId', isEqualTo: repairId).get();
-      final payments = snapshot.docs
-          .map(RepairFirestoreMapper.paymentFromSnapshot)
-          .where((payment) =>
-              payment.storeId == context.storeId &&
-              payment.repairId == repairId)
-          .toList()
-        ..sort((left, right) => right.postedAt.compareTo(left.postedAt));
+      final payments =
+          snapshot.docs
+              .map(RepairFirestoreMapper.paymentFromSnapshot)
+              .where(
+                (payment) =>
+                    payment.storeId == context.storeId &&
+                    payment.repairId == repairId,
+              )
+              .toList()
+            ..sort((left, right) => right.postedAt.compareTo(left.postedAt));
       return Success<List<RepairPayment>>(payments);
     } on FirebaseException catch (error) {
       return FailureResult<List<RepairPayment>>(

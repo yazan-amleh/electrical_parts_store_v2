@@ -59,10 +59,7 @@ class Cheque {
     return StoreContext(storeId: storeId, userId: userId);
   }
 
-  Cheque copyWith({
-    ChequeStatus? status,
-    String? settlementJournalEntryId,
-  }) {
+  Cheque copyWith({ChequeStatus? status, String? settlementJournalEntryId}) {
     return Cheque(
       id: id,
       storeId: storeId,

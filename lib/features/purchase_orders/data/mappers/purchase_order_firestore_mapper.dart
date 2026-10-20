@@ -72,9 +72,7 @@ abstract final class PurchaseOrderFirestoreMapper {
       id: _string(data['id'], '$productId-line'),
       productId: productId,
       productName: _string(data['productName'], productId),
-      quantity: Quantity.fromMilliUnits(
-        _int(data['quantityMilliUnits']),
-      ),
+      quantity: Quantity.fromMilliUnits(_int(data['quantityMilliUnits'])),
       unitFactorToBase: Quantity.fromMilliUnits(
         _int(data['unitFactorToBaseMilliUnits'], Quantity.scale),
       ),
@@ -114,8 +112,8 @@ abstract final class PurchaseOrderFirestoreMapper {
     return value is int
         ? value
         : value is num
-            ? value.toInt()
-            : fallback;
+        ? value.toInt()
+        : fallback;
   }
 
   static DateTime? _date(Object? value) {

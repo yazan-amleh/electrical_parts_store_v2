@@ -128,12 +128,7 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
   Widget _buildAccountTile(Account account) {
     final depth = _depthOf(account);
     return Card(
-      margin: EdgeInsetsDirectional.fromSTEB(
-        12 + depth * 24,
-        3,
-        12,
-        3,
-      ),
+      margin: EdgeInsetsDirectional.fromSTEB(12 + depth * 24, 3, 12, 3),
       child: ListTile(
         leading: Icon(
           account.isHeader

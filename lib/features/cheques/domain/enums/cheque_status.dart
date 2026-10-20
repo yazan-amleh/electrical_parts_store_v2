@@ -1,5 +1,1 @@
-enum ChequeStatus {
-  pending,
-  cleared,
-  bounced,
-}
+enum ChequeStatus { pending, cleared, bounced }

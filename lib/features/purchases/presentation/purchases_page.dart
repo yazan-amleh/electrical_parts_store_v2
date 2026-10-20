@@ -91,10 +91,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
     final fraction = parts.length == 1 || parts[1].isEmpty
         ? 0
         : int.parse(parts[1].padRight(2, '0'));
-    return Money(
-      minorUnits: major * 100 + fraction,
-      currency: currency,
-    );
+    return Money(minorUnits: major * 100 + fraction, currency: currency);
   }
 
   @override
@@ -155,10 +152,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
               children: [
                 const Icon(Icons.inventory_2_outlined),
                 const SizedBox(width: 8),
-                Text(
-                  'الأصناف',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
+                Text('الأصناف', style: Theme.of(context).textTheme.titleLarge),
                 const Spacer(),
                 Text('${products.length} صنف'),
               ],
@@ -234,9 +228,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
               ),
             ),
             title: Text(product.name),
-            subtitle: Text(
-              '${product.purchasePrice.formatted} • $available',
-            ),
+            subtitle: Text('${product.purchasePrice.formatted} • $available'),
             trailing: IconButton(
               tooltip: 'إضافة',
               onPressed: () => _addProduct(product),
@@ -567,8 +559,9 @@ class _PurchasesPageState extends State<PurchasesPage> {
           )
           .toList(growable: false),
       tax: tax,
-      supplierId:
-          _paymentMethod == PurchasePaymentMethod.credit ? supplierId : null,
+      supplierId: _paymentMethod == PurchasePaymentMethod.credit
+          ? supplierId
+          : null,
       description: 'شراء من شاشة المشتريات',
     );
 
@@ -639,10 +632,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
 }
 
 class _PurchaseCartLine {
-  const _PurchaseCartLine({
-    required this.product,
-    required this.quantity,
-  });
+  const _PurchaseCartLine({required this.product, required this.quantity});
 
   final Product product;
   final Quantity quantity;

@@ -9,9 +9,7 @@ import '../../domain/enums/offer_order_status.dart';
 import '../../domain/enums/offer_price_type.dart';
 
 abstract final class OfferFirestoreMapper {
-  static Offer fromSnapshot(
-    DocumentSnapshot<Map<String, dynamic>> snapshot,
-  ) {
+  static Offer fromSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot) {
     final data = snapshot.data() ?? const <String, dynamic>{};
     final currency = _string(data['currency'], 'ILS');
     final rawLines = data['lines'] is List<Object?>
@@ -87,10 +85,12 @@ abstract final class OfferFirestoreMapper {
       'currency': offer.currency,
       'createdAt': Timestamp.fromDate(offer.createdAt),
       'isActive': offer.isActive,
-      'startDate':
-          offer.startDate == null ? null : Timestamp.fromDate(offer.startDate!),
-      'endDate':
-          offer.endDate == null ? null : Timestamp.fromDate(offer.endDate!),
+      'startDate': offer.startDate == null
+          ? null
+          : Timestamp.fromDate(offer.startDate!),
+      'endDate': offer.endDate == null
+          ? null
+          : Timestamp.fromDate(offer.endDate!),
       'imageUrl': offer.imageUrl,
       'globalDiscountMinorUnits': offer.globalDiscount.minorUnits,
       'totalOriginalMinorUnits': offer.originalTotal.minorUnits,
@@ -183,8 +183,8 @@ abstract final class OfferFirestoreMapper {
     return value is int
         ? value
         : value is num
-            ? value.toInt()
-            : fallback;
+        ? value.toInt()
+        : fallback;
   }
 
   static DateTime? _date(Object? value) {

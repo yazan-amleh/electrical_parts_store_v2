@@ -303,8 +303,8 @@ class _AppShellPageState extends State<AppShellPage> {
   int selectedIndex = 0;
 
   List<_Module> get _modules => [
-        for (final section in _sections) ...section.modules,
-      ];
+    for (final section in _sections) ...section.modules,
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -362,12 +362,7 @@ class _AppShellPageState extends State<AppShellPage> {
       final sectionOffset = moduleOffset;
       navigationItems.add(
         Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(
-            20,
-            12,
-            20,
-            4,
-          ),
+          padding: const EdgeInsetsDirectional.fromSTEB(20, 12, 20, 4),
           child: Align(
             alignment: AlignmentDirectional.centerStart,
             child: Text(
@@ -378,9 +373,11 @@ class _AppShellPageState extends State<AppShellPage> {
         ),
       );
 
-      for (var localIndex = 0;
-          localIndex < section.modules.length;
-          localIndex++) {
+      for (
+        var localIndex = 0;
+        localIndex < section.modules.length;
+        localIndex++
+      ) {
         navigationItems.add(
           ListTile(
             leading: Icon(section.modules[localIndex].icon),
@@ -662,10 +659,7 @@ class _ModuleLandingPage extends StatelessWidget {
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    module.description,
-                    textAlign: TextAlign.center,
-                  ),
+                  Text(module.description, textAlign: TextAlign.center),
                   const SizedBox(height: 24),
                   Wrap(
                     alignment: WrapAlignment.center,
@@ -680,17 +674,18 @@ class _ModuleLandingPage extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color:
-                          Theme.of(context).colorScheme.surfaceContainerHighest,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       module.foundationReady
                           ? 'محرك هذه الوحدة موجود في الأساس البرمجي، '
-                              'والخطوة التالية تركيب واجهتها وربطها بحالات '
-                              'التحميل والأخطاء والصلاحيات.'
+                                'والخطوة التالية تركيب واجهتها وربطها بحالات '
+                                'التحميل والأخطاء والصلاحيات.'
                           : 'هذه الوحدة مثبتة في خريطة الترحيل حتى لا تضيع '
-                              'أي ميزة من V1، وسيتم تنفيذها ضمن ترتيب الترحيل.',
+                                'أي ميزة من V1، وسيتم تنفيذها ضمن ترتيب الترحيل.',
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -705,10 +700,7 @@ class _ModuleLandingPage extends StatelessWidget {
 }
 
 class _NavigationSection {
-  const _NavigationSection({
-    required this.title,
-    required this.modules,
-  });
+  const _NavigationSection({required this.title, required this.modules});
 
   final String title;
   final List<_Module> modules;

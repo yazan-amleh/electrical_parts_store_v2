@@ -30,9 +30,10 @@ class Product {
     this.expiryDate,
     this.isActive = true,
     List<ProductUnit> units = const [],
-  })  : inventoryValue = inventoryValue ??
-            _defaultInventoryValue(purchasePrice, quantityOnHand),
-        units = List.unmodifiable(units) {
+  }) : inventoryValue =
+           inventoryValue ??
+           _defaultInventoryValue(purchasePrice, quantityOnHand),
+       units = List.unmodifiable(units) {
     if (id.trim().isEmpty ||
         storeId.trim().isEmpty ||
         name.trim().isEmpty ||
@@ -50,7 +51,8 @@ class Product {
     for (final unit in this.units) {
       if (unit.productId != id || unit.storeId != storeId) {
         throw ArgumentError(
-            'Product unit belongs to another product or store.');
+          'Product unit belongs to another product or store.',
+        );
       }
       if (unit.retailPrice.currency != purchasePrice.currency ||
           unit.wholesalePrice.currency != purchasePrice.currency) {
@@ -91,15 +93,9 @@ class Product {
         quantityOnHand.milliUnits <= minimumQuantity.milliUnits;
   }
 
-  static Money _defaultInventoryValue(
-    Money purchasePrice,
-    Quantity quantity,
-  ) {
+  static Money _defaultInventoryValue(Money purchasePrice, Quantity quantity) {
     final numerator = purchasePrice.minorUnits * quantity.milliUnits;
     final minorUnits = (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
-    return Money(
-      minorUnits: minorUnits,
-      currency: purchasePrice.currency,
-    );
+    return Money(minorUnits: minorUnits, currency: purchasePrice.currency);
   }
 }

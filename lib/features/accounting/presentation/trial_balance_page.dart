@@ -117,9 +117,7 @@ class _TrialBalancePageState extends State<TrialBalancePage> {
                       DataRow(
                         cells: [
                           DataCell(
-                            Text(
-                              '${line.account.code} — ${line.account.name}',
-                            ),
+                            Text('${line.account.code} — ${line.account.name}'),
                           ),
                           DataCell(Text(line.debit.formatted)),
                           DataCell(Text(line.credit.formatted)),

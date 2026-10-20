@@ -17,9 +17,9 @@ class FirestoreAccountTransferRepository implements AccountTransferRepository {
     CommandQueueRepository? commandQueue,
     AccountTransferPostingPlanner planner =
         const AccountTransferPostingPlanner(),
-  })  : _functions = functions,
-        _commandQueue = commandQueue,
-        _planner = planner;
+  }) : _functions = functions,
+       _commandQueue = commandQueue,
+       _planner = planner;
 
   final firebase_functions.FirebaseFunctions _functions;
   final CommandQueueRepository? _commandQueue;
@@ -30,18 +30,13 @@ class FirestoreAccountTransferRepository implements AccountTransferRepository {
     required StoreContext context,
     required AccountTransfer transfer,
   }) async {
-    final prepared = _planner.prepare(
-      context: context,
-      transfer: transfer,
-    );
+    final prepared = _planner.prepare(context: context, transfer: transfer);
     if (prepared is FailureResult<AccountTransferPostingPlan>) {
       return FailureResult<AccountTransferPostingPlan>(prepared.failure);
     }
 
     final plan = (prepared as Success<AccountTransferPostingPlan>).value;
-    final payload = AccountTransferCommandMapper.toRequest(
-      transfer: transfer,
-    );
+    final payload = AccountTransferCommandMapper.toRequest(transfer: transfer);
 
     try {
       final callable = _functions.httpsCallable('postAccountTransfer');
@@ -83,9 +78,7 @@ class FirestoreAccountTransferRepository implements AccountTransferRepository {
     }
   }
 
-  Failure _mapFailure(
-    firebase_functions.FirebaseFunctionsException error,
-  ) {
+  Failure _mapFailure(firebase_functions.FirebaseFunctionsException error) {
     switch (error.code) {
       case 'permission-denied':
       case 'unauthenticated':

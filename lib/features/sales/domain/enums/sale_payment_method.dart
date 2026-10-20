@@ -1,6 +1,1 @@
-enum SalePaymentMethod {
-  cash,
-  bank,
-  card,
-  credit,
-}
+enum SalePaymentMethod { cash, bank, card, credit }

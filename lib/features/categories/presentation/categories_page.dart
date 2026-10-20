@@ -132,10 +132,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
           children: [
             const Icon(Icons.category_outlined),
             const SizedBox(width: 10),
-            Text(
-              'التصنيفات',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            Text('التصنيفات', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(width: 16),
             Expanded(
               child: TextField(
@@ -168,12 +165,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
   Widget _buildCategoryTile(BuildContext context, _CategoryRow row) {
     final category = row.category;
     return Card(
-      margin: EdgeInsetsDirectional.fromSTEB(
-        12 + row.depth * 24,
-        3,
-        12,
-        3,
-      ),
+      margin: EdgeInsetsDirectional.fromSTEB(12 + row.depth * 24, 3, 12, 3),
       child: ListTile(
         leading: Icon(
           category.isRoot
@@ -181,9 +173,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
               : Icons.subdirectory_arrow_left_outlined,
         ),
         title: Text(category.name),
-        subtitle: Text(
-          category.isActive ? 'نشط' : 'غير نشط',
-        ),
+        subtitle: Text(category.isActive ? 'نشط' : 'غير نشط'),
         trailing: IconButton(
           tooltip: 'تعديل',
           onPressed: () => _openEditor(category),
@@ -378,7 +368,8 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
               ],
               onChanged: (value) {
                 setState(
-                    () => _parentId = value?.isEmpty == true ? null : value);
+                  () => _parentId = value?.isEmpty == true ? null : value,
+                );
               },
             ),
             SwitchListTile(
@@ -390,9 +381,7 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
             if (_errorMessage != null)
               Text(
                 _errorMessage!,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                ),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
           ],
         ),
@@ -422,7 +411,8 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
     try {
       Navigator.of(context).pop(
         Category(
-          id: initial?.id ??
+          id:
+              initial?.id ??
               'category-${DateTime.now().microsecondsSinceEpoch}',
           storeId: widget.storeId,
           name: name,
@@ -444,10 +434,7 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
 }
 
 class _CategoryRow {
-  const _CategoryRow({
-    required this.category,
-    required this.depth,
-  });
+  const _CategoryRow({required this.category, required this.depth});
 
   final Category category;
   final int depth;

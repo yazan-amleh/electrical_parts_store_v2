@@ -76,12 +76,15 @@ void main() {
     );
   });
 
-  test('repair posting accounts have a distinct role for each control account', () {
-    const accounts = RepairPostingAccounts();
+  test(
+    'repair posting accounts have a distinct role for each control account',
+    () {
+      const accounts = RepairPostingAccounts();
 
-    accounts.validate();
-    expect(accounts.customerReceivableAccountId, '1140');
-    expect(accounts.repairRevenueAccountId, '4110');
-    expect(accounts.customerAdvancesAccountId, '2130');
-  });
+      accounts.validate();
+      expect(accounts.customerReceivableAccountId, '1140');
+      expect(accounts.repairRevenueAccountId, '4110');
+      expect(accounts.customerAdvancesAccountId, '2130');
+    },
+  );
 }

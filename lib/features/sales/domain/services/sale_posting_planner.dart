@@ -67,24 +67,22 @@ class SalePostingPlanner {
       }
 
       if (!sale.costTotal.isZero) {
-        journalLines.addAll(
-          <JournalLine>[
-            JournalLine(
-              id: _lineId(sale.id, 'cost'),
-              accountId: accounts.costOfSalesAccountId,
-              debit: sale.costTotal,
-              credit: zero,
-              description: 'Cost of sales',
-            ),
-            JournalLine(
-              id: _lineId(sale.id, 'inventory'),
-              accountId: accounts.inventoryAccountId,
-              debit: zero,
-              credit: sale.costTotal,
-              description: 'Inventory issue',
-            ),
-          ],
-        );
+        journalLines.addAll(<JournalLine>[
+          JournalLine(
+            id: _lineId(sale.id, 'cost'),
+            accountId: accounts.costOfSalesAccountId,
+            debit: sale.costTotal,
+            credit: zero,
+            description: 'Cost of sales',
+          ),
+          JournalLine(
+            id: _lineId(sale.id, 'inventory'),
+            accountId: accounts.inventoryAccountId,
+            debit: zero,
+            credit: sale.costTotal,
+            description: 'Inventory issue',
+          ),
+        ]);
       }
 
       final entry = JournalEntry(

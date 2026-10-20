@@ -15,9 +15,7 @@ abstract interface class AccountingQueryRepository {
     required StoreContext context,
   });
 
-  Future<Result<TrialBalance>> getTrialBalance({
-    required StoreContext context,
-  });
+  Future<Result<TrialBalance>> getTrialBalance({required StoreContext context});
 
   Future<Result<List<AccountLedgerLine>>> getAccountLedger({
     required StoreContext context,

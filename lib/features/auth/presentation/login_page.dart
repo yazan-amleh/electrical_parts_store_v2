@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 import '../application/auth_session_controller.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({
-    required this.controller,
-    super.key,
-  });
+  const LoginPage({required this.controller, super.key});
 
   final AuthSessionController controller;
 

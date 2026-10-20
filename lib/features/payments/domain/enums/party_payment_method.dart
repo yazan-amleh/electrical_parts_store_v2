@@ -1,6 +1,1 @@
-enum PartyPaymentMethod {
-  cash,
-  bank,
-  card,
-  cheque,
-}
+enum PartyPaymentMethod { cash, bank, card, cheque }

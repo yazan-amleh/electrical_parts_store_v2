@@ -9,10 +9,10 @@ class InMemoryAccountingRepository implements AccountingRepository {
   InMemoryAccountingRepository({
     required Iterable<Account> accounts,
     JournalPostingEngine engine = const JournalPostingEngine(),
-  })  : _accounts = <String, Account>{
-          for (final account in accounts) account.id: account,
-        },
-        _engine = engine;
+  }) : _accounts = <String, Account>{
+         for (final account in accounts) account.id: account,
+       },
+       _engine = engine;
 
   final Map<String, Account> _accounts;
   final JournalPostingEngine _engine;
@@ -51,9 +51,11 @@ class InMemoryAccountingRepository implements AccountingRepository {
 
     for (final delta in result.deltas) {
       final account = _accounts[delta.accountId]!;
-      final previousDebit = _debitTotals[delta.accountId] ??
+      final previousDebit =
+          _debitTotals[delta.accountId] ??
           Money.zero(currency: account.currency);
-      final previousCredit = _creditTotals[delta.accountId] ??
+      final previousCredit =
+          _creditTotals[delta.accountId] ??
           Money.zero(currency: account.currency);
       _debitTotals[delta.accountId] = previousDebit + delta.debit;
       _creditTotals[delta.accountId] = previousCredit + delta.credit;

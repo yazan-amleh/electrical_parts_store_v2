@@ -9,11 +9,7 @@ import '../domain/entities/financial_statements.dart';
 import '../domain/entities/trial_balance.dart';
 import '../domain/repositories/accounting_query_repository.dart';
 
-enum _StatementView {
-  trialBalance,
-  incomeStatement,
-  balanceSheet,
-}
+enum _StatementView { trialBalance, incomeStatement, balanceSheet }
 
 class FinancialStatementsPage extends StatefulWidget {
   const FinancialStatementsPage({
@@ -91,8 +87,9 @@ class _FinancialStatementsPageState extends State<FinancialStatementsPage> {
             const SizedBox(height: 12),
             switch (_selectedView) {
               _StatementView.trialBalance => _buildTrialBalance(trialBalance),
-              _StatementView.incomeStatement =>
-                _buildIncomeStatement(statements),
+              _StatementView.incomeStatement => _buildIncomeStatement(
+                statements,
+              ),
               _StatementView.balanceSheet => _buildBalanceSheet(statements),
             },
           ],
@@ -211,15 +208,17 @@ class _FinancialStatementsPageState extends State<FinancialStatementsPage> {
                     DataRow(
                       cells: [
                         DataCell(
-                          Text(
-                            '${line.account.code} — ${line.account.name}',
-                          ),
+                          Text('${line.account.code} — ${line.account.name}'),
                         ),
                         DataCell(Text(line.debit.formatted)),
                         DataCell(Text(line.credit.formatted)),
-                        DataCell(Text(line.account.normalSide.name == 'debit'
-                            ? (line.debit - line.credit).formatted
-                            : (line.credit - line.debit).formatted)),
+                        DataCell(
+                          Text(
+                            line.account.normalSide.name == 'debit'
+                                ? (line.debit - line.credit).formatted
+                                : (line.credit - line.debit).formatted,
+                          ),
+                        ),
                       ],
                     ),
                 ],
@@ -312,10 +311,7 @@ class _FinancialStatementsPageState extends State<FinancialStatementsPage> {
           lines: statements.equity,
           total: statements.totalEquity,
         ),
-        _buildSummaryCard(
-          'صافي الربح للفترة',
-          statements.netIncome,
-        ),
+        _buildSummaryCard('صافي الربح للفترة', statements.netIncome),
         _buildSummaryCard(
           'إجمالي الالتزامات وحقوق الملكية',
           statements.totalLiabilitiesAndEquity,
@@ -365,9 +361,7 @@ class _FinancialStatementsPageState extends State<FinancialStatementsPage> {
                 ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    '${line.account.code} — ${line.account.name}',
-                  ),
+                  title: Text('${line.account.code} — ${line.account.name}'),
                   trailing: Text(line.amount.formatted),
                 ),
           ],
@@ -385,10 +379,7 @@ class _FinancialStatementsPageState extends State<FinancialStatementsPage> {
       margin: const EdgeInsets.only(bottom: 12),
       color: highlight ? Colors.green.withValues(alpha: 0.12) : null,
       child: ListTile(
-        title: Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
         trailing: Text(
           value.formatted,
           style: const TextStyle(fontWeight: FontWeight.bold),
@@ -397,10 +388,7 @@ class _FinancialStatementsPageState extends State<FinancialStatementsPage> {
     );
   }
 
-  Widget _totalRow({
-    required String label,
-    required String value,
-  }) {
+  Widget _totalRow({required String label, required String value}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [

@@ -75,8 +75,9 @@ class _ProductsPageState extends State<ProductsPage> {
                 ),
                 const SizedBox(width: 8),
                 FilledButton.icon(
-                  onPressed:
-                      widget.repository == null ? null : () => _openEditor(),
+                  onPressed: widget.repository == null
+                      ? null
+                      : () => _openEditor(),
                   icon: const Icon(Icons.add),
                   label: const Text('إضافة صنف'),
                 ),
@@ -102,10 +103,7 @@ class _ProductsPageState extends State<ProductsPage> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_errorMessage != null) {
-      return _ErrorState(
-        message: _errorMessage!,
-        onRetry: _loadProducts,
-      );
+      return _ErrorState(message: _errorMessage!, onRetry: _loadProducts);
     }
     if (products.isEmpty) {
       return const Center(child: Text('لا توجد أصناف مطابقة للبحث.'));
@@ -276,10 +274,7 @@ class _ProductsPageState extends State<ProductsPage> {
 }
 
 class _ErrorState extends StatelessWidget {
-  const _ErrorState({
-    required this.message,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.message, required this.onRetry});
 
   final String message;
   final Future<void> Function() onRetry;
