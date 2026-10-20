@@ -476,14 +476,14 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
         storeName: widget.membership.storeId,
       );
       final filename =
-          'sales_analytics_' + _formatDate(_from) + '_' + _formatDate(_to);
+          'sales_analytics_${_formatDate(_from)}_${_formatDate(_to)}';
       if (share) {
-        await Printing.sharePdf(bytes: bytes, filename: filename + '.pdf');
+        await Printing.sharePdf(bytes: bytes, filename: '$filename.pdf');
       } else {
         await Printing.layoutPdf(onLayout: (_) async => bytes);
       }
     } catch (error) {
-      _showMessage('تعذر تجهيز PDF: ' + error.toString());
+      _showMessage('تعذر تجهيز PDF: $error');
     } finally {
       if (mounted) {
         setState(() => _isExporting = false);
