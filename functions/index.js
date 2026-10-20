@@ -1673,9 +1673,6 @@ function parsePartyPaymentCommand(rawCommand) {
   if (accounts.settlementAccountId === accounts.partyAccountId) {
     invalid('Party payment accounts must be distinct.');
   }
-  if (paymentMethod === 'cheque' && partyType !== 'customer') {
-    invalid('Cheques are currently supported for customer receipts.');
-  }
   const chequeNumber = payment.chequeNumber == null
     ? null
     : stringValue(payment.chequeNumber, 'payment.chequeNumber');
@@ -1687,6 +1684,9 @@ function parsePartyPaymentCommand(rawCommand) {
     : parseDate(payment.dueDate, 'payment.dueDate');
   if (paymentMethod === 'cheque' && !chequeNumber) {
     invalid('A cheque number is required.');
+  }
+  if (paymentMethod === 'cheque' && !bankName) {
+    invalid('A cheque bank name is required.');
   }
 
   return {
@@ -1841,15 +1841,22 @@ async function postPartyPaymentInTransaction(
 
   const partyBalanceSnapshot = await transaction.get(partyBalanceRef);
 
+  const isCustomerPayment = command.payment.partyType === 'customer';
+  const settlementAccountType =
+    !isCustomerPayment && command.payment.paymentMethod === 'cheque'
+      ? 'liability'
+      : 'asset';
   assertAccount(
     accountSnapshots.get(command.accounts.settlementAccountId),
     command.accounts.settlementAccountId,
     command.storeId,
     command.payment.currency,
-    'asset',
-    paymentAccountControlType(command.payment.paymentMethod),
+    settlementAccountType,
+    paymentAccountControlType(
+      command.payment.paymentMethod,
+      command.payment.partyType,
+    ),
   );
-  const isCustomerPayment = command.payment.partyType === 'customer';
   assertAccount(
     accountSnapshots.get(command.accounts.partyAccountId),
     command.accounts.partyAccountId,
@@ -4171,7 +4178,7 @@ function assertTransferAccount(
   }
 }
 
-function paymentAccountControlType(paymentMethod) {
+function paymentAccountControlType(paymentMethod, partyType) {
   switch (paymentMethod) {
     case 'cash':
       return 'cashBox';
@@ -4180,7 +4187,7 @@ function paymentAccountControlType(paymentMethod) {
     case 'card':
       return 'cardReceivable';
     case 'cheque':
-      return 'checks';
+      return partyType === 'supplier' ? 'checksPayable' : 'checks';
     case 'credit':
       return 'customerReceivable';
     default:
@@ -5040,17 +5047,28 @@ function parseChequeSettlementCommand(rawCommand) {
     accounts.checksAccountId,
     'checksAccountId',
   );
+  const issuedChecksAccountId = safeId(
+    accounts.issuedChecksAccountId,
+    'issuedChecksAccountId',
+  );
   const customerReceivableAccountId = safeId(
     accounts.customerReceivableAccountId,
     'customerReceivableAccountId',
+  );
+  const supplierPayableAccountId = safeId(
+    accounts.supplierPayableAccountId,
+    'supplierPayableAccountId',
   );
   const bankAccountId = action === 'clear'
     ? safeId(accounts.bankAccountId, 'bankAccountId')
     : null;
   const accountIds = [
     checksAccountId,
-    action === 'clear' ? bankAccountId : customerReceivableAccountId,
-  ];
+    issuedChecksAccountId,
+    customerReceivableAccountId,
+    supplierPayableAccountId,
+    bankAccountId,
+  ].filter((accountId) => accountId != null);
   if (new Set(accountIds).size !== accountIds.length) {
     invalid('Cheque settlement accounts must be different.');
   }
@@ -5062,7 +5080,9 @@ function parseChequeSettlementCommand(rawCommand) {
     postedAt: parseDate(command.postedAt, 'postedAt'),
     accounts: {
       checksAccountId,
+      issuedChecksAccountId,
       customerReceivableAccountId,
+      supplierPayableAccountId,
       bankAccountId,
     },
   };
@@ -5142,8 +5162,9 @@ async function settleChequeInTransaction(transaction, userId, command) {
     deny('Cheque belongs to another store.');
   }
   if (cheque.paymentMethod !== 'cheque' ||
-      cheque.partyType !== 'customer') {
-    invalid('Only incoming customer cheques can be settled here.');
+      (cheque.partyType !== 'customer' &&
+       cheque.partyType !== 'supplier')) {
+    invalid('Only customer and supplier cheques can be settled here.');
   }
   if (cheque.status !== 'pending') {
     conflict('The cheque is already settled.');
@@ -5160,12 +5181,16 @@ async function settleChequeInTransaction(transaction, userId, command) {
     conflict('The cheque settlement journal idempotency key already exists.');
   }
 
-  const accountIds = [
-    command.accounts.checksAccountId,
-    command.action === 'clear'
-      ? command.accounts.bankAccountId
-      : command.accounts.customerReceivableAccountId,
-  ];
+  const isCustomerCheque = cheque.partyType === 'customer';
+  const heldChequeAccountId = isCustomerCheque
+    ? command.accounts.checksAccountId
+    : command.accounts.issuedChecksAccountId;
+  const counterpartyAccountId = command.action === 'clear'
+    ? command.accounts.bankAccountId
+    : isCustomerCheque
+        ? command.accounts.customerReceivableAccountId
+        : command.accounts.supplierPayableAccountId;
+  const accountIds = [heldChequeAccountId, counterpartyAccountId];
   const accountSnapshots = new Map();
   const balanceSnapshots = new Map();
   for (const accountId of accountIds) {
@@ -5182,12 +5207,12 @@ async function settleChequeInTransaction(transaction, userId, command) {
     invalid('Cheque amount is invalid.');
   }
   assertAccount(
-    accountSnapshots.get(command.accounts.checksAccountId),
-    command.accounts.checksAccountId,
+    accountSnapshots.get(heldChequeAccountId),
+    heldChequeAccountId,
     command.storeId,
     cheque.currency,
-    'asset',
-    'checks',
+    isCustomerCheque ? 'asset' : 'liability',
+    isCustomerCheque ? 'checks' : 'checksPayable',
   );
   if (command.action === 'clear') {
     assertAccount(
@@ -5200,12 +5225,12 @@ async function settleChequeInTransaction(transaction, userId, command) {
     );
   } else {
     assertAccount(
-      accountSnapshots.get(command.accounts.customerReceivableAccountId),
-      command.accounts.customerReceivableAccountId,
+      accountSnapshots.get(counterpartyAccountId),
+      counterpartyAccountId,
       command.storeId,
       cheque.currency,
-      'asset',
-      'customerReceivable',
+      isCustomerCheque ? 'asset' : 'liability',
+      isCustomerCheque ? 'customerReceivable' : 'supplierPayable',
     );
   }
 
@@ -5219,7 +5244,7 @@ async function settleChequeInTransaction(transaction, userId, command) {
       .doc(partyLedgerId);
     bouncedPartyBalanceRef = storeRef
       .collection('party_balances')
-      .doc('customer-' + cheque.partyId);
+      .doc(cheque.partyType + '-' + cheque.partyId);
     const bouncedLedgerSnapshot = await transaction.get(
       bouncedPartyLedgerRef,
     );
@@ -5234,18 +5259,28 @@ async function settleChequeInTransaction(transaction, userId, command) {
       : {};
   }
 
-  const debitAccountId = command.action === 'clear'
-    ? command.accounts.bankAccountId
-    : command.accounts.customerReceivableAccountId;
-  const creditAccountId = command.accounts.checksAccountId;
+  const debitAccountId = isCustomerCheque
+    ? command.action === 'clear'
+        ? command.accounts.bankAccountId
+        : command.accounts.customerReceivableAccountId
+    : heldChequeAccountId;
+  const creditAccountId = isCustomerCheque
+    ? heldChequeAccountId
+    : command.action === 'clear'
+        ? command.accounts.bankAccountId
+        : command.accounts.supplierPayableAccountId;
   const journalLines = [
     {
       id: journalEntryId + '-debit',
       storeId: command.storeId,
       accountId: debitAccountId,
       description: command.action === 'clear'
-        ? 'Cheque deposited to bank'
-        : 'Bounced cheque returned to customer receivable',
+        ? isCustomerCheque
+            ? 'Incoming cheque deposited to bank'
+            : 'Issued cheque paid through bank'
+        : isCustomerCheque
+            ? 'Bounced cheque returned to customer receivable'
+            : 'Bounced supplier cheque returned to payable',
       lineNumber: 1,
       debitMinorUnits: amount,
       creditMinorUnits: 0,
@@ -5254,7 +5289,9 @@ async function settleChequeInTransaction(transaction, userId, command) {
       id: journalEntryId + '-credit',
       storeId: command.storeId,
       accountId: creditAccountId,
-      description: 'Cheque settlement',
+      description: isCustomerCheque
+        ? 'Incoming cheque settlement'
+        : 'Issued cheque settlement',
       lineNumber: 2,
       debitMinorUnits: 0,
       creditMinorUnits: amount,
@@ -5299,26 +5336,31 @@ async function settleChequeInTransaction(transaction, userId, command) {
   if (command.action === 'bounce') {
     const currentDebit = storedInt(bouncedPartyBalance.debitMinorUnits, 0);
     const currentCredit = storedInt(bouncedPartyBalance.creditMinorUnits, 0);
+    const partyDebit = isCustomerCheque ? amount : 0;
+    const partyCredit = isCustomerCheque ? 0 : amount;
     transaction.set(bouncedPartyLedgerRef, {
       storeId: command.storeId,
-      partyType: 'customer',
+      partyType: cheque.partyType,
       partyId: cheque.partyId,
       sourceType: 'chequeBounce',
       sourceId: command.chequeId,
       currency: cheque.currency,
-      debitMinorUnits: amount,
-      creditMinorUnits: 0,
-      description: 'Bounced cheque returned to customer receivable',
+      debitMinorUnits: partyDebit,
+      creditMinorUnits: partyCredit,
+      description: isCustomerCheque
+        ? 'Bounced cheque returned to customer receivable'
+        : 'Bounced supplier cheque returned to payable',
       postedAt: Timestamp.fromDate(command.postedAt),
     });
     transaction.set(bouncedPartyBalanceRef, {
       storeId: command.storeId,
-      partyType: 'customer',
+      partyType: cheque.partyType,
       partyId: cheque.partyId,
       currency: cheque.currency,
-      debitMinorUnits: currentDebit + amount,
-      creditMinorUnits: currentCredit,
-      balanceMinorUnits: currentDebit + amount - currentCredit,
+      debitMinorUnits: currentDebit + partyDebit,
+      creditMinorUnits: currentCredit + partyCredit,
+      balanceMinorUnits:
+        currentDebit + partyDebit - currentCredit - partyCredit,
       updatedAt: FieldValue.serverTimestamp(),
     });
   }
