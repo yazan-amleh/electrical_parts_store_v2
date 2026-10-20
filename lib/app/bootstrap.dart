@@ -39,8 +39,7 @@ abstract final class AppBootstrap {
       return AppDependencies(
         runtime: runtime,
         reportDocumentBuilder: PdfReportDocumentBuilder(),
-        categoryInventoryDocumentBuilder:
-            PdfCategoryInventoryDocumentBuilder(),
+        categoryInventoryDocumentBuilder: PdfCategoryInventoryDocumentBuilder(),
         repairDocumentBuilder: PdfRepairDocumentBuilder(),
       );
     }
@@ -129,8 +128,7 @@ abstract final class AppBootstrap {
       ),
       reportsRepository: FirestoreReportsRepository(firestore: firestore),
       reportDocumentBuilder: PdfReportDocumentBuilder(),
-      categoryInventoryDocumentBuilder:
-          PdfCategoryInventoryDocumentBuilder(),
+      categoryInventoryDocumentBuilder: PdfCategoryInventoryDocumentBuilder(),
       repairDocumentBuilder: PdfRepairDocumentBuilder(),
       settingsRepository: FirestoreSettingsRepository(firestore: firestore),
     );
