@@ -19,14 +19,14 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 - Firestore rules proposal and emulator tests.
 - Accounting audit callable and UI.
 - Repair workflow and accounting contract.
-- Cash/bank overview and canonical operational reports.
+- Cash/bank overview, canonical operational reports and CSV clipboard export.
 - CI checks for JavaScript syntax, formatting, analyzer, Flutter tests and Firestore rules.
 
 ## Release gates still open
 
 1. Complete remaining UI parity and responsive review.
 2. Add export/print adapters without changing accounting facts.
-3. Finish settings and administration screens.
+3. Finish PDF/print report adapters and the remaining advanced analytics.
 4. Expand emulator scenarios, including concurrent retries and cheque bounce.
 5. Run a clean-data acceptance pass with representative store workflows.
 6. Configure the separate V2 Firebase project, then deploy only after the rules and functions review is approved.
