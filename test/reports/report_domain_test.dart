@@ -18,6 +18,7 @@ void main() {
       salesByPaymentMethod: {'cash': 2, 'credit': 1},
       expensesByPaymentMethod: {'cash': 1},
       transactions: const <ReportTransaction>[],
+      mayBeTruncated: false,
     );
 
     expect(report.grossProfit, const Money(minorUnits: 4000));
