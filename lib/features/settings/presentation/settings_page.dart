@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
-import '../../auth/domain/entities/store_member.dart';
+import '../domain/entities/store_member.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../auth/domain/enums/store_role.dart';
 import '../domain/entities/store_profile.dart';
