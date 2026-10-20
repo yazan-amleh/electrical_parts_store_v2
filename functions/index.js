@@ -6046,3 +6046,1494 @@ async function runAccountingIntegrityAudit(userId, command) {
     issues,
   };
 }
+
+
+exports.createRepair = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const command = parseRepairCreateCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return createRepairInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('createRepair failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError('internal', 'The repair could not be created.');
+  }
+});
+
+exports.updateRepair = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const command = parseRepairUpdateCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return updateRepairInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('updateRepair failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError('internal', 'The repair could not be updated.');
+  }
+});
+
+exports.deliverRepair = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const command = parseRepairDeliveryCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return deliverRepairInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('deliverRepair failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError('internal', 'The repair could not be delivered.');
+  }
+});
+
+exports.postRepairAdvance = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const command = parseRepairPaymentCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return postRepairAdvanceInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('postRepairAdvance failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The repair advance could not be posted.',
+    );
+  }
+});
+
+exports.postRepairPayment = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const command = parseRepairPaymentCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return postRepairPaymentInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('postRepairPayment failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The repair payment could not be posted.',
+    );
+  }
+});
+
+function parseRepairCreateCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const repair = parseRepairPayload(
+    asObject(command.repair, 'repair'),
+  );
+  if (repair.status !== 'received') {
+    invalid('A new repair must start with received status.');
+  }
+  return {storeId, repair};
+}
+
+function parseRepairUpdateCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const repairId = safeId(command.repairId, 'repairId');
+  const repair = parseRepairPayload(
+    asObject(command.repair, 'repair'),
+  );
+  if (repair.id !== repairId) {
+    invalid('Repair id does not match the update target.');
+  }
+  if (repair.status === 'delivered') {
+    invalid('Use the delivery command to complete a repair.');
+  }
+  return {storeId, repairId, repair};
+}
+
+function parseRepairDeliveryCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const rawAccounts = asObject(command.accounts, 'accounts');
+  return {
+    storeId: safeId(command.storeId, 'storeId'),
+    repairId: safeId(command.repairId, 'repairId'),
+    idempotencyKey: safeId(
+      command.idempotencyKey,
+      'idempotencyKey',
+    ),
+    postedAt: parseDate(command.postedAt, 'postedAt'),
+    accounts: {
+      customerReceivableAccountId: safeId(
+        rawAccounts.customerReceivableAccountId,
+        'customerReceivableAccountId',
+      ),
+      repairRevenueAccountId: safeId(
+        rawAccounts.repairRevenueAccountId,
+        'repairRevenueAccountId',
+      ),
+      inventoryAccountId: safeId(
+        rawAccounts.inventoryAccountId,
+        'inventoryAccountId',
+      ),
+      costOfSalesAccountId: safeId(
+        rawAccounts.costOfSalesAccountId,
+        'costOfSalesAccountId',
+      ),
+      customerAdvancesAccountId: safeId(
+        rawAccounts.customerAdvancesAccountId,
+        'customerAdvancesAccountId',
+      ),
+    },
+  };
+}
+
+function parseRepairPaymentCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const rawPayment = asObject(command.payment, 'payment');
+  const rawAccounts = asObject(
+    command.postingAccounts,
+    'postingAccounts',
+  );
+  const paymentMethod = stringValue(
+    rawPayment.paymentMethod,
+    'payment.paymentMethod',
+  );
+  if (!PARTY_PAYMENT_METHODS.has(paymentMethod)) {
+    invalid('Unsupported repair payment method.');
+  }
+
+  return {
+    storeId: safeId(command.storeId, 'storeId'),
+    repairId: safeId(command.repairId, 'repairId'),
+    payment: {
+      id: safeId(rawPayment.id, 'payment id'),
+      idempotencyKey: safeId(
+        rawPayment.idempotencyKey,
+        'payment idempotencyKey',
+      ),
+      postedAt: parseDate(rawPayment.postedAt, 'payment.postedAt'),
+      paymentMethod,
+      amountMinorUnits: positiveInt(
+        rawPayment.amountMinorUnits,
+        'payment.amountMinorUnits',
+      ),
+      currency: stringValue(rawPayment.currency, 'payment.currency'),
+      description: rawPayment.description == null
+        ? null
+        : stringValue(rawPayment.description, 'payment.description'),
+      chequeNumber: rawPayment.chequeNumber == null
+        ? null
+        : stringValue(rawPayment.chequeNumber, 'payment.chequeNumber'),
+      bankName: rawPayment.bankName == null
+        ? null
+        : stringValue(rawPayment.bankName, 'payment.bankName'),
+      dueDate: rawPayment.dueDate == null
+        ? null
+        : parseDate(rawPayment.dueDate, 'payment.dueDate'),
+    },
+    accounts: {
+      settlementAccountId: safeId(
+        rawAccounts.settlementAccountId,
+        'settlementAccountId',
+      ),
+      customerReceivableAccountId: safeId(
+        rawAccounts.customerReceivableAccountId,
+        'customerReceivableAccountId',
+      ),
+      customerAdvancesAccountId: rawAccounts.customerAdvancesAccountId == null
+        ? null
+        : safeId(
+          rawAccounts.customerAdvancesAccountId,
+          'customerAdvancesAccountId',
+        ),
+    },
+  };
+}
+
+function parseRepairPayload(rawRepair) {
+  const rawParts = Array.isArray(rawRepair.parts)
+    ? rawRepair.parts
+    : [];
+  if (rawParts.length > MAX_LINES) {
+    invalid('A repair cannot contain more than 100 parts.');
+  }
+
+  const currency = stringValue(
+    rawRepair.currency,
+    'repair.currency',
+  );
+  const parts = rawParts.map((rawPart, index) => {
+    const part = asObject(
+      rawPart,
+      'repair.parts[' + index + ']',
+    );
+    return {
+      id: safeId(part.id, 'repair part id'),
+      productId: safeId(part.productId, 'repair product id'),
+      productName: stringValue(
+        part.productName,
+        'repair product name',
+      ),
+      quantityMilliUnits: positiveInt(
+        part.quantityMilliUnits,
+        'repair part quantityMilliUnits',
+      ),
+      unitPriceMinorUnits: nonNegativeInt(
+        part.unitPriceMinorUnits,
+        'repair part unitPriceMinorUnits',
+      ),
+      unitCostMinorUnits: nonNegativeInt(
+        part.unitCostMinorUnits || 0,
+        'repair part unitCostMinorUnits',
+      ),
+      source: part.source == null
+        ? 'products'
+        : stringValue(part.source, 'repair part source'),
+    };
+  });
+  const partIds = new Set(parts.map((part) => part.id));
+  if (partIds.size !== parts.length) {
+    invalid('Repair part ids must be unique.');
+  }
+
+  const requiredParts = Array.isArray(rawRepair.requiredParts)
+    ? rawRepair.requiredParts.map((value, index) => stringValue(
+      value,
+      'repair.requiredParts[' + index + ']',
+    ))
+    : [];
+  const deviceImages = Array.isArray(rawRepair.deviceImages)
+    ? rawRepair.deviceImages.map((value, index) => stringValue(
+      value,
+      'repair.deviceImages[' + index + ']',
+    ))
+    : [];
+  const rawRequiredStatus = rawRepair.requiredPartsStatus;
+  const requiredPartsStatus = {};
+  if (rawRequiredStatus != null) {
+    const statusObject = asObject(
+      rawRequiredStatus,
+      'repair.requiredPartsStatus',
+    );
+    for (const [key, value] of Object.entries(statusObject)) {
+      requiredPartsStatus[stringValue(key, 'required part name')] =
+        stringValue(value, 'required part status');
+    }
+  }
+
+  return {
+    id: safeId(rawRepair.id, 'repair id'),
+    idempotencyKey: safeId(
+      rawRepair.idempotencyKey,
+      'repair idempotencyKey',
+    ),
+    customerId: safeId(rawRepair.customerId, 'repair customerId'),
+    deviceName: stringValue(rawRepair.deviceName, 'repair deviceName'),
+    deviceModel: stringValue(rawRepair.deviceModel, 'repair deviceModel'),
+    problemDescription: optionalText(
+      rawRepair.problemDescription,
+      'repair.problemDescription',
+    ),
+    createdAt: parseDate(rawRepair.createdAt, 'repair.createdAt'),
+    receivedAt: parseDate(rawRepair.receivedAt, 'repair.receivedAt'),
+    expectedDeliveryDate: parseDate(
+      rawRepair.expectedDeliveryDate,
+      'repair.expectedDeliveryDate',
+    ),
+    status: rawRepair.status == null
+      ? 'received'
+      : stringValue(rawRepair.status, 'repair.status'),
+    estimatedCostMinorUnits: nonNegativeInt(
+      rawRepair.estimatedCostMinorUnits || 0,
+      'repair.estimatedCostMinorUnits',
+    ),
+    laborCostMinorUnits: nonNegativeInt(
+      rawRepair.laborCostMinorUnits || 0,
+      'repair.laborCostMinorUnits',
+    ),
+    currency,
+    technicianNotes: optionalText(
+      rawRepair.technicianNotes,
+      'repair.technicianNotes',
+    ),
+    serialNumber: optionalText(rawRepair.serialNumber, 'repair.serialNumber'),
+    priority: rawRepair.priority == null
+      ? 'normal'
+      : stringValue(rawRepair.priority, 'repair.priority'),
+    deviceCondition: rawRepair.deviceCondition == null
+      ? 'notWorking'
+      : stringValue(
+        rawRepair.deviceCondition,
+        'repair.deviceCondition',
+      ),
+    deviceConditionNotes: optionalText(
+      rawRepair.deviceConditionNotes,
+      'repair.deviceConditionNotes',
+    ),
+    requiredParts,
+    requiredPartsStatus,
+    deviceImages,
+    parts,
+  };
+}
+
+async function createRepairInTransaction(transaction, userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const repairRef = storeRef.collection('repairs').doc(command.repair.id);
+  const idempotencyRef = storeRef
+    .collection('repair_idempotency')
+    .doc(command.repair.idempotencyKey);
+  const memberSnapshot = await transaction.get(
+    storeRef.collection('members').doc(userId),
+  );
+  assertMembership(
+    memberSnapshot,
+    command.storeId,
+    'manage repairs',
+    new Set(['owner', 'admin', 'accountant', 'sales']),
+  );
+  const [idempotencySnapshot, repairSnapshot, partySnapshot] =
+    await Promise.all([
+      transaction.get(idempotencyRef),
+      transaction.get(repairRef),
+      transaction.get(storeRef.collection('parties').doc(
+        command.repair.customerId,
+      )),
+    ]);
+  if (idempotencySnapshot.exists) {
+    const data = idempotencySnapshot.data();
+    if (data.repairId === command.repair.id) {
+      return {
+        status: 'already_created',
+        repairId: command.repair.id,
+      };
+    }
+    conflict('The repair idempotency key is already assigned.');
+  }
+  if (repairSnapshot.exists) {
+    conflict('The repair id already exists.');
+  }
+  assertParty(
+    partySnapshot,
+    command.storeId,
+    command.repair.customerId,
+    'customer',
+  );
+
+  const parts = await canonicalRepairParts(
+    transaction,
+    storeRef,
+    command.storeId,
+    command.repair,
+  );
+  transaction.set(repairRef, repairDocument(
+    command.storeId,
+    command.repair,
+    parts,
+    userId,
+  ));
+  transaction.set(idempotencyRef, {
+    storeId: command.storeId,
+    repairId: command.repair.id,
+    idempotencyKey: command.repair.idempotencyKey,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {status: 'created', repairId: command.repair.id};
+}
+
+async function updateRepairInTransaction(transaction, userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const repairRef = storeRef.collection('repairs').doc(command.repairId);
+  const memberSnapshot = await transaction.get(
+    storeRef.collection('members').doc(userId),
+  );
+  assertMembership(
+    memberSnapshot,
+    command.storeId,
+    'manage repairs',
+    new Set(['owner', 'admin', 'accountant', 'sales']),
+  );
+  const repairSnapshot = await transaction.get(repairRef);
+  if (!repairSnapshot.exists) {
+    invalid('Repair request was not found.');
+  }
+  const existing = repairSnapshot.data();
+  assertRepairTransition(existing.status || 'received', command.repair.status);
+  if (existing.invoiceJournalEntryId) {
+    invalid('An invoiced repair cannot be edited.');
+  }
+
+  const partySnapshot = await transaction.get(
+    storeRef.collection('parties').doc(command.repair.customerId),
+  );
+  assertParty(
+    partySnapshot,
+    command.storeId,
+    command.repair.customerId,
+    'customer',
+  );
+  const parts = await canonicalRepairParts(
+    transaction,
+    storeRef,
+    command.storeId,
+    command.repair,
+  );
+  transaction.update(
+    repairRef,
+    repairEditableDocument(command.repair, parts),
+  );
+  return {status: 'updated', repairId: command.repairId};
+}
+
+async function canonicalRepairParts(
+  transaction,
+  storeRef,
+  storeId,
+  repair,
+) {
+  const productSnapshots = new Map();
+  for (const part of repair.parts) {
+    if (productSnapshots.has(part.productId)) {
+      invalid('A repair cannot use the same product more than once.');
+    }
+    productSnapshots.set(
+      part.productId,
+      await transaction.get(
+        storeRef.collection('products').doc(part.productId),
+      ),
+    );
+  }
+
+  return repair.parts.map((part) => {
+    const productSnapshot = productSnapshots.get(part.productId);
+    if (!productSnapshot.exists) {
+      invalid('Repair product was not found: ' + part.productId);
+    }
+    const product = productSnapshot.data();
+    if (product.storeId !== storeId) {
+      deny('Repair product belongs to another store.');
+    }
+    if (product.isActive === false || product.isService === true) {
+      invalid('Only active stock products can be used in a repair.');
+    }
+    const productCurrency = product.currency || 'ILS';
+    if (productCurrency !== repair.currency) {
+      invalid('Repair product currency does not match the repair.');
+    }
+    return {
+      id: part.id,
+      productId: part.productId,
+      productName: product.name,
+      quantityMilliUnits: part.quantityMilliUnits,
+      unitPriceMinorUnits: part.unitPriceMinorUnits,
+      unitCostMinorUnits: storedInt(
+        product.purchasePriceMinorUnits,
+        part.unitCostMinorUnits,
+      ),
+      currency: repair.currency,
+      source: part.source,
+    };
+  });
+}
+
+function repairDocument(storeId, repair, parts, userId) {
+  return {
+    storeId,
+    idempotencyKey: repair.idempotencyKey,
+    customerId: repair.customerId,
+    deviceName: repair.deviceName,
+    deviceModel: repair.deviceModel,
+    problemDescription: repair.problemDescription,
+    createdAt: Timestamp.fromDate(repair.createdAt),
+    receivedAt: Timestamp.fromDate(repair.receivedAt),
+    expectedDeliveryDate: Timestamp.fromDate(repair.expectedDeliveryDate),
+    status: 'received',
+    estimatedCostMinorUnits: repair.estimatedCostMinorUnits,
+    laborCostMinorUnits: repair.laborCostMinorUnits,
+    currency: repair.currency,
+    technicianNotes: repair.technicianNotes,
+    serialNumber: repair.serialNumber,
+    priority: repair.priority,
+    deviceCondition: repair.deviceCondition,
+    deviceConditionNotes: repair.deviceConditionNotes,
+    requiredParts: repair.requiredParts,
+    requiredPartsStatus: repair.requiredPartsStatus,
+    deviceImages: repair.deviceImages,
+    parts,
+    advancePaidMinorUnits: 0,
+    paidMinorUnits: 0,
+    invoiceJournalEntryId: null,
+    invoicedTotalMinorUnits: 0,
+    costOfPartsMinorUnits: 0,
+    createdBy: userId,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+function repairEditableDocument(repair, parts) {
+  return {
+    customerId: repair.customerId,
+    deviceName: repair.deviceName,
+    deviceModel: repair.deviceModel,
+    problemDescription: repair.problemDescription,
+    receivedAt: Timestamp.fromDate(repair.receivedAt),
+    expectedDeliveryDate: Timestamp.fromDate(repair.expectedDeliveryDate),
+    status: repair.status,
+    estimatedCostMinorUnits: repair.estimatedCostMinorUnits,
+    laborCostMinorUnits: repair.laborCostMinorUnits,
+    technicianNotes: repair.technicianNotes,
+    serialNumber: repair.serialNumber,
+    priority: repair.priority,
+    deviceCondition: repair.deviceCondition,
+    deviceConditionNotes: repair.deviceConditionNotes,
+    requiredParts: repair.requiredParts,
+    requiredPartsStatus: repair.requiredPartsStatus,
+    deviceImages: repair.deviceImages,
+    parts,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+function assertRepairTransition(currentStatus, nextStatus) {
+  const allowed = new Set([
+    'received',
+    'diagnosing',
+    'inProgress',
+    'ready',
+    'cancelled',
+  ]);
+  if (!allowed.has(nextStatus)) {
+    invalid('Unsupported repair status.');
+  }
+  if (currentStatus === 'delivered' || currentStatus === 'cancelled') {
+    invalid('A completed or cancelled repair cannot be edited.');
+  }
+  const transitions = {
+    received: new Set(['received', 'diagnosing', 'cancelled']),
+    diagnosing: new Set(['diagnosing', 'inProgress', 'cancelled']),
+    inProgress: new Set(['inProgress', 'ready', 'cancelled']),
+    ready: new Set(['ready', 'inProgress', 'cancelled']),
+  };
+  if (!transitions[currentStatus] ||
+      !transitions[currentStatus].has(nextStatus)) {
+    invalid('Invalid repair status transition.');
+  }
+}
+
+async function deliverRepairInTransaction(transaction, userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const repairRef = storeRef.collection('repairs').doc(command.repairId);
+  const deliveryIdempotencyRef = storeRef
+    .collection('repair_delivery_idempotency')
+    .doc(command.idempotencyKey);
+  const journalEntryId = command.repairId + '-invoice';
+  const journalIdempotencyKey = command.idempotencyKey + ':journal';
+  const journalRef = storeRef
+    .collection('journal_entries')
+    .doc(journalEntryId);
+  const journalIdempotencyRef = storeRef
+    .collection('idempotency_keys')
+    .doc(journalIdempotencyKey);
+  const memberSnapshot = await transaction.get(
+    storeRef.collection('members').doc(userId),
+  );
+  assertMembership(
+    memberSnapshot,
+    command.storeId,
+    'deliver repairs',
+    new Set(['owner', 'admin', 'accountant', 'sales']),
+  );
+
+  const [
+    deliveryIdempotencySnapshot,
+    repairSnapshot,
+    journalSnapshot,
+    journalIdempotencySnapshot,
+    partySnapshot,
+  ] = await Promise.all([
+    transaction.get(deliveryIdempotencyRef),
+    transaction.get(repairRef),
+    transaction.get(journalRef),
+    transaction.get(journalIdempotencyRef),
+    transaction.get(storeRef.collection('parties').doc(command.repairId)),
+  ]);
+  if (deliveryIdempotencySnapshot.exists) {
+    const data = deliveryIdempotencySnapshot.data();
+    return {
+      status: 'already_delivered',
+      repairId: command.repairId,
+      journalEntryId: data.journalEntryId,
+    };
+  }
+  if (!repairSnapshot.exists) {
+    invalid('Repair request was not found.');
+  }
+  const repair = repairSnapshot.data();
+  if (repair.storeId !== command.storeId) {
+    deny('Repair belongs to another store.');
+  }
+  if (repair.status === 'cancelled') {
+    invalid('A cancelled repair cannot be delivered.');
+  }
+  if (repair.status === 'delivered' || repair.invoiceJournalEntryId) {
+    invalid('The repair has already been delivered.');
+  }
+  if (journalSnapshot.exists || journalIdempotencySnapshot.exists) {
+    conflict('The repair invoice journal already exists.');
+  }
+  assertParty(
+    partySnapshot,
+    command.storeId,
+    repair.customerId,
+    'customer',
+  );
+
+  const rawParts = Array.isArray(repair.parts) ? repair.parts : [];
+  const productSnapshots = new Map();
+  for (const part of rawParts) {
+    const productId = safeId(part.productId, 'repair product id');
+    if (productSnapshots.has(productId)) {
+      invalid('A repair cannot use the same product more than once.');
+    }
+    productSnapshots.set(
+      productId,
+      await transaction.get(storeRef.collection('products').doc(productId)),
+    );
+  }
+
+  const parts = [];
+  let partsRevenue = 0;
+  let partsCost = 0;
+  const productChanges = [];
+  for (const rawPart of rawParts) {
+    const productId = safeId(rawPart.productId, 'repair product id');
+    const productSnapshot = productSnapshots.get(productId);
+    if (!productSnapshot.exists) {
+      invalid('Repair product was not found: ' + productId);
+    }
+    const product = productSnapshot.data();
+    if (product.storeId !== command.storeId ||
+        product.isActive === false ||
+        product.isService === true) {
+      invalid('A repair product is no longer available.');
+    }
+    const currency = product.currency || 'ILS';
+    if (currency !== repair.currency) {
+      invalid('Repair product currency does not match the repair.');
+    }
+    const quantity = positiveInt(
+      storedInt(rawPart.quantityMilliUnits, 0),
+      'repair part quantity',
+    );
+    const unitPrice = nonNegativeInt(
+      storedInt(rawPart.unitPriceMinorUnits, 0),
+      'repair part unit price',
+    );
+    const unitCost = storedInt(product.purchasePriceMinorUnits, 0);
+    const cost = multiplyAndRound(unitCost, quantity);
+    const revenue = multiplyAndRound(unitPrice, quantity);
+    const currentQuantity = storedInt(product.quantityOnHandMilliUnits, 0);
+    const nextQuantity = currentQuantity - quantity;
+    if (nextQuantity < 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Insufficient stock for repair product ' + productId + '.',
+      );
+    }
+    const currentValue = Number.isSafeInteger(
+      product.inventoryValueMinorUnits,
+    )
+      ? product.inventoryValueMinorUnits
+      : multiplyAndRound(
+        unitCost,
+        currentQuantity,
+      );
+    const nextValue = currentValue - cost;
+    if (nextValue < 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Repair would create negative inventory value.',
+      );
+    }
+    partsRevenue += revenue;
+    partsCost += cost;
+    parts.push({
+      id: safeId(rawPart.id, 'repair part id'),
+      productId,
+      productName: product.name,
+      quantityMilliUnits: quantity,
+      unitPriceMinorUnits: unitPrice,
+      unitCostMinorUnits: unitCost,
+      currency,
+      source: rawPart.source || 'products',
+    });
+    productChanges.push({
+      productId,
+      productRef: storeRef.collection('products').doc(productId),
+      currentQuantity,
+      nextQuantity,
+      nextValue,
+      cost,
+    });
+  }
+
+  const labor = storedInt(repair.laborCostMinorUnits, 0);
+  const total = partsRevenue + labor;
+  if (total <= 0) {
+    invalid('A repair invoice must be greater than zero.');
+  }
+  const advance = storedInt(repair.advancePaidMinorUnits, 0);
+  if (advance > total) {
+    invalid('Repair advances cannot exceed the final invoice.');
+  }
+
+  const accountIds = [
+    command.accounts.customerReceivableAccountId,
+    command.accounts.repairRevenueAccountId,
+  ];
+  if (partsCost > 0) {
+    accountIds.push(
+      command.accounts.inventoryAccountId,
+      command.accounts.costOfSalesAccountId,
+    );
+  }
+  if (advance > 0) {
+    accountIds.push(command.accounts.customerAdvancesAccountId);
+  }
+  const uniqueAccountIds = [...new Set(accountIds)];
+  const accountSnapshots = new Map();
+  const balanceSnapshots = new Map();
+  for (const accountId of uniqueAccountIds) {
+    accountSnapshots.set(
+      accountId,
+      await transaction.get(storeRef.collection('accounts').doc(accountId)),
+    );
+  }
+  for (const accountId of uniqueAccountIds) {
+    balanceSnapshots.set(
+      accountId,
+      await transaction.get(
+        storeRef.collection('account_balances').doc(accountId),
+      ),
+    );
+  }
+  const partyBalanceRef = storeRef
+    .collection('party_balances')
+    .doc('customer-' + repair.customerId);
+  const partyBalanceSnapshot = await transaction.get(partyBalanceRef);
+  const invoiceLedgerRef = storeRef
+    .collection('party_ledger_entries')
+    .doc(command.repairId + '-invoice-customer');
+  const invoiceLedgerSnapshot = await transaction.get(invoiceLedgerRef);
+  const advanceLedgerRef = storeRef
+    .collection('party_ledger_entries')
+    .doc(command.repairId + '-advance-application');
+  const advanceLedgerSnapshot = await transaction.get(advanceLedgerRef);
+
+  assertAccount(
+    accountSnapshots.get(command.accounts.customerReceivableAccountId),
+    command.accounts.customerReceivableAccountId,
+    command.storeId,
+    repair.currency,
+    'asset',
+    'customerReceivable',
+  );
+  assertAccount(
+    accountSnapshots.get(command.accounts.repairRevenueAccountId),
+    command.accounts.repairRevenueAccountId,
+    command.storeId,
+    repair.currency,
+    'revenue',
+  );
+  if (partsCost > 0) {
+    assertAccount(
+      accountSnapshots.get(command.accounts.inventoryAccountId),
+      command.accounts.inventoryAccountId,
+      command.storeId,
+      repair.currency,
+      'asset',
+      'inventory',
+    );
+    assertAccount(
+      accountSnapshots.get(command.accounts.costOfSalesAccountId),
+      command.accounts.costOfSalesAccountId,
+      command.storeId,
+      repair.currency,
+      'expense',
+    );
+  }
+  if (advance > 0) {
+    assertAccount(
+      accountSnapshots.get(command.accounts.customerAdvancesAccountId),
+      command.accounts.customerAdvancesAccountId,
+      command.storeId,
+      repair.currency,
+      'liability',
+    );
+  }
+  if (invoiceLedgerSnapshot.exists || advanceLedgerSnapshot.exists) {
+    conflict('Repair party ledger entries already exist.');
+  }
+
+  const accountDeltas = new Map();
+  addDelta(
+    accountDeltas,
+    command.accounts.customerReceivableAccountId,
+    total,
+    advance,
+  );
+  addDelta(
+    accountDeltas,
+    command.accounts.repairRevenueAccountId,
+    0,
+    total,
+  );
+  if (partsCost > 0) {
+    addDelta(
+      accountDeltas,
+      command.accounts.costOfSalesAccountId,
+      partsCost,
+      0,
+    );
+    addDelta(
+      accountDeltas,
+      command.accounts.inventoryAccountId,
+      0,
+      partsCost,
+    );
+  }
+  if (advance > 0) {
+    addDelta(
+      accountDeltas,
+      command.accounts.customerAdvancesAccountId,
+      advance,
+      0,
+    );
+  }
+
+  const journalLines = [
+    {
+      id: command.repairId + '-receivable',
+      storeId: command.storeId,
+      accountId: command.accounts.customerReceivableAccountId,
+      description: 'Repair invoice receivable',
+      lineNumber: 1,
+      debitMinorUnits: total,
+      creditMinorUnits: 0,
+    },
+    {
+      id: command.repairId + '-revenue',
+      storeId: command.storeId,
+      accountId: command.accounts.repairRevenueAccountId,
+      description: 'Repair revenue',
+      lineNumber: 2,
+      debitMinorUnits: 0,
+      creditMinorUnits: total,
+    },
+  ];
+  if (partsCost > 0) {
+    journalLines.push({
+      id: command.repairId + '-cost',
+      storeId: command.storeId,
+      accountId: command.accounts.costOfSalesAccountId,
+      description: 'Repair parts cost',
+      lineNumber: journalLines.length + 1,
+      debitMinorUnits: partsCost,
+      creditMinorUnits: 0,
+    });
+    journalLines.push({
+      id: command.repairId + '-inventory',
+      storeId: command.storeId,
+      accountId: command.accounts.inventoryAccountId,
+      description: 'Repair parts inventory issue',
+      lineNumber: journalLines.length + 1,
+      debitMinorUnits: 0,
+      creditMinorUnits: partsCost,
+    });
+  }
+  if (advance > 0) {
+    journalLines.push({
+      id: command.repairId + '-advance',
+      accountId: command.accounts.customerAdvancesAccountId,
+      storeId: command.storeId,
+      description: 'Apply customer advance to repair invoice',
+      lineNumber: journalLines.length + 1,
+      debitMinorUnits: advance,
+      creditMinorUnits: 0,
+    });
+    journalLines.push({
+      id: command.repairId + '-advance-receivable',
+      accountId: command.accounts.customerReceivableAccountId,
+      storeId: command.storeId,
+      description: 'Apply customer advance to receivable',
+      lineNumber: journalLines.length + 1,
+      debitMinorUnits: 0,
+      creditMinorUnits: advance,
+    });
+  }
+
+  const totalDebit = total + partsCost + advance;
+  const totalCredit = total + partsCost + advance;
+  transaction.set(journalRef, {
+    storeId: command.storeId,
+    idempotencyKey: journalIdempotencyKey,
+    sourceType: 'repair',
+    description: 'Repair invoice ' + command.repairId,
+    status: 'posted',
+    currency: repair.currency,
+    totalDebitMinorUnits: totalDebit,
+    totalCreditMinorUnits: totalCredit,
+    postedAt: Timestamp.fromDate(command.postedAt),
+  });
+  for (const line of journalLines) {
+    transaction.set(
+      journalRef.collection('lines').doc(line.id),
+      {
+        ...line,
+        entryId: journalEntryId,
+        currency: repair.currency,
+        postedAt: Timestamp.fromDate(command.postedAt),
+      },
+    );
+  }
+
+  for (const change of productChanges) {
+    transaction.update(change.productRef, {
+      quantityOnHandMilliUnits: change.nextQuantity,
+      inventoryValueMinorUnits: change.nextValue,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    const movementId = command.repairId + '-part-' + change.productId;
+    const movementRef = storeRef
+      .collection('inventory_movements')
+      .doc(movementId);
+    const movementIdempotencyRef = storeRef
+      .collection('inventory_idempotency')
+      .doc(command.idempotencyKey + ':inventory:' + change.productId);
+    const movementSnapshot = await transaction.get(movementRef);
+    const movementIdempotencySnapshot = await transaction.get(
+      movementIdempotencyRef,
+    );
+    if (movementSnapshot.exists || movementIdempotencySnapshot.exists) {
+      conflict('Repair inventory movement already exists.');
+    }
+    const part = parts.firstWhere(
+      (candidate) => candidate.productId == change.productId,
+    );
+    transaction.set(movementRef, {
+      storeId: command.storeId,
+      productId: change.productId,
+      type: 'saleIssue',
+      quantityDeltaMilliUnits: -part.quantityMilliUnits,
+      unitCostMinorUnits: part.unitCostMinorUnits,
+      totalCostMinorUnits: part.unitCostMinorUnits == 0
+          ? 0
+          : change.cost,
+      currency: repair.currency,
+      idempotencyKey: command.idempotencyKey +
+          ':inventory:' + change.productId,
+      sourceType: 'repair',
+      sourceId: command.repairId,
+      occurredAt: Timestamp.fromDate(command.postedAt),
+    });
+    transaction.set(movementIdempotencyRef, {
+      storeId: command.storeId,
+      movementId,
+      idempotencyKey: command.idempotencyKey +
+          ':inventory:' + change.productId,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  const partyBalance = partyBalanceSnapshot.exists
+    ? partyBalanceSnapshot.data()
+    : {};
+  const currentPartyDebit = storedInt(
+    partyBalance.debitMinorUnits,
+    0,
+  );
+  const currentPartyCredit = storedInt(
+    partyBalance.creditMinorUnits,
+    0,
+  );
+  transaction.set(invoiceLedgerRef, {
+    storeId: command.storeId,
+    partyType: 'customer',
+    partyId: repair.customerId,
+    sourceType: 'repairInvoice',
+    sourceId: command.repairId,
+    currency: repair.currency,
+    debitMinorUnits: total,
+    creditMinorUnits: 0,
+    description: 'Repair invoice',
+    postedAt: Timestamp.fromDate(command.postedAt),
+  });
+  if (advance > 0) {
+    transaction.set(advanceLedgerRef, {
+      storeId: command.storeId,
+      partyType: 'customer',
+      partyId: repair.customerId,
+      sourceType: 'repairAdvanceApplication',
+      sourceId: command.repairId,
+      currency: repair.currency,
+      debitMinorUnits: 0,
+      creditMinorUnits: advance,
+      description: 'Repair customer advance applied',
+      postedAt: Timestamp.fromDate(command.postedAt),
+    });
+  }
+  transaction.set(partyBalanceRef, {
+    storeId: command.storeId,
+    partyType: 'customer',
+    partyId: repair.customerId,
+    currency: repair.currency,
+    debitMinorUnits: currentPartyDebit + total,
+    creditMinorUnits: currentPartyCredit + advance,
+    balanceMinorUnits:
+      currentPartyDebit + total - currentPartyCredit - advance,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  for (const accountId of uniqueAccountIds) {
+    const balanceSnapshot = balanceSnapshots.get(accountId);
+    const previous = balanceSnapshot.exists
+      ? balanceSnapshot.data()
+      : {};
+    const delta = accountDeltas.get(accountId) || {
+      debit: 0,
+      credit: 0,
+    };
+    const currentDebit = storedInt(previous.debitMinorUnits, 0);
+    const currentCredit = storedInt(previous.creditMinorUnits, 0);
+    transaction.set(
+      storeRef.collection('account_balances').doc(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: repair.currency,
+        debitMinorUnits: currentDebit + delta.debit,
+        creditMinorUnits: currentCredit + delta.credit,
+        balanceMinorUnits:
+          currentDebit + delta.debit - currentCredit - delta.credit,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  transaction.update(repairRef, {
+    status: 'delivered',
+    completedAt: Timestamp.fromDate(command.postedAt),
+    actualDeliveryDate: Timestamp.fromDate(command.postedAt),
+    invoiceJournalEntryId: journalEntryId,
+    invoicedTotalMinorUnits: total,
+    costOfPartsMinorUnits: partsCost,
+    paidMinorUnits: advance,
+    parts,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  transaction.set(deliveryIdempotencyRef, {
+    storeId: command.storeId,
+    repairId: command.repairId,
+    idempotencyKey: command.idempotencyKey,
+    journalEntryId,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  transaction.set(journalIdempotencyRef, {
+    storeId: command.storeId,
+    entryId: journalEntryId,
+    idempotencyKey: journalIdempotencyKey,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    status: 'posted',
+    repairId: command.repairId,
+    journalEntryId,
+    totalMinorUnits: total,
+  };
+}
+
+async function postRepairAdvanceInTransaction(
+  transaction,
+  userId,
+  command,
+) {
+  if (command.payment.paymentMethod === 'cheque') {
+    invalid('Cheque advances need a posted repair invoice.');
+  }
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberSnapshot = await transaction.get(
+    storeRef.collection('members').doc(userId),
+  );
+  assertMembership(
+    memberSnapshot,
+    command.storeId,
+    'post repair advances',
+    new Set(['owner', 'admin', 'accountant', 'sales']),
+  );
+  const repairRef = storeRef.collection('repairs').doc(command.repairId);
+  const paymentRef = storeRef
+    .collection('party_payments')
+    .doc(command.payment.id);
+  const paymentIdempotencyRef = storeRef
+    .collection('repair_payment_idempotency')
+    .doc(command.payment.idempotencyKey);
+  const journalEntryId = command.payment.id + '-journal';
+  const journalIdempotencyKey = command.payment.idempotencyKey + ':journal';
+  const journalRef = storeRef
+    .collection('journal_entries')
+    .doc(journalEntryId);
+  const journalIdempotencyRef = storeRef
+    .collection('idempotency_keys')
+    .doc(journalIdempotencyKey);
+
+  const [
+    repairSnapshot,
+    paymentIdempotencySnapshot,
+    paymentSnapshot,
+    journalSnapshot,
+    journalIdempotencySnapshot,
+    partySnapshot,
+  ] = await Promise.all([
+    transaction.get(repairRef),
+    transaction.get(paymentIdempotencyRef),
+    transaction.get(paymentRef),
+    transaction.get(journalRef),
+    transaction.get(journalIdempotencyRef),
+    transaction.get(storeRef.collection('parties').doc(command.repairId)),
+  ]);
+  if (paymentIdempotencySnapshot.exists) {
+    const data = paymentIdempotencySnapshot.data();
+    if (data.paymentId === command.payment.id) {
+      return {
+        status: 'already_posted',
+        paymentId: command.payment.id,
+        journalEntryId,
+      };
+    }
+    conflict('The repair payment idempotency key is already assigned.');
+  }
+  if (paymentSnapshot.exists ||
+      journalSnapshot.exists ||
+      journalIdempotencySnapshot.exists) {
+    conflict('The repair advance already exists.');
+  }
+  if (!repairSnapshot.exists) {
+    invalid('Repair request was not found.');
+  }
+  const repair = repairSnapshot.data();
+  if (repair.storeId !== command.storeId) {
+    deny('Repair belongs to another store.');
+  }
+  if (repair.status === 'cancelled' ||
+      repair.status === 'delivered' ||
+      repair.invoiceJournalEntryId) {
+    invalid('An advance can only be posted before the repair invoice.');
+  }
+  if (repair.customerId !== command.repairId &&
+      repair.customerId !== command.payment.customerId) {
+    invalid('Repair payment customer does not match the repair.');
+  }
+  assertParty(
+    partySnapshot,
+    command.storeId,
+    repair.customerId,
+    'customer',
+  );
+  if ((repair.currency || 'ILS') !== command.payment.currency) {
+    invalid('Repair payment currency does not match the repair.');
+  }
+
+  const settlementAccountId = command.accounts.settlementAccountId;
+  const advancesAccountId = command.accounts.customerAdvancesAccountId;
+  if (!advancesAccountId) {
+    invalid('A customer advances account is required.');
+  }
+  const accountIds = [settlementAccountId, advancesAccountId];
+  const accountSnapshots = new Map();
+  const balanceSnapshots = new Map();
+  for (const accountId of accountIds) {
+    accountSnapshots.set(
+      accountId,
+      await transaction.get(storeRef.collection('accounts').doc(accountId)),
+    );
+  }
+  for (const accountId of accountIds) {
+    balanceSnapshots.set(
+      accountId,
+      await transaction.get(
+        storeRef.collection('account_balances').doc(accountId),
+      ),
+    );
+  }
+  assertAccount(
+    accountSnapshots.get(settlementAccountId),
+    settlementAccountId,
+    command.storeId,
+    command.payment.currency,
+    'asset',
+    paymentAccountControlType(
+      command.payment.paymentMethod,
+      'customer',
+    ),
+  );
+  assertAccount(
+    accountSnapshots.get(advancesAccountId),
+    advancesAccountId,
+    command.storeId,
+    command.payment.currency,
+    'liability',
+  );
+
+  const amount = command.payment.amountMinorUnits;
+  const paymentData = {
+    storeId: command.storeId,
+    idempotencyKey: command.payment.idempotencyKey,
+    postedAt: Timestamp.fromDate(command.payment.postedAt),
+    partyType: 'customer',
+    partyId: repair.customerId,
+    repairId: command.repairId,
+    paymentKind: 'advance',
+    paymentMethod: command.payment.paymentMethod,
+    amountMinorUnits: amount,
+    currency: command.payment.currency,
+    description: command.payment.description,
+    status: 'posted',
+    chequeNumber: null,
+    bankName: null,
+    dueDate: null,
+    journalEntryId,
+    createdAt: FieldValue.serverTimestamp(),
+  };
+  transaction.set(paymentRef, paymentData);
+  transaction.set(journalRef, {
+    storeId: command.storeId,
+    idempotencyKey: journalIdempotencyKey,
+    sourceType: 'repairAdvance',
+    description: command.payment.description,
+    status: 'posted',
+    currency: command.payment.currency,
+    totalDebitMinorUnits: amount,
+    totalCreditMinorUnits: amount,
+    postedAt: Timestamp.fromDate(command.payment.postedAt),
+  });
+  transaction.set(
+    journalRef.collection('lines').doc(command.payment.id + '-settlement'),
+    {
+      storeId: command.storeId,
+      entryId: journalEntryId,
+      accountId: settlementAccountId,
+      description: command.payment.paymentMethod,
+      lineNumber: 1,
+      currency: command.payment.currency,
+      debitMinorUnits: amount,
+      creditMinorUnits: 0,
+      postedAt: Timestamp.fromDate(command.payment.postedAt),
+    },
+  );
+  transaction.set(
+    journalRef.collection('lines').doc(command.payment.id + '-advance'),
+    {
+      storeId: command.storeId,
+      entryId: journalEntryId,
+      accountId: advancesAccountId,
+      description: 'Customer repair advance',
+      lineNumber: 2,
+      currency: command.payment.currency,
+      debitMinorUnits: 0,
+      creditMinorUnits: amount,
+      postedAt: Timestamp.fromDate(command.payment.postedAt),
+    },
+  );
+
+  const deltas = new Map();
+  addDelta(deltas, settlementAccountId, amount, 0);
+  addDelta(deltas, advancesAccountId, 0, amount);
+  for (const accountId of accountIds) {
+    const previous = balanceSnapshots.get(accountId).exists
+      ? balanceSnapshots.get(accountId).data()
+      : {};
+    const delta = deltas.get(accountId);
+    const debit = storedInt(previous.debitMinorUnits, 0) + delta.debit;
+    const credit = storedInt(previous.creditMinorUnits, 0) + delta.credit;
+    transaction.set(
+      storeRef.collection('account_balances').doc(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.payment.currency,
+        debitMinorUnits: debit,
+        creditMinorUnits: credit,
+        balanceMinorUnits: debit - credit,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  transaction.update(repairRef, {
+    advancePaidMinorUnits:
+      storedInt(repair.advancePaidMinorUnits, 0) + amount,
+    paidMinorUnits: storedInt(repair.paidMinorUnits, 0) + amount,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  transaction.set(paymentIdempotencyRef, {
+    storeId: command.storeId,
+    paymentId: command.payment.id,
+    repairId: command.repairId,
+    idempotencyKey: command.payment.idempotencyKey,
+    journalEntryId,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  transaction.set(journalIdempotencyRef, {
+    storeId: command.storeId,
+    entryId: journalEntryId,
+    idempotencyKey: journalIdempotencyKey,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    status: 'posted',
+    paymentId: command.payment.id,
+    journalEntryId,
+  };
+}
+
+async function postRepairPaymentInTransaction(
+  transaction,
+  userId,
+  command,
+) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberSnapshot = await transaction.get(
+    storeRef.collection('members').doc(userId),
+  );
+  assertMembership(
+    memberSnapshot,
+    command.storeId,
+    'post repair payments',
+    new Set(['owner', 'admin', 'accountant', 'sales']),
+  );
+  const repairRef = storeRef.collection('repairs').doc(command.repairId);
+  const repairSnapshot = await transaction.get(repairRef);
+  if (!repairSnapshot.exists) {
+    invalid('Repair request was not found.');
+  }
+  const repair = repairSnapshot.data();
+  if (repair.storeId !== command.storeId ||
+      repair.invoiceJournalEntryId == null) {
+    invalid('A repair payment requires a posted repair invoice.');
+  }
+  if (repair.status === 'cancelled') {
+    invalid('A cancelled repair cannot receive a payment.');
+  }
+  const total = storedInt(repair.invoicedTotalMinorUnits, 0);
+  const paid = storedInt(repair.paidMinorUnits, 0);
+  if (command.payment.amountMinorUnits > total - paid) {
+    invalid('Repair payment exceeds the outstanding amount.');
+  }
+
+  const paymentCommand = {
+    storeId: command.storeId,
+    payment: {
+      id: command.payment.id,
+      idempotencyKey: command.payment.idempotencyKey,
+      postedAt: command.payment.postedAt,
+      partyType: 'customer',
+      partyId: repair.customerId,
+      paymentMethod: command.payment.paymentMethod,
+      amountMinorUnits: command.payment.amountMinorUnits,
+      currency: command.payment.currency,
+      description: command.payment.description,
+      chequeNumber: command.payment.chequeNumber,
+      bankName: command.payment.bankName,
+      dueDate: command.payment.dueDate,
+    },
+    accounts: {
+      settlementAccountId: command.accounts.settlementAccountId,
+      partyAccountId: command.accounts.customerReceivableAccountId,
+    },
+  };
+  const result = await postPartyPaymentInTransaction(
+    transaction,
+    userId,
+    paymentCommand,
+  );
+  if (result.status === 'already_posted') {
+    return {
+      ...result,
+      repairId: command.repairId,
+    };
+  }
+
+  const paymentRef = storeRef
+    .collection('party_payments')
+    .doc(command.payment.id);
+  transaction.update(paymentRef, {
+    repairId: command.repairId,
+    paymentKind: 'settlement',
+  });
+  transaction.update(repairRef, {
+    paidMinorUnits: paid + command.payment.amountMinorUnits,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return {
+    ...result,
+    repairId: command.repairId,
+  };
+}
