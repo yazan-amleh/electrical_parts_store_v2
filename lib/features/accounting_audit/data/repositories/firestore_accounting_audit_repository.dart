@@ -1,5 +1,4 @@
-import 'package:cloud_functions/cloud_functions.dart'
-    as firebase_functions;
+import 'package:cloud_functions/cloud_functions.dart' as firebase_functions;
 
 import '../../../../core/errors/failure.dart';
 import '../../../../core/result/result.dart';
