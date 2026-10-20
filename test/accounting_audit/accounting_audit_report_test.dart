@@ -16,7 +16,7 @@ void main() {
         'products': 9,
         'inventoryMovements': 11,
       },
-      'issues': const [],
+      'issues': const <Map<String, dynamic>>[],
     });
 
     expect(report.storeId, 'store-1');
