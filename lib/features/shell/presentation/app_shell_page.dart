@@ -37,7 +37,6 @@ import '../../payments/domain/repositories/party_payment_repository.dart';
 import '../../cheques/domain/repositories/cheque_repository.dart';
 import '../../cheques/presentation/cheques_page.dart';
 import '../../transfers/domain/repositories/account_transfer_repository.dart';
-import '../../transfers/presentation/account_transfers_page.dart';
 import '../../transfers/presentation/cash_banks_page.dart';
 import '../../repairs/domain/repositories/repair_repository.dart';
 import '../../repairs/presentation/repairs_page.dart';
