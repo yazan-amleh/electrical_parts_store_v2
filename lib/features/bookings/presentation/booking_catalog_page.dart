@@ -156,16 +156,13 @@ class _BookingCatalogPageState extends State<BookingCatalogPage> {
             final customer = customers[index];
             return Card(
               child: ListTile(
-                leading: const CircleAvatar(
-                  child: Icon(Icons.person_outline),
-                ),
+                leading: const CircleAvatar(child: Icon(Icons.person_outline)),
                 title: Text(customer.name),
                 subtitle: Text(
                   [
                     customer.phoneNumber,
                     if (customer.email?.isNotEmpty == true) customer.email!,
-                    if (customer.address?.isNotEmpty == true)
-                      customer.address!,
+                    if (customer.address?.isNotEmpty == true) customer.address!,
                   ].join(' • '),
                 ),
                 trailing: _canManageCatalog
@@ -284,7 +281,10 @@ class _BookingCatalogPageState extends State<BookingCatalogPage> {
         customer: value,
       );
       if (mounted) {
-        _showResult(result, customer == null ? 'تمت إضافة العميل.' : 'تم تحديث العميل.');
+        _showResult(
+          result,
+          customer == null ? 'تمت إضافة العميل.' : 'تم تحديث العميل.',
+        );
       }
       return;
     }
@@ -304,7 +304,10 @@ class _BookingCatalogPageState extends State<BookingCatalogPage> {
       option: value,
     );
     if (mounted) {
-      _showResult(result, option == null ? 'تمت إضافة خيار التصوير.' : 'تم تحديث خيار التصوير.');
+      _showResult(
+        result,
+        option == null ? 'تمت إضافة خيار التصوير.' : 'تم تحديث خيار التصوير.',
+      );
     }
   }
 
@@ -375,7 +378,9 @@ class _BookingCustomerDialogState extends State<_BookingCustomerDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.initial == null ? 'إضافة عميل حجز' : 'تعديل عميل الحجز'),
+      title: Text(
+        widget.initial == null ? 'إضافة عميل حجز' : 'تعديل عميل الحجز',
+      ),
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
@@ -437,7 +442,9 @@ class _BookingCustomerDialogState extends State<_BookingCustomerDialog> {
       final initial = widget.initial;
       Navigator.of(context).pop(
         BookingCustomer(
-          id: initial?.id ?? 'booking-customer-${DateTime.now().microsecondsSinceEpoch}',
+          id:
+              initial?.id ??
+              'booking-customer-${DateTime.now().microsecondsSinceEpoch}',
           storeId: widget.storeId,
           name: name,
           phoneNumber: phone,
@@ -495,7 +502,9 @@ class _PhotographyOptionDialogState extends State<_PhotographyOptionDialog> {
     _name = TextEditingController(text: value?.name ?? '');
     _description = TextEditingController(text: value?.description ?? '');
     _price = TextEditingController(
-      text: value == null ? '' : (value.price.minorUnits / 100).toStringAsFixed(2),
+      text: value == null
+          ? ''
+          : (value.price.minorUnits / 100).toStringAsFixed(2),
     );
     _duration = TextEditingController(
       text: value == null ? '0' : value.durationMinutes.toString(),
@@ -506,7 +515,9 @@ class _PhotographyOptionDialogState extends State<_PhotographyOptionDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.initial == null ? 'إضافة خيار تصوير' : 'تعديل خيار التصوير'),
+      title: Text(
+        widget.initial == null ? 'إضافة خيار تصوير' : 'تعديل خيار التصوير',
+      ),
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
@@ -514,7 +525,12 @@ class _PhotographyOptionDialogState extends State<_PhotographyOptionDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _field(_name, 'اسم الخيار', Icons.camera_alt_outlined),
-              _field(_description, 'الوصف', Icons.description_outlined, maxLines: 2),
+              _field(
+                _description,
+                'الوصف',
+                Icons.description_outlined,
+                maxLines: 2,
+              ),
               _field(
                 _price,
                 'السعر (شيكل)',
@@ -582,7 +598,11 @@ class _PhotographyOptionDialogState extends State<_PhotographyOptionDialog> {
     final name = _name.text.trim();
     final price = _parseMoney(_price.text);
     final duration = int.tryParse(_duration.text.trim());
-    if (name.isEmpty || price == null || price.isNegative || duration == null || duration < 0) {
+    if (name.isEmpty ||
+        price == null ||
+        price.isNegative ||
+        duration == null ||
+        duration < 0) {
       setState(() => _error = 'تحقق من الاسم والسعر والمدة.');
       return;
     }
@@ -590,7 +610,9 @@ class _PhotographyOptionDialogState extends State<_PhotographyOptionDialog> {
       final initial = widget.initial;
       Navigator.of(context).pop(
         PhotographyOption(
-          id: initial?.id ?? 'photography-option-${DateTime.now().microsecondsSinceEpoch}',
+          id:
+              initial?.id ??
+              'photography-option-${DateTime.now().microsecondsSinceEpoch}',
           storeId: widget.storeId,
           name: name,
           description: _description.text.trim(),
