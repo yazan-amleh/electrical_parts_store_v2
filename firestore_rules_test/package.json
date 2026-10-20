@@ -2,7 +2,7 @@
   "name": "electrical-parts-store-v2-firestore-rules-test",
   "private": true,
   "scripts": {
-    "test": "mocha --timeout 30000 rules.test.js"
+    "test": "mocha --timeout 30000 rules.test.js storage.test.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "3.0.4",

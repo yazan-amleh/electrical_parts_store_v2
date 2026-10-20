@@ -50,4 +50,4 @@ jobs:
 
       - name: Test Firestore security rules
         working-directory: firestore_rules_test
-        run: npx firebase-tools emulators:exec --only firestore --project demo-electrical-parts-v2-rules "npm test"
+        run: npx firebase-tools emulators:exec --only firestore,storage --config ../firebase.json --project demo-electrical-parts-v2-rules "npm test"
