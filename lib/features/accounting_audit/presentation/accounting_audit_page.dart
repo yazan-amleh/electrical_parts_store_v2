@@ -312,7 +312,7 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
     }
     if (issue.valueKind == 'milliUnits') {
       final sign = value < 0 ? '-' : '';
-      return '\$sign${(value.abs() / 1000).toStringAsFixed(3)}';
+      return '$sign${(value.abs() / 1000).toStringAsFixed(3)}';
     }
     return value.toString();
   }
