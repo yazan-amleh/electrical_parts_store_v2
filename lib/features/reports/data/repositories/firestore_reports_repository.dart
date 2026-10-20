@@ -576,3 +576,13 @@ class _AnalyticsAccumulator {
     );
   }
 }
+
+class _PagedDocuments {
+  const _PagedDocuments({
+    required this.documents,
+    required this.mayBeTruncated,
+  });
+
+  final List<DocumentSnapshot<Map<String, dynamic>>> documents;
+  final bool mayBeTruncated;
+}
