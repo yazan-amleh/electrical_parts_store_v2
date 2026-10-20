@@ -93,8 +93,8 @@ void main() {
   });
 
   test(
-    'credit purchase planner posts inventory, input tax, and supplier payable',
-    () {
+      'credit purchase planner posts inventory, input tax, and supplier payable',
+      () {
     final purchase = Purchase(
       id: 'purchase-1',
       storeId: context.storeId,
