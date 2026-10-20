@@ -104,7 +104,7 @@ class AccountingAuditReport {
     final rawIssues = map['issues'];
     final issues = rawIssues is List
         ? rawIssues
-            .whereType<Map>()
+            .whereType<Map<Object?, Object?>>()
             .map((issue) => AccountingAuditIssue.fromMap(
                   Map<String, dynamic>.from(issue),
                 ))
