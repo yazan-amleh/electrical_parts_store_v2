@@ -6,7 +6,6 @@ import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../settings/domain/entities/store_member.dart';
 import '../../settings/domain/repositories/settings_repository.dart';
-import '../domain/entities/chat_attachment.dart';
 import '../domain/entities/chat_message.dart';
 import '../domain/entities/chat_participant.dart';
 import '../domain/entities/chat_room.dart';
