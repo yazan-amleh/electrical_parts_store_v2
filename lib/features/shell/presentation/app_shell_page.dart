@@ -486,8 +486,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final AuthenticatedUser user;
   final ProductRepository? productRepository;
   final CategoryRepository? categoryRepository;
-  final CategoryInventoryDocumentBuilder?
-      categoryInventoryDocumentBuilder;
+  final CategoryInventoryDocumentBuilder? categoryInventoryDocumentBuilder;
   final InventoryRepository? inventoryRepository;
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
