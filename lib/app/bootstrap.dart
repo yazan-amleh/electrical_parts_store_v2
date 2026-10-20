@@ -17,6 +17,7 @@ import '../features/inventory/data/repositories/firestore_product_repository.dar
 import '../features/sales/data/repositories/firestore_sale_repository.dart';
 import '../features/purchases/data/repositories/firestore_purchase_repository.dart';
 import '../features/repairs/data/repositories/firestore_repair_repository.dart';
+import '../features/repairs/data/exporters/pdf_repair_document_builder.dart';
 import '../features/purchase_orders/data/repositories/firestore_purchase_order_repository.dart';
 import '../features/reports/data/repositories/firestore_reports_repository.dart';
 import '../features/reports/data/exporters/pdf_report_document_builder.dart';
@@ -37,6 +38,7 @@ abstract final class AppBootstrap {
       return AppDependencies(
         runtime: runtime,
         reportDocumentBuilder: PdfReportDocumentBuilder(),
+        repairDocumentBuilder: PdfRepairDocumentBuilder(),
       );
     }
 
@@ -124,6 +126,7 @@ abstract final class AppBootstrap {
       ),
       reportsRepository: FirestoreReportsRepository(firestore: firestore),
       reportDocumentBuilder: PdfReportDocumentBuilder(),
+      repairDocumentBuilder: PdfRepairDocumentBuilder(),
       settingsRepository: FirestoreSettingsRepository(firestore: firestore),
     );
   }
