@@ -17,11 +17,13 @@ This document is the migration checklist for the separate V2 rebuild.
 - Source branch reviewed: `main`
 - V2 target branch: `v2/foundation`
 - Source tree entries at snapshot: 575
-- Migration status: accounting foundation is green; the offers vertical slice is implemented and tested; remaining V1 screen parity is still in progress.
+- Migration status: accounting foundation is green; offers, party ledgers, financial statements, and customer/supplier cheque lifecycle are implemented and tested; remaining V1 screen parity is still in progress.
 
 ## Current V2 vertical slices
 
 - Offers domain, repository port, Firestore command adapter, atomic order confirmation, and initial UI shell are implemented.
+- Party ledger queries and financial statements read through repository ports and have domain coverage.
+- Customer incoming cheques and supplier issued cheques use 1130/2210 control accounts with atomic clear/bounce settlement.
 - Full V1 offers UX parity (detail, analytics, image upload, print/export, and all order screens) remains pending and must be acceptance-tested before migration.
 - The same rule applies to every remaining V1 screen listed below.
 
