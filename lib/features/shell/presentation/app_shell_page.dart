@@ -7,6 +7,8 @@ import '../../categories/presentation/categories_page.dart';
 import '../../accounting/domain/repositories/accounting_query_repository.dart';
 import '../../accounting/domain/repositories/accounting_repository.dart';
 import '../../accounting/presentation/financial_statements_page.dart';
+import '../../accounting_audit/domain/repositories/accounting_audit_repository.dart';
+import '../../accounting_audit/presentation/accounting_audit_page.dart';
 import '../../accounting/presentation/ledger_page.dart';
 import '../../accounting/presentation/manual_journal_page.dart';
 import '../../accounting/presentation/chart_of_accounts_page.dart';
@@ -186,6 +188,14 @@ class _AppShellPageState extends State<AppShellPage> {
           foundationReady: true,
         ),
         _Module(
+          id: 'accounting-audit',
+          label: 'فحص سلامة المحاسبة',
+          icon: Icons.fact_check_outlined,
+          description: 'مطابقة القيود مع الأرصدة وكشوف الأطراف والمخزون.',
+          capabilities: ['مطابقة القيود', 'فحص الأرصدة', 'كشف الفروقات'],
+          foundationReady: true,
+        ),
+        _Module(
           id: 'expenses',
           label: 'المصروفات والضرائب',
           icon: Icons.receipt_long_outlined,
@@ -318,6 +328,8 @@ class _AppShellPageState extends State<AppShellPage> {
           offerRepository: widget.dependencies.offerRepository,
           expenseRepository: widget.dependencies.expenseRepository,
           accountingRepository: widget.dependencies.accountingRepository,
+          accountingAuditRepository:
+              widget.dependencies.accountingAuditRepository,
           partyPaymentRepository: widget.dependencies.partyPaymentRepository,
           chequeRepository: widget.dependencies.chequeRepository,
           partyRepository: widget.dependencies.partyRepository,
@@ -435,6 +447,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.offerRepository,
     required this.expenseRepository,
     required this.accountingRepository,
+    required this.accountingAuditRepository,
     required this.partyPaymentRepository,
     required this.chequeRepository,
     required this.partyRepository,
@@ -455,6 +468,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final OfferRepository? offerRepository;
   final ExpenseRepository? expenseRepository;
   final AccountingRepository? accountingRepository;
+  final AccountingAuditRepository? accountingAuditRepository;
   final PartyPaymentRepository? partyPaymentRepository;
   final ChequeRepository? chequeRepository;
   final PartyRepository? partyRepository;
@@ -531,6 +545,13 @@ class _ModuleLandingPage extends StatelessWidget {
         user: user,
         membership: membership,
         initialPartyType: PartyType.supplier,
+      );
+    }
+    if (module.id == 'accounting-audit') {
+      return AccountingAuditPage(
+        repository: accountingAuditRepository,
+        user: user,
+        membership: membership,
       );
     }
     if (module.id == 'expenses') {
