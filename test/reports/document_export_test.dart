@@ -23,7 +23,8 @@ void main() {
   final from = DateTime.utc(2026, 1, 1);
   final to = DateTime.utc(2026, 1, 31);
 
-  test('builds operational and sales analytics PDFs from calculated DTOs', () async {
+  test('builds operational and sales analytics PDFs from calculated DTOs',
+      () async {
     final builder = PdfReportDocumentBuilder();
     final operational = OperationalReport(
       from: from,
@@ -66,7 +67,8 @@ void main() {
     expect(_isPdf(analyticsPdf), isTrue);
   });
 
-  test('builds repair request, payment receipt and category inventory PDFs', () async {
+  test('builds repair request, payment receipt and category inventory PDFs',
+      () async {
     final repair = RepairRequest(
       id: 'repair-1',
       storeId: 'store-1',
