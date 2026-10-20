@@ -1,0 +1,22 @@
+name: temporary-booking-format-3
+on:
+  push:
+    branches:
+      - v2/foundation
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.7'
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Print exact formatting diff
+        run: |
+          dart format lib/features/bookings lib/features/shell/presentation/app_shell_page.dart
+          git diff -- lib/features/bookings lib/features/shell/presentation/app_shell_page.dart
