@@ -171,16 +171,20 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                   label: const Text('نسخ CSV'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _analytics == null ||
+                  onPressed:
+                      _analytics == null ||
                           widget.documentBuilder == null ||
                           _isExporting
                       ? null
                       : () => _runPdfExport(share: false),
                   icon: const Icon(Icons.print_outlined),
-                  label: Text(_isExporting ? 'جارٍ تجهيز PDF...' : 'PDF / طباعة'),
+                  label: Text(
+                    _isExporting ? 'جارٍ تجهيز PDF...' : 'PDF / طباعة',
+                  ),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _analytics == null ||
+                  onPressed:
+                      _analytics == null ||
                           widget.documentBuilder == null ||
                           _isExporting
                       ? null
@@ -476,14 +480,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       final filename =
           'sales_analytics_' + _formatDate(_from) + '_' + _formatDate(_to);
       if (share) {
-        await Printing.sharePdf(
-          bytes: bytes,
-          filename: filename + '.pdf',
-        );
+        await Printing.sharePdf(bytes: bytes, filename: filename + '.pdf');
       } else {
-        await Printing.layoutPdf(
-          onLayout: (_) async => bytes,
-        );
+        await Printing.layoutPdf(onLayout: (_) async => bytes);
       }
     } catch (error) {
       _showMessage('تعذر تجهيز PDF: ' + error.toString());
