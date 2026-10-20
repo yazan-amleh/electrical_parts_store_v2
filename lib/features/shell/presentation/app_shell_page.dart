@@ -38,6 +38,7 @@ import '../../cheques/domain/repositories/cheque_repository.dart';
 import '../../cheques/presentation/cheques_page.dart';
 import '../../transfers/domain/repositories/account_transfer_repository.dart';
 import '../../transfers/presentation/account_transfers_page.dart';
+import '../../transfers/presentation/cash_banks_page.dart';
 import '../../repairs/domain/repositories/repair_repository.dart';
 import '../../repairs/presentation/repairs_page.dart';
 
@@ -521,8 +522,9 @@ class _ModuleLandingPage extends StatelessWidget {
       );
     }
     if (module.id == 'cash-banks') {
-      return AccountTransfersPage(
-        repository: accountTransferRepository,
+      return CashBanksPage(
+        accountingQueryRepository: accountingQueryRepository,
+        transferRepository: accountTransferRepository,
         user: user,
         membership: membership,
       );
