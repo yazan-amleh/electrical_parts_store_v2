@@ -32,7 +32,7 @@ void main() {
     final report = AccountingAuditReport.fromMap({
       'storeId': 'store-1',
       'checked': const <String, dynamic>{},
-      'issues': [
+      'issues': <Map<String, dynamic>>[
         {
           'code': 'HEADER_ACCOUNT_HAS_BALANCE',
           'scope': 'accountBalance',
