@@ -404,7 +404,7 @@ class FirestoreReportsRepository implements ReportsRepository {
           customerRows: List.unmodifiable(
             sortedCustomers.map((row) => row.toEntity()),
           ),
-          mayBeTruncated: salesPage.documents.length >= limit,
+          mayBeTruncated: salesPage.mayBeTruncated,
         ),
       );
     } on FirebaseException catch (error) {
