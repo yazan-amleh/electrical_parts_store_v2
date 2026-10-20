@@ -123,7 +123,7 @@ class FirestoreRepairRepository implements RepairRepository {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'repair-' + repair.id,
+        commandId: 'repair-${repair.id}',
         operation: 'createRepair',
         idempotencyKey: repair.idempotencyKey.value,
         payload: payload,
@@ -164,9 +164,9 @@ class FirestoreRepairRepository implements RepairRepository {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'update-repair-' + repair.id,
+        commandId: 'update-repair-${repair.id}',
         operation: 'updateRepair',
-        idempotencyKey: 'update-' + repair.id,
+        idempotencyKey: 'update-${repair.id}',
         payload: payload,
       );
       if (queued != null) {
@@ -216,7 +216,7 @@ class FirestoreRepairRepository implements RepairRepository {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'deliver-repair-' + repairId,
+        commandId: 'deliver-repair-${repairId}',
         operation: 'deliverRepair',
         idempotencyKey: idempotencyKey,
         payload: payload,
@@ -268,7 +268,7 @@ class FirestoreRepairRepository implements RepairRepository {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'repair-payment-' + payment.id,
+        commandId: 'repair-payment-${payment.id}',
         operation: operation,
         idempotencyKey: payment.idempotencyKey.value,
         payload: payload,
