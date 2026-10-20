@@ -136,7 +136,11 @@ class Booking {
     }
     return copyWith(
       paidAmount: nextPaid,
-      paymentStatus: _paymentStatusFor(nextPaid),
+      paymentStatus: _paymentStatusFor(
+        nextPaid,
+        total: totalPrice,
+        deposit: depositAmount,
+      ),
       payments: [...payments, payment],
       updatedAt: DateTime.now().toUtc(),
     );
@@ -218,10 +222,21 @@ class Booking {
     BookingStatus.cancelled: <BookingStatus>{},
   };
 
-  static BookingPaymentStatus _paymentStatusFor(Money paid) {
-    return paid.isZero
-        ? BookingPaymentStatus.unpaid
-        : BookingPaymentStatus.partialPaid;
+  static BookingPaymentStatus _paymentStatusFor(
+    Money paid, {
+    required Money total,
+    required Money deposit,
+  }) {
+    if (paid.isZero) {
+      return BookingPaymentStatus.unpaid;
+    }
+    if (paid.minorUnits >= total.minorUnits) {
+      return BookingPaymentStatus.fullyPaid;
+    }
+    if (deposit.minorUnits > 0 && paid.minorUnits >= deposit.minorUnits) {
+      return BookingPaymentStatus.deposit;
+    }
+    return BookingPaymentStatus.partialPaid;
   }
 
   static void _ensureIdentifier(String value, String label) {
