@@ -77,6 +77,10 @@ class _ReportsPageState extends State<ReportsPage> {
           padding: const EdgeInsets.all(16),
           children: [
             _buildHeader(context),
+            if (report.mayBeTruncated) ...[
+              const SizedBox(height: 12),
+              _buildTruncationWarning(context),
+            ],
             const SizedBox(height: 12),
             _buildMetrics(context, report),
             const SizedBox(height: 12),
@@ -166,6 +170,30 @@ class _ReportsPageState extends State<ReportsPage> {
       onPressed: onPressed,
       icon: const Icon(Icons.calendar_today_outlined),
       label: Text('$label: ${_formatDate(date)}'),
+    );
+  }
+
+  Widget _buildTruncationWarning(BuildContext context) {
+    return Card(
+      color: Theme.of(context).colorScheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_outlined,
+              color: Theme.of(context).colorScheme.onErrorContainer,
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'هذا التقرير وصل إلى حد القراءة الحالي لكل نوع من المستندات. '
+                'الإجماليات قد تكون ناقصة؛ ضيّق الفترة قبل الاعتماد عليها.',
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
