@@ -170,6 +170,28 @@ abstract final class FirebasePaths {
     return store(firestore, storeId).collection('party_payments');
   }
 
+  static CollectionReference<Map<String, dynamic>> repairs(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('repairs');
+  }
+
+  static CollectionReference<Map<String, dynamic>> repairPayments(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('party_payments');
+  }
+
+  static CollectionReference<Map<String, dynamic>> repairPaymentIdempotency(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('repair_payment_idempotency');
+  }
+
+
   static CollectionReference<Map<String, dynamic>> chequeSettlementIdempotency(
     FirebaseFirestore firestore,
     String storeId,
