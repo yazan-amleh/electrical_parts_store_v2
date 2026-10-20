@@ -609,7 +609,8 @@ class _RepairDialogState extends State<_RepairDialog> {
               ),
             ),
             IconButton(
-              onPressed: _isExporting ? null : () => _exportRepair(share: false),
+              onPressed:
+                  _isExporting ? null : () => _exportRepair(share: false),
               icon: const Icon(Icons.print_outlined),
               tooltip: 'طباعة طلب الصيانة',
             ),
