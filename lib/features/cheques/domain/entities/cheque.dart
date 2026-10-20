@@ -22,8 +22,8 @@ class Cheque {
     _ensureIdentifier(id, 'Cheque id');
     _ensureIdentifier(storeId, 'Cheque store id');
     _ensureIdentifier(partyId, 'Cheque party id');
-    if (partyType != PartyType.customer) {
-      throw ArgumentError('Only incoming customer cheques are supported.');
+    if (partyType != PartyType.customer && partyType != PartyType.supplier) {
+      throw ArgumentError('Only customer and supplier cheques are supported.');
     }
     if (amount.isNegative || amount.isZero) {
       throw ArgumentError('Cheque amount must be greater than zero.');
