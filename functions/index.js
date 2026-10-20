@@ -6705,13 +6705,11 @@ async function deliverRepairInTransaction(transaction, userId, command) {
     repairSnapshot,
     journalSnapshot,
     journalIdempotencySnapshot,
-    partySnapshot,
   ] = await Promise.all([
     transaction.get(deliveryIdempotencyRef),
     transaction.get(repairRef),
     transaction.get(journalRef),
     transaction.get(journalIdempotencyRef),
-    transaction.get(storeRef.collection('parties').doc(command.repairId)),
   ]);
   if (deliveryIdempotencySnapshot.exists) {
     const data = deliveryIdempotencySnapshot.data();
@@ -6728,6 +6726,9 @@ async function deliverRepairInTransaction(transaction, userId, command) {
   if (repair.storeId !== command.storeId) {
     deny('Repair belongs to another store.');
   }
+  const partySnapshot = await transaction.get(
+    storeRef.collection('parties').doc(repair.customerId),
+  );
   if (repair.status === 'cancelled') {
     invalid('A cancelled repair cannot be delivered.');
   }
@@ -6830,7 +6831,25 @@ async function deliverRepairInTransaction(transaction, userId, command) {
       nextQuantity,
       nextValue,
       cost,
+      movementId: command.repairId + '-part-' + productId,
+      movementRef: storeRef
+        .collection('inventory_movements')
+        .doc(command.repairId + '-part-' + productId),
+      movementIdempotencyRef: storeRef
+        .collection('inventory_idempotency')
+        .doc(command.idempotencyKey + ':inventory:' + productId),
     });
+  }
+
+  for (const change of productChanges) {
+    change.movementSnapshot = await transaction.get(change.movementRef);
+    change.movementIdempotencySnapshot = await transaction.get(
+      change.movementIdempotencyRef,
+    );
+    if (change.movementSnapshot.exists ||
+        change.movementIdempotencySnapshot.exists) {
+      conflict('Repair inventory movement already exists.');
+    }
   }
 
   const labor = storedInt(repair.laborCostMinorUnits, 0);
@@ -7059,23 +7078,15 @@ async function deliverRepairInTransaction(transaction, userId, command) {
       inventoryValueMinorUnits: change.nextValue,
       updatedAt: FieldValue.serverTimestamp(),
     });
-    const movementId = command.repairId + '-part-' + change.productId;
-    const movementRef = storeRef
-      .collection('inventory_movements')
-      .doc(movementId);
-    const movementIdempotencyRef = storeRef
-      .collection('inventory_idempotency')
-      .doc(command.idempotencyKey + ':inventory:' + change.productId);
-    const movementSnapshot = await transaction.get(movementRef);
-    const movementIdempotencySnapshot = await transaction.get(
-      movementIdempotencyRef,
+    const movementId = change.movementId;
+    const movementRef = change.movementRef;
+    const movementIdempotencyRef = change.movementIdempotencyRef;
+    const part = parts.find(
+      (candidate) => candidate.productId === change.productId,
     );
-    if (movementSnapshot.exists || movementIdempotencySnapshot.exists) {
-      conflict('Repair inventory movement already exists.');
+    if (!part) {
+      invalid('Repair part snapshot was not found.');
     }
-    const part = parts.firstWhere(
-      (candidate) => candidate.productId == change.productId,
-    );
     transaction.set(movementRef, {
       storeId: command.storeId,
       productId: change.productId,
@@ -7249,14 +7260,12 @@ async function postRepairAdvanceInTransaction(
     paymentSnapshot,
     journalSnapshot,
     journalIdempotencySnapshot,
-    partySnapshot,
   ] = await Promise.all([
     transaction.get(repairRef),
     transaction.get(paymentIdempotencyRef),
     transaction.get(paymentRef),
     transaction.get(journalRef),
     transaction.get(journalIdempotencyRef),
-    transaction.get(storeRef.collection('parties').doc(command.repairId)),
   ]);
   if (paymentIdempotencySnapshot.exists) {
     const data = paymentIdempotencySnapshot.data();
@@ -7281,14 +7290,13 @@ async function postRepairAdvanceInTransaction(
   if (repair.storeId !== command.storeId) {
     deny('Repair belongs to another store.');
   }
+  const partySnapshot = await transaction.get(
+    storeRef.collection('parties').doc(repair.customerId),
+  );
   if (repair.status === 'cancelled' ||
       repair.status === 'delivered' ||
       repair.invoiceJournalEntryId) {
     invalid('An advance can only be posted before the repair invoice.');
-  }
-  if (repair.customerId !== command.repairId &&
-      repair.customerId !== command.payment.customerId) {
-    invalid('Repair payment customer does not match the repair.');
   }
   assertParty(
     partySnapshot,
@@ -7481,6 +7489,9 @@ async function postRepairPaymentInTransaction(
   }
   if (repair.status === 'cancelled') {
     invalid('A cancelled repair cannot receive a payment.');
+  }
+  if ((repair.currency || 'ILS') !== command.payment.currency) {
+    invalid('Repair payment currency does not match the repair.');
   }
   const total = storedInt(repair.invoicedTotalMinorUnits, 0);
   const paid = storedInt(repair.paidMinorUnits, 0);
