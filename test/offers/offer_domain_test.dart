@@ -21,8 +21,8 @@ void main() {
       productName: 'Product $id',
       originalUnitPrice: Money(minorUnits: original),
       finalUnitPrice: Money(minorUnits: finalPrice),
-      quantity: Quantity.fromMilliUnits( quantityMilliUnits),
-      unitFactorToBase: const Quantity.fromMilliUnits( 1000),
+      quantity: Quantity.fromMilliUnits(quantityMilliUnits),
+      unitFactorToBase: const Quantity.fromMilliUnits(1000),
       priceType: OfferPriceType.retail,
     );
   }
