@@ -204,8 +204,7 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
     final content = <pw.Widget>[
       _buildTitle(
         title: 'تحليلات المبيعات',
-        subtitle:
-            'الفترة: ' +
+        subtitle: 'الفترة: ' +
             _formatDate(analytics.from) +
             ' - ' +
             _formatDate(analytics.to),
