@@ -8,7 +8,7 @@ import '../../domain/services/report_document_builder.dart';
 
 class PdfReportDocumentBuilder implements ReportDocumentBuilder {
   PdfReportDocumentBuilder({AssetBundle? assetBundle})
-      : _assetBundle = assetBundle ?? rootBundle;
+    : _assetBundle = assetBundle ?? rootBundle;
 
   final AssetBundle _assetBundle;
   _PdfFonts? _fonts;
@@ -146,7 +146,8 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
     final content = <pw.Widget>[
       _buildTitle(
         title: 'التقرير التشغيلي',
-        subtitle: 'الفترة: ${_formatDate(report.from)} - ${_formatDate(report.to)}',
+        subtitle:
+            'الفترة: ${_formatDate(report.from)} - ${_formatDate(report.to)}',
         storeName: storeName,
         fonts: fonts,
       ),
@@ -196,7 +197,8 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
     final content = <pw.Widget>[
       _buildTitle(
         title: 'تحليلات المبيعات',
-        subtitle: 'الفترة: ${_formatDate(analytics.from)} - ${_formatDate(analytics.to)}',
+        subtitle:
+            'الفترة: ${_formatDate(analytics.from)} - ${_formatDate(analytics.to)}',
         storeName: storeName,
         fonts: fonts,
       ),
