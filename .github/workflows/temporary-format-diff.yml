@@ -1,0 +1,24 @@
+name: Temporary Dart format diff
+
+on:
+  push:
+    branches:
+      - v2/foundation
+
+permissions:
+  contents: read
+
+jobs:
+  format-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Format accounting scenario and print diff
+        run: |
+          dart format test/accounting/accounting_flow_scenario_test.dart
+          git diff -- test/accounting/accounting_flow_scenario_test.dart
