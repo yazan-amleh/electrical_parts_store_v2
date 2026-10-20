@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -8,6 +6,7 @@ import '../../domain/entities/repair_payment.dart';
 import '../../domain/entities/repair_request.dart';
 import '../../domain/enums/device_condition.dart';
 import '../../domain/enums/repair_payment_kind.dart';
+import '../../domain/enums/repair_priority.dart';
 import '../../domain/enums/repair_status.dart';
 import '../../../payments/domain/enums/party_payment_method.dart';
 import '../../domain/services/repair_document_builder.dart';
@@ -129,10 +128,7 @@ class PdfRepairDocumentBuilder implements RepairDocumentBuilder {
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Text(
-            'صفحة ' +
-                context.pageNumber.toString() +
-                ' من ' +
-                context.pagesCount.toString(),
+            'صفحة ${context.pageNumber} من ${context.pagesCount}',
             style: pw.TextStyle(
               font: fonts.regular,
               fontSize: 8,
@@ -162,7 +158,7 @@ class PdfRepairDocumentBuilder implements RepairDocumentBuilder {
     final content = <pw.Widget>[
       _title(
         title: 'تفاصيل طلب الإصلاح',
-        subtitle: 'طلب رقم ' + repair.id,
+        subtitle: 'طلب رقم ${repair.id}',
         storeName: storeName,
         fonts: fonts,
       ),
@@ -286,7 +282,7 @@ class PdfRepairDocumentBuilder implements RepairDocumentBuilder {
     return [
       _title(
         title: 'إيصال دفع صيانة',
-        subtitle: 'إيصال رقم ' + payment.id,
+        subtitle: 'إيصال رقم ${payment.id}',
         storeName: storeName,
         fonts: fonts,
       ),
@@ -339,7 +335,7 @@ class PdfRepairDocumentBuilder implements RepairDocumentBuilder {
           _valueLine('رقم الطلب', repair.id, fonts),
           _valueLine(
             'الجهاز',
-            repair.deviceName + ' — ' + repair.deviceModel,
+            '${repair.deviceName} — ${repair.deviceModel}',
             fonts,
           ),
           _valueLine('الإجمالي المفوتر', repair.invoicedTotal.formatted, fonts),
@@ -531,20 +527,18 @@ class PdfRepairDocumentBuilder implements RepairDocumentBuilder {
 
   String _formatDate(DateTime value) {
     final date = value.toUtc();
-    return date.year.toString().padLeft(4, '0') +
-        '/' +
-        date.month.toString().padLeft(2, '0') +
-        '/' +
-        date.day.toString().padLeft(2, '0');
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '$year/$month/$day';
   }
 
   String _formatDateTime(DateTime value) {
     final date = value.toUtc();
-    return _formatDate(date) +
-        ' ' +
-        date.hour.toString().padLeft(2, '0') +
-        ':' +
-        date.minute.toString().padLeft(2, '0');
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    final dateText = _formatDate(date);
+    return '$dateText $hour:$minute';
   }
 
   String _formatOptionalDate(DateTime? value) {
@@ -557,9 +551,8 @@ class PdfRepairDocumentBuilder implements RepairDocumentBuilder {
     final major = absolute ~/ 1000;
     final fraction = (absolute % 1000).toString().padLeft(3, '0');
     final trimmed = fraction.replaceFirst(RegExp(r'0+$'), '');
-    return trimmed.isEmpty
-        ? sign + major.toString()
-        : sign + major.toString() + '.' + trimmed;
+    final whole = sign + major.toString();
+    return trimmed.isEmpty ? whole : '$whole.$trimmed';
   }
 
   String _paymentMethodLabel(PartyPaymentMethod method) {
