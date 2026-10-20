@@ -11,6 +11,7 @@ import '../features/inventory/domain/repositories/product_repository.dart';
 import '../features/sales/domain/repositories/sale_repository.dart';
 import '../features/purchases/domain/repositories/purchase_repository.dart';
 import '../features/reports/domain/repositories/reports_repository.dart';
+import '../features/settings/domain/repositories/settings_repository.dart';
 import '../features/repairs/domain/repositories/repair_repository.dart';
 import '../features/purchase_orders/domain/repositories/purchase_order_repository.dart';
 import '../features/expenses/domain/repositories/expense_repository.dart';
@@ -41,6 +42,7 @@ class AppDependencies {
     this.accountTransferRepository,
     this.repairRepository,
     this.reportsRepository,
+    this.settingsRepository,
   });
 
   final AppRuntimeConfig runtime;
@@ -63,6 +65,7 @@ class AppDependencies {
   final AccountTransferRepository? accountTransferRepository;
   final RepairRepository? repairRepository;
   final ReportsRepository? reportsRepository;
+  final SettingsRepository? settingsRepository;
 
   bool get hasFirebaseSession => authSession != null;
 }
