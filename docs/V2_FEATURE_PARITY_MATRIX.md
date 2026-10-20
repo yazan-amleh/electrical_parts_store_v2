@@ -32,6 +32,7 @@ This matrix keeps the V1 surface visible while V2 is rebuilt on a new data set. 
 | Report export and printing | Partial | Operational reports, sales analytics, repair requests and payment receipts, and category inventory support PDF/print/share; V1-specific formats still need final visual review |
 | Advanced product/category/customer sales analytics | Implemented | Sales analytics page with product, category, customer and payment-method aggregation, paginated reads and a visible safety-cap warning |
 | Chat and notifications | Implemented | Secure participant-scoped rooms, direct/group text, unread counters, attachment upload rules, device token registration and participant-only push notification function are wired; production deployment and device QA remain release gates |
+| Salon and booking workflows | Planned | V1 includes bookings, calendar, photography options, customers, workers, work sessions, discounts and booking expenses; V2 vertical slice is next and will use atomic inventory/accounting commands |
 | Store settings and user administration UI | Complete | Store profile, members, roles and preferences (owner transfer/invitations remain separate) |
 | Full responsive UI parity review | Planned | Compare every V1 workflow on phone and desktop |
 | End-to-end emulator scenarios | Planned | Sales, purchases, payments, cheques, repairs and year-end flows |

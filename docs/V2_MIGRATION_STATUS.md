@@ -24,12 +24,13 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 
 ## Release gates still open
 
-1. Complete remaining UI parity and responsive review.
-2. Review all PDF/print layouts on phone and desktop, including the V1-specific documents now implemented.
+1. Port the salon/booking vertical slice and remaining V1 utility screens (notes, activity log and chatbot) behind V2 repository contracts.
+2. Complete remaining UI parity and responsive review.
+3. Review all PDF/print layouts on phone and desktop, including the V1-specific documents now implemented.
    Operational reports and sales analytics use paginated reads with a visible safety cap.
-3. Expand emulator scenarios, including concurrent retries and cheque bounce.
-4. Run a clean-data acceptance pass with representative store workflows.
-5. Configure the separate V2 Firebase project, then deploy only after the
+4. Expand emulator scenarios, including concurrent retries and cheque bounce.
+5. Run a clean-data acceptance pass with representative store workflows.
+6. Configure the separate V2 Firebase project, then deploy only after the
    rules and functions review is approved.
 
 No V1 customer or transaction migration is implied by this document. Migration, if desired after year-end, will be a separate audited project.
