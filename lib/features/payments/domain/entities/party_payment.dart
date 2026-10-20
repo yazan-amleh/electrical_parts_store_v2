@@ -17,7 +17,7 @@ class PartyPayment {
     this.description,
     this.chequeNumber,
     this.bankName,
-    this.dueDate,
+    DateTime? dueDate,
   })  : postedAt = postedAt.toUtc(),
         dueDate = dueDate?.toUtc() {
     _ensureSafeIdentifier(id, 'Party payment id');
@@ -39,8 +39,13 @@ class PartyPayment {
       if (partyType != PartyType.customer) {
         throw ArgumentError('Cheques are currently supported for customers.');
       }
-      if (chequeNumber == null || chequeNumber.trim().isEmpty) {
+      final number = chequeNumber;
+      if (number == null || number.trim().isEmpty) {
         throw ArgumentError('A cheque number is required.');
+      }
+      final bank = bankName;
+      if (bank == null || bank.trim().isEmpty) {
+        throw ArgumentError('A cheque bank name is required.');
       }
     }
   }
