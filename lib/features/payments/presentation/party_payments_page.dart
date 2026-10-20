@@ -159,7 +159,8 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                           Icons.account_balance_wallet_outlined,
                         ),
                       ),
-                      items: PartyPaymentMethod.values.map(
+                      items: PartyPaymentMethod.values
+                          .map(
                             (method) => DropdownMenuItem<PartyPaymentMethod>(
                               value: method,
                               child: Text(method.arabicLabel),
