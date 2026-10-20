@@ -222,7 +222,7 @@ class _ChequesPageState extends State<ChequesPage> {
                       onPressed: isBusy
                           ? null
                           : () =>
-                                _settle(cheque, ChequeSettlementAction.bounce),
+                              _settle(cheque, ChequeSettlementAction.bounce),
                       icon: const Icon(Icons.undo_outlined),
                       label: const Text('ارتجاع'),
                     ),
