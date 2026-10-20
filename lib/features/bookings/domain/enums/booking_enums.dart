@@ -1,13 +1,3 @@
-enum BookingStatus {
-  pending,
-  confirmed,
-  completed,
-  cancelled,
-}
+enum BookingStatus { pending, confirmed, completed, cancelled }
 
-enum BookingPaymentStatus {
-  unpaid,
-  deposit,
-  partialPaid,
-  fullyPaid,
-}
+enum BookingPaymentStatus { unpaid, deposit, partialPaid, fullyPaid }
