@@ -51,6 +51,10 @@ service cloud.firestore {
       return hasRole(storeId, ['owner', 'admin', 'accountant', 'sales']);
     }
 
+    function canManageRepairs(storeId) {
+      return hasRole(storeId, ['owner', 'admin', 'accountant', 'sales']);
+    }
+
     match /stores/{storeId} {
       allow read: if canReadStore(storeId);
       allow create: if signedIn() &&
@@ -127,6 +131,15 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      match /repairs/{repairId} {
+        allow read: if canReadStore(storeId);
+        allow create, update, delete: if false;
+      }
+
+      match /repair_payment_idempotency/{key} {
+        allow read, write: if false;
+      }
+
       match /sales/{saleId} {
         allow read: if canReadStore(storeId);
         allow create, update, delete: if false;
@@ -189,7 +202,12 @@ service cloud.firestore {
             'archiveOffer',
             'createOfferOrder',
             'cancelOfferOrder',
-            'confirmOfferOrder'
+            'confirmOfferOrder',
+            'createRepair',
+            'updateRepair',
+            'deliverRepair',
+            'postRepairAdvance',
+            'postRepairPayment'
           ] &&
           request.resource.data.idempotencyKey is string;
         allow update: if canReadStore(storeId) &&
