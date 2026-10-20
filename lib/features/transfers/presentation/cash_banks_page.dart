@@ -320,7 +320,7 @@ class _CashBanksPageState extends State<CashBanksPage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      '\${account.code} — \${account.name}',
+                      '${account.code} — ${account.name}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.bold),
@@ -356,12 +356,12 @@ class _CashBanksPageState extends State<CashBanksPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'كشف حركة \${account.name}',
+                    'كشف حركة ${account.name}',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
                 Text(
-                  'الرصيد المعتمد: \${balance.formatted}',
+                  'الرصيد المعتمد: ${balance.formatted}',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ],
@@ -610,8 +610,8 @@ class _CashBanksPageState extends State<CashBanksPage> {
 
   String _formatDate(DateTime date) {
     final utc = date.toUtc();
-    return '\${utc.year.toString().padLeft(4, '0')}-'
-        '\${utc.month.toString().padLeft(2, '0')}-'
-        '\${utc.day.toString().padLeft(2, '0')}';
+    return '${utc.year.toString().padLeft(4, '0')}-'
+        '${utc.month.toString().padLeft(2, '0')}-'
+        '${utc.day.toString().padLeft(2, '0')}';
   }
 }
