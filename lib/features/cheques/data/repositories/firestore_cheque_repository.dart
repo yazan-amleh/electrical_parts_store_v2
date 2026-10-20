@@ -75,7 +75,7 @@ class FirestoreChequeRepository implements ChequeRepository {
       );
     }
 
-    final idempotencyKey = 'cheque-${chequeId}-${action.name}';
+    final idempotencyKey = 'cheque-$chequeId-${action.name}';
     final payload = <String, dynamic>{
       'storeId': context.storeId,
       'chequeId': chequeId,
@@ -112,7 +112,7 @@ class FirestoreChequeRepository implements ChequeRepository {
     } on firebase_functions.FirebaseFunctionsException catch (error) {
       if (_commandQueue != null &&
           CloudFunctionQueueFallback.isTransient(error)) {
-        final commandId = 'settle-cheque-${chequeId}-${action.name}';
+        final commandId = 'settle-cheque-$chequeId-${action.name}';
         final queueFailure = await CloudFunctionQueueFallback.enqueue(
           repository: _commandQueue,
           context: context,
