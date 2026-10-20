@@ -7,7 +7,7 @@ import '../entities/chat_attachment.dart';
 abstract interface class ChatAttachmentRepository {
   static const maxAttachmentBytes = 10 * 1024 * 1024;
 
-  Future<Result<ChatAttachment>> upload({ 
+  Future<Result<ChatAttachment>> upload({
     required StoreContext context,
     required String roomId,
     required String fileName,

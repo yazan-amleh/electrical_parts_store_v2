@@ -8,8 +8,7 @@ import '../../../../core/tenancy/store_context.dart';
 import '../../domain/entities/chat_attachment.dart';
 import '../../domain/repositories/chat_attachment_repository.dart';
 
-class FirebaseChatAttachmentRepository
-    implements ChatAttachmentRepository {
+class FirebaseChatAttachmentRepository implements ChatAttachmentRepository {
   FirebaseChatAttachmentRepository({required FirebaseStorage storage})
       : _storage = storage;
 
