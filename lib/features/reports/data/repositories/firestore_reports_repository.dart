@@ -6,6 +6,7 @@ import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
 import '../../../../infrastructure/firebase/firebase_paths.dart';
 import '../../domain/entities/operational_report.dart';
+import '../../domain/entities/sales_analytics.dart';
 import '../../domain/repositories/reports_repository.dart';
 import '../mappers/report_firestore_mapper.dart';
 
@@ -162,6 +163,317 @@ class FirestoreReportsRepository implements ReportsRepository {
         InfrastructureFailure(error.toString()),
       );
     }
+  }
+
+
+  @override
+  Future<Result<SalesAnalytics>> getSalesAnalytics({
+    required StoreContext context,
+    required DateTime from,
+    required DateTime to,
+    int limit = 500,
+  }) async {
+    if (from.isAfter(to)) {
+      return const FailureResult<SalesAnalytics>(
+        ValidationFailure('Report start date cannot be after end date.'),
+      );
+    }
+    if (limit <= 0 || limit > 2000) {
+      return const FailureResult<SalesAnalytics>(
+        ValidationFailure('Report limit must be between 1 and 2000.'),
+      );
+    }
+
+    final start = Timestamp.fromDate(from.toUtc());
+    final end = Timestamp.fromDate(to.toUtc());
+
+    try {
+      final snapshots =
+          await Future.wait<QuerySnapshot<Map<String, dynamic>>>([
+        FirebasePaths.sales(_firestore, context.storeId)
+            .where('postedAt', isGreaterThanOrEqualTo: start)
+            .where('postedAt', isLessThanOrEqualTo: end)
+            .limit(limit)
+            .get(),
+        FirebasePaths.products(_firestore, context.storeId).get(),
+        FirebasePaths.categories(_firestore, context.storeId).get(),
+        FirebasePaths.parties(_firestore, context.storeId).get(),
+      ]);
+
+      final productLookup = <String, _ProductAnalyticsLookup>{};
+      for (final document in snapshots[1].docs) {
+        final data = document.data();
+        final productId = document.id;
+        final name = _analyticsString(data['name'], productId);
+        final categoryId = _analyticsString(
+          data['categoryId'],
+          'uncategorized',
+        );
+        productLookup[productId] = _ProductAnalyticsLookup(
+          name: name,
+          categoryId: categoryId,
+        );
+      }
+
+      final categoryNames = <String, String>{};
+      for (final document in snapshots[2].docs) {
+        final data = document.data();
+        categoryNames[document.id] = _analyticsString(
+          data['name'],
+          document.id,
+        );
+      }
+
+      final partyNames = <String, String>{};
+      for (final document in snapshots[3].docs) {
+        final data = document.data();
+        partyNames[document.id] = _analyticsString(
+          data['name'],
+          document.id,
+        );
+      }
+
+      String? currency;
+      var salesRevenue = Money.zero(currency: 'ILS');
+      var salesCost = Money.zero(currency: 'ILS');
+      var salesCount = 0;
+      final paymentMethodCounts = <String, int>{};
+      final productRows = <String, _AnalyticsAccumulator>{};
+      final categoryRows = <String, _AnalyticsAccumulator>{};
+      final customerRows = <String, _AnalyticsAccumulator>{};
+
+      for (final document in snapshots[0].docs) {
+        final data = document.data();
+        final postedAt = _analyticsDate(data['postedAt']);
+        if (postedAt == null) {
+          continue;
+        }
+
+        final saleCurrency = _analyticsString(data['currency'], 'ILS');
+        currency ??= saleCurrency;
+        if (saleCurrency != currency) {
+          return const FailureResult<SalesAnalytics>(
+            ValidationFailure(
+              'Sales analytics cannot combine different currencies.',
+            ),
+          );
+        }
+
+        final saleTotalMinorUnits = _analyticsInt(
+          data['totalMinorUnits'],
+          _analyticsInt(data['amountMinorUnits']),
+        );
+        final saleCostMinorUnits = _analyticsInt(
+          data['costTotalMinorUnits'],
+        );
+        salesRevenue += Money(
+          minorUnits: saleTotalMinorUnits,
+          currency: saleCurrency,
+        );
+        salesCost += Money(
+          minorUnits: saleCostMinorUnits,
+          currency: saleCurrency,
+        );
+        salesCount++;
+        _increment(
+          paymentMethodCounts,
+          _analyticsString(data['paymentMethod'], 'unknown'),
+        );
+
+        final customerId = _analyticsNullableString(data['customerId']);
+        final customerKey = customerId ?? 'walk-in';
+        final customerLabel = customerId == null
+            ? 'مبيعات نقدية / بدون عميل'
+            : (partyNames[customerId] ?? customerId);
+        _addAnalyticsRow(
+          customerRows,
+          key: customerKey,
+          label: customerLabel,
+          quantityMilliUnits: 0,
+          revenueMinorUnits: saleTotalMinorUnits,
+          costMinorUnits: saleCostMinorUnits,
+          currency: saleCurrency,
+        );
+
+        final rawLines = data['lines'];
+        if (rawLines is! List) {
+          continue;
+        }
+        for (final rawLine in rawLines) {
+          if (rawLine is! Map) {
+            continue;
+          }
+          final line = Map<String, dynamic>.from(rawLine);
+          final productId = _analyticsNullableString(line['productId']);
+          final product = productId == null ? null : productLookup[productId];
+          final fallbackLabel = _analyticsString(
+            line['description'],
+            productId ?? 'صنف غير معروف',
+          );
+          final productLabel = product?.name ?? fallbackLabel;
+          final categoryId = product?.categoryId ?? 'uncategorized';
+          final categoryLabel = categoryNames[categoryId] ?? 'غير مصنف';
+          final quantityMilliUnits = _analyticsInt(
+            line['quantityMilliUnits'],
+          );
+          final factorMilliUnits = _analyticsInt(
+            line['unitFactorToBaseMilliUnits'],
+            1000,
+          );
+          final baseQuantityMilliUnits = _scaled(
+            quantityMilliUnits,
+            factorMilliUnits,
+          );
+          final lineRevenueMinorUnits = _nonNegative(
+            _scaled(
+                  _analyticsInt(line['unitPriceMinorUnits']),
+                  quantityMilliUnits,
+                ) -
+                _analyticsInt(line['discountMinorUnits']),
+          );
+          final isService = line['isService'] is bool &&
+              line['isService'] as bool;
+          final lineCostMinorUnits = isService
+              ? 0
+              : _scaled(
+                  _analyticsInt(line['unitCostMinorUnits']),
+                  baseQuantityMilliUnits,
+                );
+
+          _addAnalyticsRow(
+            productRows,
+            key: productId ?? fallbackLabel,
+            label: productLabel,
+            quantityMilliUnits: baseQuantityMilliUnits,
+            revenueMinorUnits: lineRevenueMinorUnits,
+            costMinorUnits: lineCostMinorUnits,
+            currency: saleCurrency,
+          );
+          _addAnalyticsRow(
+            categoryRows,
+            key: categoryId,
+            label: categoryLabel,
+            quantityMilliUnits: baseQuantityMilliUnits,
+            revenueMinorUnits: lineRevenueMinorUnits,
+            costMinorUnits: lineCostMinorUnits,
+            currency: saleCurrency,
+          );
+        }
+      }
+
+      final analyticsCurrency = currency ?? 'ILS';
+      final sortRows = <_AnalyticsAccumulator>[
+        ...productRows.values,
+      ]..sort(_compareAnalyticsRows);
+      final sortedCategories = <_AnalyticsAccumulator>[
+        ...categoryRows.values,
+      ]..sort(_compareAnalyticsRows);
+      final sortedCustomers = <_AnalyticsAccumulator>[
+        ...customerRows.values,
+      ]..sort(_compareAnalyticsRows);
+
+      return Success<SalesAnalytics>(
+        SalesAnalytics(
+          from: from.toUtc(),
+          to: to.toUtc(),
+          salesRevenue: currency == null
+              ? Money.zero(currency: analyticsCurrency)
+              : salesRevenue,
+          salesCost: currency == null
+              ? Money.zero(currency: analyticsCurrency)
+              : salesCost,
+          salesCount: salesCount,
+          paymentMethodCounts: Map.unmodifiable(paymentMethodCounts),
+          productRows: List.unmodifiable(
+            sortRows.map((row) => row.toEntity()),
+          ),
+          categoryRows: List.unmodifiable(
+            sortedCategories.map((row) => row.toEntity()),
+          ),
+          customerRows: List.unmodifiable(
+            sortedCustomers.map((row) => row.toEntity()),
+          ),
+          mayBeTruncated: snapshots[0].docs.length >= limit,
+        ),
+      );
+    } on FirebaseException catch (error) {
+      return FailureResult<SalesAnalytics>(
+        InfrastructureFailure(error.message ?? error.code),
+      );
+    } catch (error) {
+      return FailureResult<SalesAnalytics>(
+        InfrastructureFailure(error.toString()),
+      );
+    }
+  }
+
+  static void _addAnalyticsRow(
+    Map<String, _AnalyticsAccumulator> rows, {
+    required String key,
+    required String label,
+    required int quantityMilliUnits,
+    required int revenueMinorUnits,
+    required int costMinorUnits,
+    required String currency,
+  }) {
+    final current = rows[key];
+    if (current == null) {
+      rows[key] = _AnalyticsAccumulator(
+        key: key,
+        label: label,
+        currency: currency,
+        quantityMilliUnits: quantityMilliUnits,
+        revenueMinorUnits: revenueMinorUnits,
+        costMinorUnits: costMinorUnits,
+      );
+      return;
+    }
+    current.quantityMilliUnits += quantityMilliUnits;
+    current.revenueMinorUnits += revenueMinorUnits;
+    current.costMinorUnits += costMinorUnits;
+  }
+
+  static int _compareAnalyticsRows(
+    _AnalyticsAccumulator left,
+    _AnalyticsAccumulator right,
+  ) {
+    final revenue = right.revenueMinorUnits.compareTo(left.revenueMinorUnits);
+    return revenue == 0
+        ? left.label.toLowerCase().compareTo(right.label.toLowerCase())
+        : revenue;
+  }
+
+  static int _scaled(int amount, int milliUnits) {
+    final numerator = amount * milliUnits;
+    return (numerator + 500) ~/ 1000;
+  }
+
+  static int _nonNegative(int value) => value < 0 ? 0 : value;
+
+  static DateTime? _analyticsDate(Object? value) {
+    if (value is Timestamp) {
+      return value.toDate().toUtc();
+    }
+    if (value is DateTime) {
+      return value.toUtc();
+    }
+    return null;
+  }
+
+  static String _analyticsString(Object? value, String fallback) {
+    return value is String && value.trim().isNotEmpty ? value.trim() : fallback;
+  }
+
+  static String? _analyticsNullableString(Object? value) {
+    return value is String && value.trim().isNotEmpty ? value.trim() : null;
+  }
+
+  static int _analyticsInt(Object? value, [int fallback = 0]) {
+    return value is int
+        ? value
+        : value is num
+            ? value.toInt()
+            : fallback;
   }
 
   static void _increment(Map<String, int> values, String key) {
