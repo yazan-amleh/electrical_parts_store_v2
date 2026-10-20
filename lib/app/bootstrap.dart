@@ -16,6 +16,7 @@ import '../features/inventory/data/repositories/firestore_inventory_repository.d
 import '../features/inventory/data/repositories/firestore_product_repository.dart';
 import '../features/sales/data/repositories/firestore_sale_repository.dart';
 import '../features/purchases/data/repositories/firestore_purchase_repository.dart';
+import '../features/repairs/data/repositories/firestore_repair_repository.dart';
 import '../features/purchase_orders/data/repositories/firestore_purchase_order_repository.dart';
 import '../features/offers/data/repositories/firestore_offer_repository.dart';
 import '../features/expenses/data/repositories/firestore_expense_repository.dart';
@@ -120,6 +121,11 @@ abstract final class AppBootstrap {
         firestore: firestore,
       ),
       accountTransferRepository: FirestoreAccountTransferRepository(
+        functions: functions,
+        commandQueue: commandQueue,
+      ),
+      repairRepository: FirestoreRepairRepository(
+        firestore: firestore,
         functions: functions,
         commandQueue: commandQueue,
       ),
