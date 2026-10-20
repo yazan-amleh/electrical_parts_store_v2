@@ -42,6 +42,8 @@ import '../../repairs/domain/repositories/repair_repository.dart';
 import '../../repairs/presentation/repairs_page.dart';
 import '../../reports/domain/repositories/reports_repository.dart';
 import '../../reports/presentation/reports_page.dart';
+import '../../settings/domain/repositories/settings_repository.dart';
+import '../../settings/presentation/settings_page.dart';
 
 class AppShellPage extends StatefulWidget {
   const AppShellPage({
@@ -351,6 +353,7 @@ class _AppShellPageState extends State<AppShellPage> {
               widget.dependencies.accountingQueryRepository,
           repairRepository: widget.dependencies.repairRepository,
           reportsRepository: widget.dependencies.reportsRepository,
+          settingsRepository: widget.dependencies.settingsRepository,
           membership: widget.membership,
         ),
       ),
@@ -464,6 +467,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.accountingQueryRepository,
     required this.repairRepository,
     required this.reportsRepository,
+    required this.settingsRepository,
     required this.membership,
   });
 
@@ -487,6 +491,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final AccountingQueryRepository? accountingQueryRepository;
   final RepairRepository? repairRepository;
   final ReportsRepository? reportsRepository;
+  final SettingsRepository? settingsRepository;
   final StoreMembership membership;
 
   @override
@@ -639,6 +644,13 @@ class _ModuleLandingPage extends StatelessWidget {
       return ReportsPage(
         repository: reportsRepository,
         productRepository: productRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'settings') {
+      return SettingsPage(
+        repository: settingsRepository,
         user: user,
         membership: membership,
       );
