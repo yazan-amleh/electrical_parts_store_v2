@@ -1,0 +1,23 @@
+name: Temporary formatter diff
+
+on:
+  push:
+    branches:
+      - "v2/**"
+
+permissions:
+  contents: read
+
+jobs:
+  format-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Apply formatter
+        run: dart format lib test
+      - name: Show formatter diff
+        run: git diff -- lib test
