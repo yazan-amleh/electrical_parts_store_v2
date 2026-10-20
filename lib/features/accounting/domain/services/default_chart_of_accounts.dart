@@ -134,6 +134,17 @@ abstract final class DefaultChartOfAccounts {
       ),
       _posting(
         storeId: storeId,
+        id: '2210',
+        code: '2210',
+        name: 'الشيكات الصادرة',
+        parentId: '2100',
+        controlType: ControlType.checksPayable,
+        section: StatementSection.currentLiability,
+        normalSide: NormalSide.credit,
+        sortOrder: 315,
+      ),
+      _posting(
+        storeId: storeId,
         id: '2120',
         code: '2120',
         name: 'الضرائب المستحقة',
