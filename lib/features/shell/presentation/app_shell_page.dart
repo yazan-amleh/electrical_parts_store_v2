@@ -501,6 +501,7 @@ class _ModuleLandingPage extends StatelessWidget {
       return PartyDirectoryPage(
         repository: partyRepository,
         paymentRepository: partyPaymentRepository,
+        ledgerRepository: partyLedgerRepository,
         user: user,
         membership: membership,
         initialPartyType: PartyType.customer,
@@ -510,6 +511,7 @@ class _ModuleLandingPage extends StatelessWidget {
       return PartyDirectoryPage(
         repository: partyRepository,
         paymentRepository: partyPaymentRepository,
+        ledgerRepository: partyLedgerRepository,
         user: user,
         membership: membership,
         initialPartyType: PartyType.supplier,
