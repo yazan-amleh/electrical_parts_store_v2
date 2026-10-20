@@ -360,7 +360,7 @@ class _RepairDialogState extends State<_RepairDialog> {
         customerName: _customer?.name ?? _repair.customerId,
         customerPhone: _customer?.phone,
       );
-      final filename = 'repair_' + _repair.id;
+      final filename = 'repair_${_repair.id}';
       if (share) {
         await Printing.sharePdf(bytes: bytes, filename: filename + '.pdf');
       } else {
@@ -393,14 +393,14 @@ class _RepairDialogState extends State<_RepairDialog> {
         customerName: _customer?.name ?? _repair.customerId,
         customerPhone: _customer?.phone,
       );
-      final filename = 'repair_receipt_' + payment.id;
+      final filename = 'repair_receipt_${payment.id}';
       if (share) {
         await Printing.sharePdf(bytes: bytes, filename: filename + '.pdf');
       } else {
         await Printing.layoutPdf(onLayout: (_) async => bytes);
       }
     } catch (error) {
-      _setError('تعذر تجهيز إيصال الدفع: ' + error.toString());
+      _setError('تعذر تجهيز إيصال الدفع: $error');
     } finally {
       if (mounted) {
         setState(() => _isExporting = false);
