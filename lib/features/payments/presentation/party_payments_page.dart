@@ -381,7 +381,9 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
 
   String get _settlementAccountId {
     if (_paymentMethod == PartyPaymentMethod.cheque) {
-      return isCustomer ? _checksAccountId : _issuedChecksAccountId;
+      return _partyType == PartyType.customer
+          ? _checksAccountId
+          : _issuedChecksAccountId;
     }
     if (_paymentMethod == PartyPaymentMethod.card &&
         _partyType == PartyType.customer) {
