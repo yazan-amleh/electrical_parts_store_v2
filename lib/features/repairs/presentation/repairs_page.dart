@@ -362,12 +362,12 @@ class _RepairDialogState extends State<_RepairDialog> {
       );
       final filename = 'repair_${_repair.id}';
       if (share) {
-        await Printing.sharePdf(bytes: bytes, filename: filename + '.pdf');
+        await Printing.sharePdf(bytes: bytes, filename: '$filename.pdf');
       } else {
         await Printing.layoutPdf(onLayout: (_) async => bytes);
       }
     } catch (error) {
-      _setError('تعذر تجهيز مستند الصيانة: ' + error.toString());
+      _setError('تعذر تجهيز مستند الصيانة: $error');
     } finally {
       if (mounted) {
         setState(() => _isExporting = false);
