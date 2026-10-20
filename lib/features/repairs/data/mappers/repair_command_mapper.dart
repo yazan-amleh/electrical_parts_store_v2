@@ -66,6 +66,7 @@ abstract final class RepairCommandMapper {
         ),
         'customerReceivableAccountId':
             accounts.customerReceivableAccountId,
+        'customerAdvancesAccountId': accounts.customerAdvancesAccountId,
       },
     };
   }
