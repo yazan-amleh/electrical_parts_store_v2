@@ -87,7 +87,7 @@ void main() {
         ],
         createdAt: DateTime.utc(2026, 1, 1),
         isActive: true,
-        globalDiscount: const Money(minorUnits: 101),
+        globalDiscount: const Money(minorUnits: 901),
       ),
       throwsA(isA<ArgumentError>()),
     );
