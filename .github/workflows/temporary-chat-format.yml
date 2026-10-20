@@ -20,5 +20,5 @@ jobs:
       - run: flutter pub get
       - name: Format chat files and print diff
         run: |
-          dart format lib/features/chat/data/mappers/chat_firestore_mapper.dart lib/features/chat/data/repositories/firestore_chat_repository.dart lib/features/chat/domain/entities/chat_room.dart
+          dart format lib/features/chat
           git diff -- lib/features/chat
