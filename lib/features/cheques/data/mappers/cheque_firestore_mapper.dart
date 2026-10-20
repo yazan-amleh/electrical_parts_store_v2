@@ -6,9 +6,7 @@ import '../../domain/entities/cheque.dart';
 import '../../domain/enums/cheque_status.dart';
 
 abstract final class ChequeFirestoreMapper {
-  static Cheque fromSnapshot(
-    DocumentSnapshot<Map<String, dynamic>> snapshot,
-  ) {
+  static Cheque fromSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot) {
     final data = snapshot.data() ?? const <String, dynamic>{};
     final statusName = _string(data['status'], ChequeStatus.pending.name);
     final status = ChequeStatus.values.firstWhere(
@@ -20,10 +18,8 @@ abstract final class ChequeFirestoreMapper {
       storeId: _string(data['storeId']),
       partyType: PartyType.values.firstWhere(
         (candidate) =>
-            candidate.name == _string(
-              data['partyType'],
-              PartyType.customer.name,
-            ),
+            candidate.name ==
+            _string(data['partyType'], PartyType.customer.name),
         orElse: () => PartyType.customer,
       ),
       partyId: _string(data['partyId']),
@@ -56,8 +52,8 @@ abstract final class ChequeFirestoreMapper {
     return value is int
         ? value
         : value is num
-            ? value.toInt()
-            : 0;
+        ? value.toInt()
+        : 0;
   }
 
   static String _string(Object? value, [String fallback = '']) {
