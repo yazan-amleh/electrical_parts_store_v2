@@ -5408,3 +5408,641 @@ async function settleChequeInTransaction(transaction, userId, command) {
     journalEntryId,
   };
 }
+
+
+exports.auditAccountingIntegrity = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parseAccountingAuditCommand(request.data);
+
+  try {
+    return await runAccountingIntegrityAudit(
+      request.auth.uid,
+      command,
+    );
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('auditAccountingIntegrity failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The accounting integrity audit could not be completed.',
+    );
+  }
+});
+
+function parseAccountingAuditCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  return {
+    storeId: safeId(command.storeId, 'storeId'),
+  };
+}
+
+async function runAccountingIntegrityAudit(userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const membershipSnapshot = await storeRef
+    .collection('members')
+    .doc(userId)
+    .get();
+  assertMembership(
+    membershipSnapshot,
+    command.storeId,
+    'run accounting audits',
+    new Set(['owner', 'admin', 'accountant']),
+  );
+
+  const [
+    accountsSnapshot,
+    accountBalancesSnapshot,
+    journalEntriesSnapshot,
+    journalLinesSnapshot,
+    partiesSnapshot,
+    partyBalancesSnapshot,
+    partyLedgerSnapshot,
+    productsSnapshot,
+    inventoryMovementsSnapshot,
+  ] = await Promise.all([
+    storeRef.collection('accounts').get(),
+    storeRef.collection('account_balances').get(),
+    storeRef.collection('journal_entries').get(),
+    db.collectionGroup('lines')
+      .where('storeId', '==', command.storeId)
+      .get(),
+    storeRef.collection('parties').get(),
+    storeRef.collection('party_balances').get(),
+    storeRef.collection('party_ledger_entries').get(),
+    storeRef.collection('products').get(),
+    storeRef.collection('inventory_movements').get(),
+  ]);
+
+  const issues = [];
+  const addIssue = ({
+    code,
+    scope,
+    referenceId,
+    message,
+    severity = 'error',
+    valueKind,
+    currency,
+    expected,
+    actual,
+  }) => {
+    if (issues.length >= 200) {
+      return;
+    }
+    issues.push({
+      code,
+      scope,
+      referenceId,
+      message,
+      severity,
+      valueKind: valueKind || null,
+      currency: currency || null,
+      expected: Number.isSafeInteger(expected) ? expected : null,
+      actual: Number.isSafeInteger(actual) ? actual : null,
+    });
+  };
+
+  const accountMap = new Map();
+  for (const document of accountsSnapshot.docs) {
+    const data = document.data();
+    if (data.storeId !== command.storeId) {
+      addIssue({
+        code: 'ACCOUNT_STORE_MISMATCH',
+        scope: 'account',
+        referenceId: document.id,
+        message: 'الحساب مربوط بمتجر آخر أو بلا متجر صحيح.',
+      });
+      continue;
+    }
+    accountMap.set(document.id, data);
+  }
+
+  const accountTotals = new Map();
+  const ensureAccountTotal = (accountId, currency) => {
+    const existing = accountTotals.get(accountId);
+    if (existing) {
+      if (existing.currency !== currency) {
+        addIssue({
+          code: 'ACCOUNT_MULTI_CURRENCY',
+          scope: 'account',
+          referenceId: accountId,
+          message: 'الحساب استُخدم بأكثر من عملة.',
+          currency: currency,
+        });
+      }
+      return existing;
+    }
+    const created = {
+      debit: 0,
+      credit: 0,
+      currency,
+    };
+    accountTotals.set(accountId, created);
+    return created;
+  };
+
+  const linesByEntry = new Map();
+  for (const document of journalLinesSnapshot.docs) {
+    const data = document.data();
+    if (data.storeId !== command.storeId) {
+      addIssue({
+        code: 'JOURNAL_LINE_STORE_MISMATCH',
+        scope: 'journalLine',
+        referenceId: document.id,
+        message: 'سطر القيد مربوط بمتجر آخر أو بلا متجر صحيح.',
+      });
+      continue;
+    }
+
+    const parentEntryId = data.entryId ||
+      (document.ref.parent.parent && document.ref.parent.parent.id);
+    if (!parentEntryId) {
+      addIssue({
+        code: 'ORPHAN_JOURNAL_LINE',
+        scope: 'journalLine',
+        referenceId: document.id,
+        message: 'سطر قيد بلا قيد أب معروف.',
+      });
+      continue;
+    }
+
+    const lineList = linesByEntry.get(parentEntryId) || [];
+    lineList.push({id: document.id, data});
+    linesByEntry.set(parentEntryId, lineList);
+  }
+
+  for (const document of journalEntriesSnapshot.docs) {
+    const entry = document.data();
+    const entryId = document.id;
+    const currency = typeof entry.currency === 'string'
+      ? entry.currency
+      : 'ILS';
+    const lines = linesByEntry.get(entryId) || [];
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    if (lines.length === 0) {
+      addIssue({
+        code: 'JOURNAL_WITHOUT_LINES',
+        scope: 'journal',
+        referenceId: entryId,
+        message: 'القيد لا يحتوي على أي سطر دفتر.',
+      });
+    }
+
+    for (const line of lines) {
+      const data = line.data;
+      const debit = storedInt(data.debitMinorUnits, 0);
+      const credit = storedInt(data.creditMinorUnits, 0);
+      totalDebit += debit;
+      totalCredit += credit;
+
+      if ((debit === 0) === (credit === 0)) {
+        addIssue({
+          code: 'INVALID_JOURNAL_LINE_SIDE',
+          scope: 'journalLine',
+          referenceId: line.id,
+          message: 'سطر القيد لا يحتوي على طرف واحد موجب فقط.',
+          valueKind: 'minorUnits',
+          currency,
+          expected: 1,
+          actual: 0,
+        });
+      }
+
+      if (data.entryId && data.entryId !== entryId) {
+        addIssue({
+          code: 'JOURNAL_LINE_PARENT_MISMATCH',
+          scope: 'journalLine',
+          referenceId: line.id,
+          message: 'السطر يشير إلى قيد أب مختلف.',
+        });
+      }
+
+      if (data.currency && data.currency !== currency) {
+        addIssue({
+          code: 'JOURNAL_LINE_CURRENCY_MISMATCH',
+          scope: 'journalLine',
+          referenceId: line.id,
+          message: 'عملة سطر القيد تختلف عن عملة القيد.',
+        });
+      }
+
+      const accountId = data.accountId;
+      if (typeof accountId !== 'string' || accountId.trim() === '') {
+        addIssue({
+          code: 'JOURNAL_LINE_ACCOUNT_MISSING',
+          scope: 'journalLine',
+          referenceId: line.id,
+          message: 'سطر القيد بلا حساب.',
+        });
+        continue;
+      }
+
+      const account = accountMap.get(accountId);
+      if (!account) {
+        addIssue({
+          code: 'JOURNAL_LINE_ACCOUNT_NOT_FOUND',
+          scope: 'journalLine',
+          referenceId: line.id,
+          message: 'سطر القيد يشير إلى حساب غير موجود.',
+        });
+      }
+
+      const total = ensureAccountTotal(
+        accountId,
+        data.currency || currency,
+      );
+      total.debit += debit;
+      total.credit += credit;
+    }
+
+    const headerDebit = storedInt(entry.totalDebitMinorUnits, 0);
+    const headerCredit = storedInt(entry.totalCreditMinorUnits, 0);
+    if (totalDebit !== headerDebit || totalCredit !== headerCredit) {
+      addIssue({
+        code: 'JOURNAL_HEADER_TOTAL_MISMATCH',
+        scope: 'journal',
+        referenceId: entryId,
+        message: 'إجمالي القيد لا يطابق مجموع سطوره.',
+        valueKind: 'minorUnits',
+        currency,
+        expected: totalDebit,
+        actual: headerDebit,
+      });
+      if (totalCredit !== headerCredit) {
+        addIssue({
+          code: 'JOURNAL_HEADER_CREDIT_MISMATCH',
+          scope: 'journal',
+          referenceId: entryId,
+          message: 'إجمالي الدائن في القيد لا يطابق مجموع سطوره.',
+          valueKind: 'minorUnits',
+          currency,
+          expected: totalCredit,
+          actual: headerCredit,
+        });
+      }
+    }
+
+    if (totalDebit <= 0 || totalDebit !== totalCredit) {
+      addIssue({
+        code: 'UNBALANCED_JOURNAL',
+        scope: 'journal',
+        referenceId: entryId,
+        message: 'القيد غير متوازن أو قيمته تساوي صفراً.',
+        valueKind: 'minorUnits',
+        currency,
+        expected: totalDebit,
+        actual: totalCredit,
+      });
+    }
+  }
+
+  const journalEntryIds = new Set(
+    journalEntriesSnapshot.docs.map((document) => document.id),
+  );
+  for (const [entryId] of linesByEntry) {
+    if (!journalEntryIds.has(entryId)) {
+      addIssue({
+        code: 'ORPHAN_JOURNAL_LINE',
+        scope: 'journal',
+        referenceId: entryId,
+        message: 'توجد سطور دفتر لقيد غير موجود.',
+      });
+    }
+  }
+
+  const storedAccountBalances = new Map();
+  for (const document of accountBalancesSnapshot.docs) {
+    const data = document.data();
+    const accountId = data.accountId || document.id;
+    storedAccountBalances.set(accountId, data);
+  }
+
+  const allAccountIds = new Set([
+    ...accountMap.keys(),
+    ...accountTotals.keys(),
+    ...storedAccountBalances.keys(),
+  ]);
+  for (const accountId of allAccountIds) {
+    const account = accountMap.get(accountId);
+    const expected = accountTotals.get(accountId) || {
+      debit: 0,
+      credit: 0,
+      currency: account && account.currency
+        ? account.currency
+        : 'ILS',
+    };
+    const stored = storedAccountBalances.get(accountId);
+    if (!stored) {
+      if (expected.debit !== 0 || expected.credit !== 0) {
+        addIssue({
+          code: 'ACCOUNT_BALANCE_MISSING',
+          scope: 'accountBalance',
+          referenceId: accountId,
+          message: 'يوجد رصيد محاسبي متوقع بلا إسقاط مخزن.',
+          valueKind: 'minorUnits',
+          currency: expected.currency,
+          expected: expected.debit - expected.credit,
+          actual: 0,
+        });
+      }
+      continue;
+    }
+
+    const storedCurrency = stored.currency || expected.currency;
+    const storedDebit = storedInt(stored.debitMinorUnits, 0);
+    const storedCredit = storedInt(stored.creditMinorUnits, 0);
+    const storedBalance = storedInt(
+      stored.balanceMinorUnits,
+      storedDebit - storedCredit,
+    );
+
+    if (storedCurrency !== expected.currency) {
+      addIssue({
+        code: 'ACCOUNT_BALANCE_CURRENCY_MISMATCH',
+        scope: 'accountBalance',
+        referenceId: accountId,
+        message: 'عملة إسقاط الحساب تختلف عن عملة حركته.',
+      });
+    }
+    if (storedDebit !== expected.debit) {
+      addIssue({
+        code: 'ACCOUNT_DEBIT_MISMATCH',
+        scope: 'accountBalance',
+        referenceId: accountId,
+        message: 'الرصيد المدين المخزن لا يطابق سطور القيود.',
+        valueKind: 'minorUnits',
+        currency: expected.currency,
+        expected: expected.debit,
+        actual: storedDebit,
+      });
+    }
+    if (storedCredit !== expected.credit) {
+      addIssue({
+        code: 'ACCOUNT_CREDIT_MISMATCH',
+        scope: 'accountBalance',
+        referenceId: accountId,
+        message: 'الرصيد الدائن المخزن لا يطابق سطور القيود.',
+        valueKind: 'minorUnits',
+        currency: expected.currency,
+        expected: expected.credit,
+        actual: storedCredit,
+      });
+    }
+    if (storedBalance !== expected.debit - expected.credit) {
+      addIssue({
+        code: 'ACCOUNT_NET_BALANCE_MISMATCH',
+        scope: 'accountBalance',
+        referenceId: accountId,
+        message: 'الرصيد الصافي المخزن لا يطابق المدين ناقص الدائن.',
+        valueKind: 'minorUnits',
+        currency: expected.currency,
+        expected: expected.debit - expected.credit,
+        actual: storedBalance,
+      });
+    }
+    if (account && account.isHeader === true &&
+        (storedDebit !== 0 || storedCredit !== 0)) {
+      addIssue({
+        code: 'HEADER_ACCOUNT_HAS_BALANCE',
+        scope: 'accountBalance',
+        referenceId: accountId,
+        message: 'حساب التجميع يحتوي على حركة مباشرة.',
+        severity: 'warning',
+        valueKind: 'minorUnits',
+        currency: storedCurrency,
+        expected: 0,
+        actual: storedBalance,
+      });
+    }
+  }
+
+  const partyMap = new Map();
+  for (const document of partiesSnapshot.docs) {
+    const data = document.data();
+    const partyId = document.id;
+    if (data.storeId !== command.storeId) {
+      addIssue({
+        code: 'PARTY_STORE_MISMATCH',
+        scope: 'party',
+        referenceId: partyId,
+        message: 'الطرف مربوط بمتجر آخر أو بلا متجر صحيح.',
+      });
+      continue;
+    }
+    partyMap.set(
+      (data.partyType || '') + ':' + partyId,
+      data,
+    );
+  }
+
+  const partyTotals = new Map();
+  const ensurePartyTotal = (partyType, partyId, currency) => {
+    const key = partyType + ':' + partyId;
+    const existing = partyTotals.get(key);
+    if (existing) {
+      return existing;
+    }
+    const created = {
+      partyType,
+      partyId,
+      debit: 0,
+      credit: 0,
+      currency,
+    };
+    partyTotals.set(key, created);
+    return created;
+  };
+
+  for (const document of partyLedgerSnapshot.docs) {
+    const data = document.data();
+    const partyType = data.partyType;
+    const partyId = data.partyId;
+    const currency = data.currency || 'ILS';
+    if (!partyType || !partyId) {
+      addIssue({
+        code: 'PARTY_LEDGER_ID_MISSING',
+        scope: 'partyLedger',
+        referenceId: document.id,
+        message: 'حركة الطرف بلا نوع طرف أو معرف طرف.',
+      });
+      continue;
+    }
+    const total = ensurePartyTotal(partyType, partyId, currency);
+    total.debit += storedInt(data.debitMinorUnits, 0);
+    total.credit += storedInt(data.creditMinorUnits, 0);
+
+    if (!partyMap.has(partyType + ':' + partyId)) {
+      addIssue({
+        code: 'PARTY_LEDGER_PARTY_NOT_FOUND',
+        scope: 'partyLedger',
+        referenceId: document.id,
+        message: 'حركة الطرف تشير إلى عميل أو مورد غير موجود.',
+      });
+    }
+  }
+
+  const storedPartyBalances = new Map();
+  for (const document of partyBalancesSnapshot.docs) {
+    const data = document.data();
+    const partyType = data.partyType;
+    const partyId = data.partyId;
+    if (!partyType || !partyId) {
+      addIssue({
+        code: 'PARTY_BALANCE_ID_MISSING',
+        scope: 'partyBalance',
+        referenceId: document.id,
+        message: 'إسقاط الطرف بلا نوع أو معرف طرف.',
+      });
+      continue;
+    }
+    storedPartyBalances.set(partyType + ':' + partyId, data);
+  }
+
+  const allPartyKeys = new Set([
+    ...partyTotals.keys(),
+    ...storedPartyBalances.keys(),
+  ]);
+  for (const key of allPartyKeys) {
+    const expected = partyTotals.get(key) || {
+      debit: 0,
+      credit: 0,
+      currency: 'ILS',
+    };
+    const stored = storedPartyBalances.get(key);
+    if (!stored) {
+      if (expected.debit !== 0 || expected.credit !== 0) {
+        addIssue({
+          code: 'PARTY_BALANCE_MISSING',
+          scope: 'partyBalance',
+          referenceId: key,
+          message: 'يوجد كشف طرف متوقع بلا رصيد مخزن.',
+          valueKind: 'minorUnits',
+          currency: expected.currency,
+          expected: expected.debit - expected.credit,
+          actual: 0,
+        });
+      }
+      continue;
+    }
+
+    const storedDebit = storedInt(stored.debitMinorUnits, 0);
+    const storedCredit = storedInt(stored.creditMinorUnits, 0);
+    const storedBalance = storedInt(
+      stored.balanceMinorUnits,
+      storedDebit - storedCredit,
+    );
+    if (storedDebit !== expected.debit ||
+        storedCredit !== expected.credit) {
+      addIssue({
+        code: 'PARTY_BALANCE_MISMATCH',
+        scope: 'partyBalance',
+        referenceId: key,
+        message: 'رصيد الطرف المخزن لا يطابق دفتر حركته.',
+        valueKind: 'minorUnits',
+        currency: expected.currency,
+        expected: expected.debit - expected.credit,
+        actual: storedBalance,
+      });
+    }
+  }
+
+  const productMap = new Map();
+  for (const document of productsSnapshot.docs) {
+    const data = document.data();
+    if (data.storeId === command.storeId) {
+      productMap.set(document.id, data);
+    }
+  }
+
+  const inventoryTotals = new Map();
+  for (const document of inventoryMovementsSnapshot.docs) {
+    const data = document.data();
+    const productId = data.productId;
+    if (!productId) {
+      addIssue({
+        code: 'INVENTORY_MOVEMENT_PRODUCT_MISSING',
+        scope: 'inventoryMovement',
+        referenceId: document.id,
+        message: 'حركة المخزون بلا صنف.',
+      });
+      continue;
+    }
+    const total = inventoryTotals.get(productId) || {
+      quantity: 0,
+      value: 0,
+      currency: data.currency || 'ILS',
+    };
+    const quantity = storedInt(data.quantityDeltaMilliUnits, 0);
+    const value = storedInt(data.totalCostMinorUnits, 0);
+    total.quantity += quantity;
+    total.value += quantity < 0 ? -value : value;
+    inventoryTotals.set(productId, total);
+  }
+
+  for (const [productId, expected] of inventoryTotals) {
+    const product = productMap.get(productId);
+    if (!product) {
+      addIssue({
+        code: 'INVENTORY_PRODUCT_NOT_FOUND',
+        scope: 'inventory',
+        referenceId: productId,
+        message: 'حركة المخزون تشير إلى صنف غير موجود.',
+      });
+      continue;
+    }
+
+    const actualQuantity = storedInt(product.quantityOnHandMilliUnits, 0);
+    const actualValue = storedInt(product.inventoryValueMinorUnits, 0);
+    if (actualQuantity !== expected.quantity) {
+      addIssue({
+        code: 'INVENTORY_QUANTITY_MISMATCH',
+        scope: 'inventory',
+        referenceId: productId,
+        message: 'كمية الصنف لا تطابق مجموع حركات المخزون.',
+        valueKind: 'milliUnits',
+        expected: expected.quantity,
+        actual: actualQuantity,
+      });
+    }
+    if (actualValue !== expected.value) {
+      addIssue({
+        code: 'INVENTORY_VALUE_MISMATCH',
+        scope: 'inventory',
+        referenceId: productId,
+        message: 'قيمة مخزون الصنف لا تطابق مجموع حركاته.',
+        valueKind: 'minorUnits',
+        currency: expected.currency,
+        expected: expected.value,
+        actual: actualValue,
+      });
+    }
+  }
+
+  return {
+    status: issues.some((issue) => issue.severity === 'error')
+      ? 'issues_found'
+      : 'healthy',
+    storeId: command.storeId,
+    generatedAt: new Date().toISOString(),
+    checked: {
+      accounts: accountMap.size,
+      journalEntries: journalEntriesSnapshot.size,
+      journalLines: journalLinesSnapshot.size,
+      parties: partyMap.size,
+      partyLedgerEntries: partyLedgerSnapshot.size,
+      products: productMap.size,
+      inventoryMovements: inventoryMovementsSnapshot.size,
+    },
+    issueCount: issues.length,
+    issues,
+  };
+}
