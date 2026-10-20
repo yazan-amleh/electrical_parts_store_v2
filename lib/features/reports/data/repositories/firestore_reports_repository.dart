@@ -480,3 +480,47 @@ class FirestoreReportsRepository implements ReportsRepository {
     values[key] = (values[key] ?? 0) + 1;
   }
 }
+
+class _ProductAnalyticsLookup {
+  const _ProductAnalyticsLookup({
+    required this.name,
+    required this.categoryId,
+  });
+
+  final String name;
+  final String categoryId;
+}
+
+class _AnalyticsAccumulator {
+  _AnalyticsAccumulator({
+    required this.key,
+    required this.label,
+    required this.currency,
+    required this.quantityMilliUnits,
+    required this.revenueMinorUnits,
+    required this.costMinorUnits,
+  });
+
+  final String key;
+  final String label;
+  final String currency;
+  int quantityMilliUnits;
+  int revenueMinorUnits;
+  int costMinorUnits;
+
+  SalesAnalyticsRow toEntity() {
+    return SalesAnalyticsRow(
+      key: key,
+      label: label,
+      quantityMilliUnits: quantityMilliUnits,
+      revenue: Money(
+        minorUnits: revenueMinorUnits,
+        currency: currency,
+      ),
+      cost: Money(
+        minorUnits: costMinorUnits,
+        currency: currency,
+      ),
+    );
+  }
+}
