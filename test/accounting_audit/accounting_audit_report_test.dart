@@ -61,6 +61,11 @@ void main() {
     expect(report.isHealthy, isFalse);
     expect(report.errorCount, 1);
     expect(report.warningCount, 1);
-    expect(report.issues.singleWhere((issue) => issue.code == 'ACCOUNT_DEBIT_MISMATCH').expected, 1000);
+    expect(
+      report.issues
+          .singleWhere((issue) => issue.code == 'ACCOUNT_DEBIT_MISMATCH')
+          .expected,
+      1000,
+    );
   });
 }
