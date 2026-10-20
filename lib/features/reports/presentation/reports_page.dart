@@ -158,16 +158,20 @@ class _ReportsPageState extends State<ReportsPage> {
                   label: const Text('نسخ CSV'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _report == null ||
+                  onPressed:
+                      _report == null ||
                           widget.documentBuilder == null ||
                           _isExporting
                       ? null
                       : () => _runPdfExport(share: false),
                   icon: const Icon(Icons.print_outlined),
-                  label: Text(_isExporting ? 'جارٍ تجهيز PDF...' : 'PDF / طباعة'),
+                  label: Text(
+                    _isExporting ? 'جارٍ تجهيز PDF...' : 'PDF / طباعة',
+                  ),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _report == null ||
+                  onPressed:
+                      _report == null ||
                           widget.documentBuilder == null ||
                           _isExporting
                       ? null
@@ -414,18 +418,12 @@ class _ReportsPageState extends State<ReportsPage> {
         contentPadding: EdgeInsets.zero,
         leading: Icon(icon),
         title: Text(title),
-        subtitle: Text(
-          value,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        subtitle: Text(value, style: Theme.of(context).textTheme.titleMedium),
       ),
     );
   }
 
-  Widget _buildTransactions(
-    BuildContext context,
-    OperationalReport report,
-  ) {
+  Widget _buildTransactions(BuildContext context, OperationalReport report) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -466,9 +464,7 @@ class _ReportsPageState extends State<ReportsPage> {
                             Text(
                               transaction.paymentMethod == null
                                   ? '—'
-                                  : _paymentLabel(
-                                      transaction.paymentMethod!,
-                                    ),
+                                  : _paymentLabel(transaction.paymentMethod!),
                             ),
                           ),
                           DataCell(Text(transaction.amount.formatted)),
@@ -574,14 +570,9 @@ class _ReportsPageState extends State<ReportsPage> {
       final filename =
           'operational_report_' + _formatDate(_from) + '_' + _formatDate(_to);
       if (share) {
-        await Printing.sharePdf(
-          bytes: bytes,
-          filename: filename + '.pdf',
-        );
+        await Printing.sharePdf(bytes: bytes, filename: filename + '.pdf');
       } else {
-        await Printing.layoutPdf(
-          onLayout: (_) async => bytes,
-        );
+        await Printing.layoutPdf(onLayout: (_) async => bytes);
       }
     } catch (error) {
       _showMessage('تعذر تجهيز PDF: ' + error.toString());
@@ -646,14 +637,7 @@ class _ReportsPageState extends State<ReportsPage> {
     setState(() {
       _from = DateTime(selected.year, selected.month, selected.day);
       if (_from.isAfter(_to)) {
-        _to = DateTime(
-          selected.year,
-          selected.month,
-          selected.day,
-          23,
-          59,
-          59,
-        );
+        _to = DateTime(selected.year, selected.month, selected.day, 23, 59, 59);
       }
     });
   }
@@ -669,14 +653,7 @@ class _ReportsPageState extends State<ReportsPage> {
       return;
     }
     setState(() {
-      _to = DateTime(
-        selected.year,
-        selected.month,
-        selected.day,
-        23,
-        59,
-        59,
-      );
+      _to = DateTime(selected.year, selected.month, selected.day, 23, 59, 59);
     });
   }
 
