@@ -36,6 +36,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
   static const _currency = 'ILS';
   static const _cashAccountId = '1110';
   static const _bankAccountId = '1121';
+  static const _checksAccountId = '1130';
   static const _cardReceivableAccountId = '1160';
   static const _customerReceivableAccountId = '1140';
   static const _supplierPayableAccountId = '2110';
@@ -43,9 +44,12 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
   final _partyController = TextEditingController();
   final _amountController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _chequeNumberController = TextEditingController();
+  final _bankNameController = TextEditingController();
 
   late PartyType _partyType;
   PartyPaymentMethod _paymentMethod = PartyPaymentMethod.cash;
+  DateTime? _dueDate;
   bool _isPosting = false;
 
   @override
@@ -155,6 +159,11 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                         ),
                       ),
                       items: PartyPaymentMethod.values
+                          .where(
+                            (method) =>
+                                isCustomer ||
+                                method != PartyPaymentMethod.cheque,
+                          )
                           .map(
                             (method) => DropdownMenuItem<PartyPaymentMethod>(
                               value: method,
@@ -177,6 +186,44 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                           'للقبض بالبطاقة سيُستخدم حساب ذمم البطاقات 1160.',
                         ),
                       ),
+                    if (_paymentMethod == PartyPaymentMethod.cheque &&
+                        isCustomer) ...[
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'يُسجّل الشيك أولاً في حساب الشيكات قيد التحصيل 1130، '
+                          'ولا يزيد الصندوق حتى يتم تحصيله.',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _chequeNumberController,
+                        enabled: !_isPosting,
+                        decoration: const InputDecoration(
+                          labelText: 'رقم الشيك',
+                          prefixIcon: Icon(Icons.numbers_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _bankNameController,
+                        enabled: !_isPosting,
+                        decoration: const InputDecoration(
+                          labelText: 'البنك المسحوب عليه',
+                          prefixIcon: Icon(Icons.account_balance_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: _isPosting ? null : _pickDueDate,
+                        icon: const Icon(Icons.event_outlined),
+                        label: Text(
+                          _dueDate == null
+                              ? 'اختيار تاريخ الاستحقاق (اختياري)'
+                              : 'الاستحقاق: ' + _formatDate(_dueDate!),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     TextField(
                       controller: _descriptionController,
@@ -261,6 +308,21 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       return;
     }
 
+    final chequeNumber = _paymentMethod == PartyPaymentMethod.cheque
+        ? _chequeNumberController.text.trim()
+        : null;
+    final bankName = _paymentMethod == PartyPaymentMethod.cheque
+        ? _bankNameController.text.trim()
+        : null;
+    if (_paymentMethod == PartyPaymentMethod.cheque &&
+        (chequeNumber == null ||
+            chequeNumber.isEmpty ||
+            bankName == null ||
+            bankName.isEmpty)) {
+      _showMessage('أدخل رقم الشيك واسم البنك.');
+      return;
+    }
+
     final paymentId = 'party-payment-${DateTime.now().microsecondsSinceEpoch}';
     final payment = PartyPayment(
       id: paymentId,
@@ -274,6 +336,9 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       description: _descriptionController.text.trim().isEmpty
           ? null
           : _descriptionController.text.trim(),
+      chequeNumber: chequeNumber,
+      bankName: bankName,
+      dueDate: _dueDate,
     );
 
     setState(() => _isPosting = true);
@@ -303,6 +368,9 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
     if (result is Success<PartyPaymentPostingPlan>) {
       _amountController.clear();
       _descriptionController.clear();
+      _chequeNumberController.clear();
+      _bankNameController.clear();
+      setState(() => _dueDate = null);
       _showMessage('تم ترحيل الحركة والقيد وكشف الحساب بنجاح.');
     }
   }
@@ -314,6 +382,9 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
   }
 
   String get _settlementAccountId {
+    if (_paymentMethod == PartyPaymentMethod.cheque) {
+      return _checksAccountId;
+    }
     if (_paymentMethod == PartyPaymentMethod.card &&
         _partyType == PartyType.customer) {
       return _cardReceivableAccountId;
@@ -321,6 +392,22 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
     return _paymentMethod == PartyPaymentMethod.cash
         ? _cashAccountId
         : _bankAccountId;
+  }
+
+  Future<void> _pickDueDate() async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: _dueDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (selected != null && mounted) {
+      setState(() => _dueDate = selected);
+    }
+  }
+
+  String _formatDate(DateTime value) {
+    return value.toLocal().toIso8601String().split('T').first;
   }
 
   void _showMessage(String message) {
@@ -337,6 +424,8 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
     _partyController.dispose();
     _amountController.dispose();
     _descriptionController.dispose();
+    _chequeNumberController.dispose();
+    _bankNameController.dispose();
     super.dispose();
   }
 }
@@ -350,6 +439,8 @@ extension on PartyPaymentMethod {
         return 'بنك';
       case PartyPaymentMethod.card:
         return 'بطاقة';
+      case PartyPaymentMethod.cheque:
+        return 'شيك';
     }
   }
 }
