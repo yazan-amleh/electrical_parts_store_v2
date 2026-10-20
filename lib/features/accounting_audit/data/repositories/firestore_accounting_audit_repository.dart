@@ -6,8 +6,7 @@ import '../../../../core/tenancy/store_context.dart';
 import '../../domain/entities/accounting_audit_report.dart';
 import '../../domain/repositories/accounting_audit_repository.dart';
 
-class FirestoreAccountingAuditRepository
-    implements AccountingAuditRepository {
+class FirestoreAccountingAuditRepository implements AccountingAuditRepository {
   FirestoreAccountingAuditRepository({
     required firebase_functions.FirebaseFunctions functions,
   }) : _functions = functions;
