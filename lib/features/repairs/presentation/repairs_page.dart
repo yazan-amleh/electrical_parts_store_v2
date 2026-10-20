@@ -395,7 +395,7 @@ class _RepairDialogState extends State<_RepairDialog> {
       );
       final filename = 'repair_receipt_${payment.id}';
       if (share) {
-        await Printing.sharePdf(bytes: bytes, filename: filename + '.pdf');
+        await Printing.sharePdf(bytes: bytes, filename: '$filename.pdf');
       } else {
         await Printing.layoutPdf(onLayout: (_) async => bytes);
       }
