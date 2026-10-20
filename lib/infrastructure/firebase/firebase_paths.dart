@@ -38,6 +38,51 @@ abstract final class FirebasePaths {
     return chatRoom(firestore, storeId, roomId).collection('messages');
   }
 
+  static CollectionReference<Map<String, dynamic>> bookingCustomers(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('booking_customers');
+  }
+
+  static DocumentReference<Map<String, dynamic>> bookingCustomer(
+    FirebaseFirestore firestore,
+    String storeId,
+    String customerId,
+  ) {
+    return bookingCustomers(firestore, storeId).doc(customerId);
+  }
+
+  static CollectionReference<Map<String, dynamic>> photographyOptions(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('photography_options');
+  }
+
+  static DocumentReference<Map<String, dynamic>> photographyOption(
+    FirebaseFirestore firestore,
+    String storeId,
+    String optionId,
+  ) {
+    return photographyOptions(firestore, storeId).doc(optionId);
+  }
+
+  static CollectionReference<Map<String, dynamic>> bookings(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('bookings');
+  }
+
+  static DocumentReference<Map<String, dynamic>> booking(
+    FirebaseFirestore firestore,
+    String storeId,
+    String bookingId,
+  ) {
+    return bookings(firestore, storeId).doc(bookingId);
+  }
+
   static CollectionReference<Map<String, dynamic>> accounts(
     FirebaseFirestore firestore,
     String storeId,

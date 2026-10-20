@@ -151,6 +151,30 @@ service cloud.firestore {
           resource.data.userId == request.auth.uid;
       }
 
+      match /booking_customers/{customerId} {
+        allow read: if canReadStore(storeId);
+        allow create, update: if canManageParties(storeId) &&
+          request.resource.data.storeId == storeId &&
+          request.resource.data.name is string &&
+          request.resource.data.phoneNumber is string;
+        allow delete: if false;
+      }
+
+      match /photography_options/{optionId} {
+        allow read: if canReadStore(storeId);
+        allow create, update: if hasRole(storeId, ['owner', 'admin', 'sales']) &&
+          request.resource.data.storeId == storeId &&
+          request.resource.data.name is string &&
+          request.resource.data.priceMinorUnits is int &&
+          request.resource.data.durationMinutes is int;
+        allow delete: if false;
+      }
+
+      match /bookings/{bookingId} {
+        allow read: if canReadStore(storeId);
+        allow create, update, delete: if false;
+      }
+
       match /accounts/{accountId} {
         allow read: if canReadStore(storeId);
         allow create, update: if canManageStore(storeId);
