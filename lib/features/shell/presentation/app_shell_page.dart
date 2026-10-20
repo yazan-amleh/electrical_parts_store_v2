@@ -40,6 +40,7 @@ import '../../transfers/domain/repositories/account_transfer_repository.dart';
 import '../../transfers/presentation/cash_banks_page.dart';
 import '../../repairs/domain/repositories/repair_repository.dart';
 import '../../repairs/presentation/repairs_page.dart';
+import '../../reports/domain/repositories/reports_repository.dart';
 import '../../reports/presentation/reports_page.dart';
 
 class AppShellPage extends StatefulWidget {
