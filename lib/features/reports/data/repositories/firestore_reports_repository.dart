@@ -250,8 +250,11 @@ class FirestoreReportsRepository implements ReportsRepository {
         }
 
         final saleCurrency = _analyticsString(data['currency'], 'ILS');
-        currency ??= saleCurrency;
-        if (saleCurrency != currency) {
+        if (currency == null) {
+          currency = saleCurrency;
+          salesRevenue = Money.zero(currency: saleCurrency);
+          salesCost = Money.zero(currency: saleCurrency);
+        } else if (saleCurrency != currency) {
           return const FailureResult<SalesAnalytics>(
             ValidationFailure(
               'Sales analytics cannot combine different currencies.',
