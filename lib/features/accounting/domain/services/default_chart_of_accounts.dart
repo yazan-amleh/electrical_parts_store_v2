@@ -154,6 +154,16 @@ abstract final class DefaultChartOfAccounts {
         normalSide: NormalSide.credit,
         sortOrder: 320,
       ),
+      _posting(
+        storeId: storeId,
+        id: '2130',
+        code: '2130',
+        name: 'دفعات مقدمة من العملاء',
+        parentId: '2100',
+        section: StatementSection.currentLiability,
+        normalSide: NormalSide.credit,
+        sortOrder: 330,
+      ),
       _header(
         storeId: storeId,
         id: '3100',
@@ -181,6 +191,15 @@ abstract final class DefaultChartOfAccounts {
         section: StatementSection.revenue,
         normalSide: NormalSide.credit,
         sortOrder: 500,
+      ),
+      _posting(
+        storeId: storeId,
+        id: '4110',
+        code: '4110',
+        name: 'إيرادات الصيانة',
+        section: StatementSection.revenue,
+        normalSide: NormalSide.credit,
+        sortOrder: 510,
       ),
       _posting(
         storeId: storeId,
