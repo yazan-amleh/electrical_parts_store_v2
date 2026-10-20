@@ -1,0 +1,26 @@
+name: V2 format preview
+
+on:
+  push:
+    branches:
+      - "v2/**"
+
+permissions:
+  contents: read
+
+jobs:
+  format-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Format preview
+        run: |
+          dart format lib test
+          git diff --no-ext-diff -- lib/features/reports/presentation/reports_page.dart
