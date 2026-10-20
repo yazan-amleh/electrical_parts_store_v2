@@ -102,6 +102,7 @@ void main() {
       offerNumber: 'OFFER-1',
       customerId: 'customer-1',
       customerName: 'Customer',
+      createdAt: DateTime.utc(2026, 1, 1),
       lines: [
         line(
           id: 'one',
