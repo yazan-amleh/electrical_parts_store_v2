@@ -176,7 +176,8 @@ class PdfCategoryInventoryDocumentBuilder
       cost: _sum(products.map((product) => product.inventoryValue)),
       wholesale: _sum(
         products.map(
-          (product) => _multiply(product.wholesalePrice, product.quantityOnHand),
+          (product) =>
+              _multiply(product.wholesalePrice, product.quantityOnHand),
         ),
       ),
       retail: _sum(
