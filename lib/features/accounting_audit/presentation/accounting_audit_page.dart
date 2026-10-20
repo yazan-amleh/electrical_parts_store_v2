@@ -85,9 +85,8 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
     AccountingAuditReport report,
   ) {
     final color = report.isHealthy ? Colors.green : Colors.red;
-    final icon = report.isHealthy
-        ? Icons.check_circle_outline
-        : Icons.error_outline;
+    final icon =
+        report.isHealthy ? Icons.check_circle_outline : Icons.error_outline;
     final title = report.isHealthy
         ? report.warningCount == 0
             ? 'المحاسبة متطابقة'
