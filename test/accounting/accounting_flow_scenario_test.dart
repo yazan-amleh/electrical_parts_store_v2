@@ -93,7 +93,7 @@ void main() {
     return JournalEntry(
       id: id,
       storeId: context.storeId,
-      idempotencyKey: sourceType + '-' + id,
+      idempotencyKey: '$sourceType-$id',
       postedAt: DateTime.utc(2026, 1, 1),
       sourceType: sourceType,
       lines: lines,
