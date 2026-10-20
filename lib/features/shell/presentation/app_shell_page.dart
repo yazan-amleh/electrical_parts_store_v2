@@ -32,6 +32,8 @@ import '../../purchase_orders/presentation/purchase_orders_page.dart';
 import '../../expenses/domain/repositories/expense_repository.dart';
 import '../../expenses/presentation/expenses_page.dart';
 import '../../payments/domain/repositories/party_payment_repository.dart';
+import '../../cheques/domain/repositories/cheque_repository.dart';
+import '../../cheques/presentation/cheques_page.dart';
 import '../../transfers/domain/repositories/account_transfer_repository.dart';
 import '../../transfers/presentation/account_transfers_page.dart';
 
@@ -209,8 +211,8 @@ class _AppShellPageState extends State<AppShellPage> {
           label: 'الشيكات',
           icon: Icons.payments_outlined,
           description: 'تسجيل الشيكات ومتابعة حالتها ضمن دورة التحصيل.',
-          capabilities: ['وارد', 'صادر', 'استحقاق'],
-          foundationReady: false,
+          capabilities: ['شيكات واردة', 'تحصيل', 'ارتجاع'],
+          foundationReady: true,
         ),
       ],
     ),
@@ -317,6 +319,7 @@ class _AppShellPageState extends State<AppShellPage> {
           expenseRepository: widget.dependencies.expenseRepository,
           accountingRepository: widget.dependencies.accountingRepository,
           partyPaymentRepository: widget.dependencies.partyPaymentRepository,
+          chequeRepository: widget.dependencies.chequeRepository,
           partyRepository: widget.dependencies.partyRepository,
           partyLedgerRepository: widget.dependencies.partyLedgerRepository,
           accountTransferRepository:
@@ -433,6 +436,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.expenseRepository,
     required this.accountingRepository,
     required this.partyPaymentRepository,
+    required this.chequeRepository,
     required this.partyRepository,
     required this.partyLedgerRepository,
     required this.accountTransferRepository,
@@ -452,6 +456,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final ExpenseRepository? expenseRepository;
   final AccountingRepository? accountingRepository;
   final PartyPaymentRepository? partyPaymentRepository;
+  final ChequeRepository? chequeRepository;
   final PartyRepository? partyRepository;
   final PartyLedgerRepository? partyLedgerRepository;
   final AccountTransferRepository? accountTransferRepository;
@@ -497,6 +502,13 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'cash-banks') {
       return AccountTransfersPage(
         repository: accountTransferRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'checks') {
+      return ChequesPage(
+        repository: chequeRepository,
         user: user,
         membership: membership,
       );
