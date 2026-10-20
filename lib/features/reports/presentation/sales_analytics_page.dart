@@ -284,20 +284,14 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     );
   }
 
-  Widget _buildPaymentMethods(
-    BuildContext context,
-    SalesAnalytics analytics,
-  ) {
+  Widget _buildPaymentMethods(BuildContext context, SalesAnalytics analytics) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'طرق الدفع',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            Text('طرق الدفع', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             if (analytics.paymentMethodCounts.isEmpty)
               const Text('لا توجد فواتير ضمن الفترة.')
@@ -306,8 +300,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final entry
-                      in analytics.paymentMethodCounts.entries)
+                  for (final entry in analytics.paymentMethodCounts.entries)
                     Chip(
                       avatar: const Icon(Icons.payments_outlined, size: 18),
                       label: Text(
@@ -344,8 +337,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                 child: DataTable(
                   columns: [
                     const DataColumn(label: Text('الاسم')),
-                    if (showQuantity)
-                      const DataColumn(label: Text('الكمية')),
+                    if (showQuantity) const DataColumn(label: Text('الكمية')),
                     const DataColumn(label: Text('المبيعات')),
                     const DataColumn(label: Text('التكلفة')),
                     const DataColumn(label: Text('مجمل الربح')),
@@ -494,14 +486,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     setState(() {
       _from = DateTime(selected.year, selected.month, selected.day);
       if (_from.isAfter(_to)) {
-        _to = DateTime(
-          selected.year,
-          selected.month,
-          selected.day,
-          23,
-          59,
-          59,
-        );
+        _to = DateTime(selected.year, selected.month, selected.day, 23, 59, 59);
       }
     });
   }
@@ -517,14 +502,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       return;
     }
     setState(() {
-      _to = DateTime(
-        selected.year,
-        selected.month,
-        selected.day,
-        23,
-        59,
-        59,
-      );
+      _to = DateTime(selected.year, selected.month, selected.day, 23, 59, 59);
     });
   }
 
