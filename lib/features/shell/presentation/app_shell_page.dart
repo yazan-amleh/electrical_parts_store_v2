@@ -38,6 +38,8 @@ import '../../cheques/domain/repositories/cheque_repository.dart';
 import '../../cheques/presentation/cheques_page.dart';
 import '../../transfers/domain/repositories/account_transfer_repository.dart';
 import '../../transfers/presentation/account_transfers_page.dart';
+import '../../repairs/domain/repositories/repair_repository.dart';
+import '../../repairs/presentation/repairs_page.dart';
 
 class AppShellPage extends StatefulWidget {
   const AppShellPage({
@@ -255,8 +257,15 @@ class _AppShellPageState extends State<AppShellPage> {
           label: 'الصيانة والإصلاحات',
           icon: Icons.build_outlined,
           description: 'تتبع طلبات الإصلاح وحالتها وتكاليفها.',
-          capabilities: ['استلام', 'حالة', 'تسليم'],
-          foundationReady: false,
+          capabilities: [
+            'استلام جهاز',
+            'فحص وتشخيص',
+            'قطع مستخدمة',
+            'دفعة مقدمة',
+            'فاتورة وتسليم',
+            'متابعة الحالة',
+          ],
+          foundationReady: true,
         ),
         _Module(
           id: 'reports',
@@ -338,6 +347,7 @@ class _AppShellPageState extends State<AppShellPage> {
               widget.dependencies.accountTransferRepository,
           accountingQueryRepository:
               widget.dependencies.accountingQueryRepository,
+          repairRepository: widget.dependencies.repairRepository,
           membership: widget.membership,
         ),
       ),
@@ -454,6 +464,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.partyLedgerRepository,
     required this.accountTransferRepository,
     required this.accountingQueryRepository,
+    required this.repairRepository,
     required this.membership,
   });
 
@@ -475,6 +486,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final PartyLedgerRepository? partyLedgerRepository;
   final AccountTransferRepository? accountTransferRepository;
   final AccountingQueryRepository? accountingQueryRepository;
+  final RepairRepository? repairRepository;
   final StoreMembership membership;
 
   @override
@@ -523,6 +535,15 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'checks') {
       return ChequesPage(
         repository: chequeRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'repairs') {
+      return RepairsPage(
+        repository: repairRepository,
+        productRepository: productRepository,
+        partyRepository: partyRepository,
         user: user,
         membership: membership,
       );
