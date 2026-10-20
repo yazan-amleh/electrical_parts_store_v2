@@ -173,7 +173,7 @@ class _ChequesPageState extends State<ChequesPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'شيك رقم ' + cheque.chequeNumber,
+                    'شيك رقم ${cheque.chequeNumber}',
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -185,12 +185,12 @@ class _ChequesPageState extends State<ChequesPage> {
               spacing: 18,
               runSpacing: 8,
               children: [
-                Text('المبلغ: ' + cheque.amount.formatted),
-                Text('البنك: ' + cheque.bankName),
-                Text('العميل: ' + cheque.partyId),
-                Text('تاريخ الاستلام: ' + _formatDate(cheque.receivedAt)),
+                Text('المبلغ: ${cheque.amount.formatted}'),
+                Text('البنك: ${cheque.bankName}'),
+                Text('العميل: ${cheque.partyId}'),
+                Text('تاريخ الاستلام: ${_formatDate(cheque.receivedAt)}'),
                 if (cheque.dueDate != null)
-                  Text('الاستحقاق: ' + _formatDate(cheque.dueDate!)),
+                  Text('الاستحقاق: ${_formatDate(cheque.dueDate!)}'),
               ],
             ),
             if (cheque.description?.trim().isNotEmpty == true) ...[
@@ -339,11 +339,7 @@ class _ChequesPageState extends State<ChequesPage> {
 
   String _formatDate(DateTime value) {
     final local = value.toLocal();
-    return local.year.toString() +
-        '/' +
-        local.month.toString().padLeft(2, '0') +
-        '/' +
-        local.day.toString().padLeft(2, '0');
+    return '${local.year}/${local.month.toString().padLeft(2, '0')}/${local.day.toString().padLeft(2, '0')}';
   }
 
   void _showMessage(String message) {
