@@ -37,8 +37,8 @@ class ChatRoom {
       throw ArgumentError('Chat rooms require unique participants.');
     }
     if (this.participants.any(
-      (participant) => !this.participantIds.contains(participant.userId),
-    )) {
+          (participant) => !this.participantIds.contains(participant.userId),
+        )) {
       throw ArgumentError('Chat participants must belong to the room.');
     }
   }

@@ -26,7 +26,8 @@ abstract final class ChatFirestoreMapper {
       groupDescription: data['groupDescription'] as String?,
       createdBy: _string(data['createdBy'], ''),
       type: _roomType(data['type']),
-      isArchived: data['isArchived'] is bool ? data['isArchived'] as bool : false,
+      isArchived:
+          data['isArchived'] is bool ? data['isArchived'] as bool : false,
     );
   }
 
@@ -107,7 +108,8 @@ abstract final class ChatFirestoreMapper {
             userId: _string(value['userId'], ''),
             displayName: value['displayName'] as String?,
             joinedAt: _date(value['joinedAt'], DateTime.now().toUtc()),
-            isAdmin: value['isAdmin'] is bool ? value['isAdmin'] as bool : false,
+            isAdmin:
+                value['isAdmin'] is bool ? value['isAdmin'] as bool : false,
             photoUrl: value['photoUrl'] as String?,
           ),
         )

@@ -59,7 +59,8 @@ class _ChatPageState extends State<ChatPage> {
       _loadingMembers = false;
       if (result is Success<List<StoreMember>>) {
         _members = result.value
-            .where((member) => member.isActive && member.userId != widget.user.id)
+            .where(
+                (member) => member.isActive && member.userId != widget.user.id)
             .toList();
         _membersError = null;
       } else if (result is FailureResult<List<StoreMember>>) {
@@ -163,8 +164,7 @@ class _ChatPageState extends State<ChatPage> {
             return ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: rooms.length,
-              separatorBuilder: (context, index) =>
-                  const SizedBox(height: 8),
+              separatorBuilder: (context, index) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final room = rooms[index];
                 return _ChatRoomTile(
@@ -453,9 +453,7 @@ class _ChatRoomTile extends StatelessWidget {
         ),
         title: Text(room.name),
         subtitle: Text(
-          room.lastMessageText.isEmpty
-              ? 'ابدأ المحادثة'
-              : room.lastMessageText,
+          room.lastMessageText.isEmpty ? 'ابدأ المحادثة' : room.lastMessageText,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -551,11 +549,14 @@ class _MessageBubble extends StatelessWidget {
     }
     final colors = Theme.of(context).colorScheme;
     return Align(
-      alignment: isMine ? AlignmentDirectional.centerStart : AlignmentDirectional.centerEnd,
+      alignment: isMine
+          ? AlignmentDirectional.centerStart
+          : AlignmentDirectional.centerEnd,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460),
         child: Card(
-          color: isMine ? colors.primaryContainer : colors.surfaceContainerHighest,
+          color:
+              isMine ? colors.primaryContainer : colors.surfaceContainerHighest,
           child: Padding(
             padding: const EdgeInsets.all(10),
             child: Column(

@@ -37,8 +37,7 @@ class FirestoreChatRepository implements ChatRepository {
         final rooms = snapshot.docs
             .map(ChatFirestoreMapper.roomFromSnapshot)
             .where(
-              (room) =>
-                  room.storeId == context.storeId && !room.isArchived,
+              (room) => room.storeId == context.storeId && !room.isArchived,
             )
             .toList()
           ..sort(
@@ -233,7 +232,8 @@ class FirestoreChatRepository implements ChatRepository {
             roomId: normalizedRoomId,
             storeId: context.storeId,
             senderId: context.userId,
-            senderName: senderName.trim().isEmpty ? 'مستخدم' : senderName.trim(),
+            senderName:
+                senderName.trim().isEmpty ? 'مستخدم' : senderName.trim(),
             content: normalizedContent,
             sentAt: now,
             type: type,
@@ -344,8 +344,7 @@ class FirestoreChatRepository implements ChatRepository {
         final participants = room.participants
             .where((participant) => participant.userId != userId)
             .toList();
-        final unread = <String, int>{...room.unreadCountByUser}
-          ..remove(userId);
+        final unread = <String, int>{...room.unreadCountByUser}..remove(userId);
         if (ids.isEmpty) {
           return room;
         }
