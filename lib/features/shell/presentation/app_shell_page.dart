@@ -41,6 +41,7 @@ import '../../transfers/presentation/cash_banks_page.dart';
 import '../../repairs/domain/repositories/repair_repository.dart';
 import '../../repairs/presentation/repairs_page.dart';
 import '../../reports/domain/repositories/reports_repository.dart';
+import '../../reports/domain/services/report_document_builder.dart';
 import '../../reports/presentation/reports_page.dart';
 import '../../reports/presentation/sales_analytics_page.dart';
 import '../../settings/domain/repositories/settings_repository.dart';
@@ -354,6 +355,7 @@ class _AppShellPageState extends State<AppShellPage> {
               widget.dependencies.accountingQueryRepository,
           repairRepository: widget.dependencies.repairRepository,
           reportsRepository: widget.dependencies.reportsRepository,
+          reportDocumentBuilder: widget.dependencies.reportDocumentBuilder,
           settingsRepository: widget.dependencies.settingsRepository,
           membership: widget.membership,
         ),
@@ -468,6 +470,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.accountingQueryRepository,
     required this.repairRepository,
     required this.reportsRepository,
+    required this.reportDocumentBuilder,
     required this.settingsRepository,
     required this.membership,
   });
@@ -492,6 +495,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final AccountingQueryRepository? accountingQueryRepository;
   final RepairRepository? repairRepository;
   final ReportsRepository? reportsRepository;
+  final ReportDocumentBuilder? reportDocumentBuilder;
   final SettingsRepository? settingsRepository;
   final StoreMembership membership;
 
@@ -644,6 +648,7 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'sales-reports') {
       return SalesAnalyticsPage(
         repository: reportsRepository,
+        documentBuilder: reportDocumentBuilder,
         user: user,
         membership: membership,
       );
@@ -651,6 +656,7 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'reports') {
       return ReportsPage(
         repository: reportsRepository,
+        documentBuilder: reportDocumentBuilder,
         productRepository: productRepository,
         user: user,
         membership: membership,
