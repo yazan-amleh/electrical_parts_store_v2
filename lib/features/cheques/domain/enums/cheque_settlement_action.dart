@@ -1,0 +1,4 @@
+enum ChequeSettlementAction {
+  clear,
+  bounce,
+}

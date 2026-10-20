@@ -175,6 +175,7 @@ service cloud.firestore {
             'postSale',
             'postPurchase',
             'postPartyPayment',
+            'settleCheque',
             'postExpense',
             'postAccountTransfer',
             'postJournalEntry',
@@ -223,6 +224,10 @@ service cloud.firestore {
       }
 
       match /party_payment_idempotency/{key} {
+        allow read, write: if false;
+      }
+
+      match /cheque_settlement_idempotency/{key} {
         allow read, write: if false;
       }
 

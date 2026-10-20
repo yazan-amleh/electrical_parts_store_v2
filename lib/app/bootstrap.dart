@@ -7,6 +7,7 @@ import '../core/config/app_runtime_config.dart';
 import '../features/accounting/data/repositories/firestore_accounting_query_repository.dart';
 import '../features/accounting/data/repositories/firestore_accounting_repository.dart';
 import '../features/categories/data/repositories/firestore_category_repository.dart';
+import '../features/cheques/data/repositories/firestore_cheque_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
 import '../features/auth/data/repositories/firebase_auth_repository.dart';
 import '../features/auth/data/repositories/firestore_store_membership_repository.dart';
@@ -66,6 +67,11 @@ abstract final class AppBootstrap {
       ),
       categoryRepository: FirestoreCategoryRepository(
         firestore: firestore,
+      ),
+      chequeRepository: FirestoreChequeRepository(
+        firestore: firestore,
+        functions: functions,
+        commandQueue: commandQueue,
       ),
       accountingQueryRepository:
           FirestoreAccountingQueryRepository(firestore: firestore),

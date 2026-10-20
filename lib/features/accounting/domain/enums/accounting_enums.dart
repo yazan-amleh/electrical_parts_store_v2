@@ -15,6 +15,7 @@ enum ControlType {
   none,
   cashBox,
   bank,
+  checks,
   customerReceivable,
   supplierPayable,
   inventory,

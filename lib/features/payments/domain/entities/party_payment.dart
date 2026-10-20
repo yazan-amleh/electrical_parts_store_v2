@@ -15,7 +15,11 @@ class PartyPayment {
     required this.paymentMethod,
     required this.amount,
     this.description,
-  }) : postedAt = postedAt.toUtc() {
+    this.chequeNumber,
+    this.bankName,
+    this.dueDate,
+  })  : postedAt = postedAt.toUtc(),
+        dueDate = dueDate?.toUtc() {
     _ensureSafeIdentifier(id, 'Party payment id');
     _ensureSafeIdentifier(storeId, 'Store id');
     _ensureSafeIdentifier(partyId, 'Party id');
@@ -31,6 +35,14 @@ class PartyPayment {
     if (amount.currency.trim().isEmpty) {
       throw ArgumentError('Party payment currency is required.');
     }
+    if (paymentMethod == PartyPaymentMethod.cheque) {
+      if (partyType != PartyType.customer) {
+        throw ArgumentError('Cheques are currently supported for customers.');
+      }
+      if (chequeNumber == null || chequeNumber.trim().isEmpty) {
+        throw ArgumentError('A cheque number is required.');
+      }
+    }
   }
 
   final String id;
@@ -42,6 +54,9 @@ class PartyPayment {
   final PartyPaymentMethod paymentMethod;
   final Money amount;
   final String? description;
+  final String? chequeNumber;
+  final String? bankName;
+  final DateTime? dueDate;
 
   StoreContext contextFor(String userId) {
     return StoreContext(storeId: storeId, userId: userId);

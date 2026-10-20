@@ -19,7 +19,7 @@ const MAX_LINES = 100;
 const POSTING_ROLES = new Set(['owner', 'admin', 'accountant', 'sales']);
 const OFFER_ROLES = new Set(['owner', 'admin', 'accountant', 'sales']);
 const OFFER_PRICE_TYPES = new Set(['retail', 'wholesale', 'custom']);
-const PARTY_PAYMENT_METHODS = new Set(['cash', 'bank', 'card']);
+const PARTY_PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'cheque']);
 const EXPENSE_PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
 const PAYMENT_POSTING_ROLES = new Set(['owner', 'admin', 'accountant']);
 const PAYMENT_METHODS = new Set(['cash', 'bank', 'card', 'credit']);
@@ -1673,6 +1673,21 @@ function parsePartyPaymentCommand(rawCommand) {
   if (accounts.settlementAccountId === accounts.partyAccountId) {
     invalid('Party payment accounts must be distinct.');
   }
+  if (paymentMethod === 'cheque' && partyType !== 'customer') {
+    invalid('Cheques are currently supported for customer receipts.');
+  }
+  const chequeNumber = payment.chequeNumber == null
+    ? null
+    : stringValue(payment.chequeNumber, 'payment.chequeNumber');
+  const bankName = payment.bankName == null
+    ? null
+    : stringValue(payment.bankName, 'payment.bankName');
+  const dueDate = payment.dueDate == null
+    ? null
+    : parseDate(payment.dueDate, 'payment.dueDate');
+  if (paymentMethod === 'cheque' && !chequeNumber) {
+    invalid('A cheque number is required.');
+  }
 
   return {
     storeId,
@@ -1694,6 +1709,9 @@ function parsePartyPaymentCommand(rawCommand) {
       description: payment.description == null
         ? null
         : stringValue(payment.description, 'payment.description'),
+      chequeNumber,
+      bankName,
+      dueDate,
     },
     accounts,
   };
@@ -1905,7 +1923,14 @@ async function postPartyPaymentInTransaction(
     currency: command.payment.currency,
     description: command.payment.description,
     journalEntryId,
-    status: 'posted',
+    status: command.payment.paymentMethod === 'cheque'
+      ? 'pending'
+      : 'posted',
+    chequeNumber: command.payment.chequeNumber,
+    bankName: command.payment.bankName,
+    dueDate: command.payment.dueDate == null
+      ? null
+      : Timestamp.fromDate(command.payment.dueDate),
     createdAt: FieldValue.serverTimestamp(),
   };
   transaction.set(paymentRef, paymentData);
@@ -4154,6 +4179,8 @@ function paymentAccountControlType(paymentMethod) {
       return 'bank';
     case 'card':
       return 'cardReceivable';
+    case 'cheque':
+      return 'checks';
     case 'credit':
       return 'customerReceivable';
     default:
@@ -4999,4 +5026,323 @@ function isOfferCurrentlyActive(offer) {
     return false;
   }
   return true;
+}
+
+
+function parseChequeSettlementCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const action = stringValue(command.action, 'action');
+  if (action !== 'clear' && action !== 'bounce') {
+    invalid('Unsupported cheque settlement action.');
+  }
+  const accounts = asObject(command.accounts, 'accounts');
+  const bankAccountId = action === 'clear'
+    ? safeId(accounts.bankAccountId, 'bankAccountId')
+    : null;
+  return {
+    storeId: safeId(command.storeId, 'storeId'),
+    chequeId: safeId(command.chequeId, 'chequeId'),
+    action,
+    idempotencyKey: safeId(command.idempotencyKey, 'idempotencyKey'),
+    postedAt: parseDate(command.postedAt, 'postedAt'),
+    accounts: {
+      checksAccountId: safeId(accounts.checksAccountId, 'checksAccountId'),
+      customerReceivableAccountId: safeId(
+        accounts.customerReceivableAccountId,
+        'customerReceivableAccountId',
+      ),
+      bankAccountId,
+    },
+  };
+}
+
+exports.settleCheque = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const command = parseChequeSettlementCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return settleChequeInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('settleCheque failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The cheque could not be settled.',
+    );
+  }
+});
+
+async function settleChequeInTransaction(transaction, userId, command) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  const memberRef = storeRef.collection('members').doc(userId);
+  const chequeRef = storeRef.collection('party_payments').doc(command.chequeId);
+  const settlementIdempotencyRef = storeRef
+    .collection('cheque_settlement_idempotency')
+    .doc(command.idempotencyKey);
+  const journalEntryId = command.chequeId + '-cheque-' + command.action;
+  const journalIdempotencyKey = command.idempotencyKey + ':journal';
+  const journalRef = storeRef
+    .collection('journal_entries')
+    .doc(journalEntryId);
+  const journalIdempotencyRef = storeRef
+    .collection('idempotency_keys')
+    .doc(journalIdempotencyKey);
+
+  const membershipSnapshot = await transaction.get(memberRef);
+  assertMembership(
+    membershipSnapshot,
+    command.storeId,
+    'settle cheques',
+    PAYMENT_POSTING_ROLES,
+  );
+  const idempotencySnapshot = await transaction.get(settlementIdempotencyRef);
+  if (idempotencySnapshot.exists) {
+    const existing = idempotencySnapshot.data();
+    if (existing.chequeId === command.chequeId &&
+        existing.action === command.action) {
+      return {
+        status: command.action === 'clear' ? 'cleared' : 'bounced',
+        chequeId: command.chequeId,
+        journalEntryId: existing.journalEntryId,
+      };
+    }
+    conflict('The cheque settlement idempotency key is already assigned.');
+  }
+
+  const chequeSnapshot = await transaction.get(chequeRef);
+  if (!chequeSnapshot.exists) {
+    invalid('Cheque was not found.');
+  }
+  const cheque = chequeSnapshot.data();
+  if (cheque.storeId !== command.storeId) {
+    deny('Cheque belongs to another store.');
+  }
+  if (cheque.paymentMethod !== 'cheque' ||
+      cheque.partyType !== 'customer') {
+    invalid('Only incoming customer cheques can be settled here.');
+  }
+  if (cheque.status !== 'pending') {
+    conflict('The cheque is already settled.');
+  }
+
+  const existingJournalSnapshot = await transaction.get(journalRef);
+  if (existingJournalSnapshot.exists) {
+    conflict('The cheque settlement journal already exists.');
+  }
+  const existingJournalIdempotencySnapshot = await transaction.get(
+    journalIdempotencyRef,
+  );
+  if (existingJournalIdempotencySnapshot.exists) {
+    conflict('The cheque settlement journal idempotency key already exists.');
+  }
+
+  const accountIds = [
+    command.accounts.checksAccountId,
+    command.action === 'clear'
+      ? command.accounts.bankAccountId
+      : command.accounts.customerReceivableAccountId,
+  ];
+  const accountSnapshots = new Map();
+  const balanceSnapshots = new Map();
+  for (const accountId of accountIds) {
+    const accountRef = storeRef.collection('accounts').doc(accountId);
+    accountSnapshots.set(accountId, await transaction.get(accountRef));
+  }
+  for (const accountId of accountIds) {
+    const balanceRef = storeRef.collection('account_balances').doc(accountId);
+    balanceSnapshots.set(accountId, await transaction.get(balanceRef));
+  }
+
+  const amount = storedInt(cheque.amountMinorUnits, 0);
+  if (amount <= 0) {
+    invalid('Cheque amount is invalid.');
+  }
+  assertAccount(
+    accountSnapshots.get(command.accounts.checksAccountId),
+    command.accounts.checksAccountId,
+    command.storeId,
+    cheque.currency,
+    'asset',
+    'checks',
+  );
+  if (command.action === 'clear') {
+    assertAccount(
+      accountSnapshots.get(command.accounts.bankAccountId),
+      command.accounts.bankAccountId,
+      command.storeId,
+      cheque.currency,
+      'asset',
+      'bank',
+    );
+  } else {
+    assertAccount(
+      accountSnapshots.get(command.accounts.customerReceivableAccountId),
+      command.accounts.customerReceivableAccountId,
+      command.storeId,
+      cheque.currency,
+      'asset',
+      'customerReceivable',
+    );
+  }
+
+  const debitAccountId = command.action === 'clear'
+    ? command.accounts.bankAccountId
+    : command.accounts.customerReceivableAccountId;
+  const creditAccountId = command.accounts.checksAccountId;
+  const journalLines = [
+    {
+      id: journalEntryId + '-debit',
+      storeId: command.storeId,
+      accountId: debitAccountId,
+      description: command.action === 'clear'
+        ? 'Cheque deposited to bank'
+        : 'Bounced cheque returned to customer receivable',
+      lineNumber: 1,
+      debitMinorUnits: amount,
+      creditMinorUnits: 0,
+    },
+    {
+      id: journalEntryId + '-credit',
+      storeId: command.storeId,
+      accountId: creditAccountId,
+      description: 'Cheque settlement',
+      lineNumber: 2,
+      debitMinorUnits: 0,
+      creditMinorUnits: amount,
+    },
+  ];
+
+  const deltas = new Map();
+  addDelta(deltas, debitAccountId, amount, 0);
+  addDelta(deltas, creditAccountId, 0, amount);
+
+  transaction.update(chequeRef, {
+    status: command.action === 'clear' ? 'cleared' : 'bounced',
+    settlementJournalEntryId: journalEntryId,
+    settledAt: Timestamp.fromDate(command.postedAt),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  transaction.set(journalRef, {
+    storeId: command.storeId,
+    idempotencyKey: journalIdempotencyKey,
+    sourceType: command.action === 'clear'
+      ? 'chequeClearance'
+      : 'chequeBounce',
+    description: cheque.description || 'Cheque settlement',
+    status: 'posted',
+    currency: cheque.currency,
+    totalDebitMinorUnits: amount,
+    totalCreditMinorUnits: amount,
+    postedAt: Timestamp.fromDate(command.postedAt),
+  });
+  for (const line of journalLines) {
+    transaction.set(
+      journalRef.collection('lines').doc(line.id),
+      {
+        ...line,
+        entryId: journalEntryId,
+        postedAt: Timestamp.fromDate(command.postedAt),
+        currency: cheque.currency,
+      },
+    );
+  }
+
+  if (command.action === 'bounce') {
+    const partyLedgerId = command.chequeId + '-bounce';
+    const partyLedgerRef = storeRef
+      .collection('party_ledger_entries')
+      .doc(partyLedgerId);
+    const partyBalanceRef = storeRef
+      .collection('party_balances')
+      .doc('customer-' + cheque.partyId);
+    const [ledgerSnapshot, partyBalanceSnapshot] = await Promise.all([
+      transaction.get(partyLedgerRef),
+      transaction.get(partyBalanceRef),
+    ]);
+    if (ledgerSnapshot.exists) {
+      conflict('The bounced cheque ledger entry already exists.');
+    }
+    const balance = partyBalanceSnapshot.exists
+      ? partyBalanceSnapshot.data()
+      : {};
+    const currentDebit = storedInt(balance.debitMinorUnits, 0);
+    const currentCredit = storedInt(balance.creditMinorUnits, 0);
+    transaction.set(partyLedgerRef, {
+      storeId: command.storeId,
+      partyType: 'customer',
+      partyId: cheque.partyId,
+      sourceType: 'chequeBounce',
+      sourceId: command.chequeId,
+      currency: cheque.currency,
+      debitMinorUnits: amount,
+      creditMinorUnits: 0,
+      description: 'Bounced cheque returned to customer receivable',
+      postedAt: Timestamp.fromDate(command.postedAt),
+    });
+    transaction.set(partyBalanceRef, {
+      storeId: command.storeId,
+      partyType: 'customer',
+      partyId: cheque.partyId,
+      currency: cheque.currency,
+      debitMinorUnits: currentDebit + amount,
+      creditMinorUnits: currentCredit,
+      balanceMinorUnits: currentDebit + amount - currentCredit,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  for (const accountId of accountIds) {
+    const balance = balanceSnapshots.get(accountId).exists
+      ? balanceSnapshots.get(accountId).data()
+      : {};
+    const currentDebit = storedInt(balance.debitMinorUnits, 0);
+    const currentCredit = storedInt(balance.creditMinorUnits, 0);
+    const delta = deltas.get(accountId);
+    transaction.set(
+      storeRef.collection('account_balances').doc(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: cheque.currency,
+        debitMinorUnits: currentDebit + delta.debit,
+        creditMinorUnits: currentCredit + delta.credit,
+        balanceMinorUnits:
+          currentDebit + delta.debit - currentCredit - delta.credit,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
+  transaction.set(settlementIdempotencyRef, {
+    storeId: command.storeId,
+    chequeId: command.chequeId,
+    action: command.action,
+    journalEntryId,
+    idempotencyKey: command.idempotencyKey,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  transaction.set(journalIdempotencyRef, {
+    storeId: command.storeId,
+    entryId: journalEntryId,
+    idempotencyKey: journalIdempotencyKey,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    status: command.action === 'clear' ? 'cleared' : 'bounced',
+    chequeId: command.chequeId,
+    journalEntryId,
+  };
 }

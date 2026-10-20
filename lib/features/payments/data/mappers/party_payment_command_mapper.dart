@@ -18,6 +18,9 @@ abstract final class PartyPaymentCommandMapper {
         'amountMinorUnits': payment.amount.minorUnits,
         'currency': payment.amount.currency,
         'description': payment.description,
+        'chequeNumber': payment.chequeNumber,
+        'bankName': payment.bankName,
+        'dueDate': payment.dueDate?.toUtc().toIso8601String(),
       },
       'postingAccounts': <String, dynamic>{
         'settlementAccountId': accounts.settlementAccountId,

@@ -50,6 +50,7 @@ abstract final class DefaultChartOfAccounts {
         code: '1130',
         name: 'الشيكات قيد التحصيل',
         parentId: '1100',
+        controlType: ControlType.checks,
         section: StatementSection.currentAsset,
         sortOrder: 130,
       ),

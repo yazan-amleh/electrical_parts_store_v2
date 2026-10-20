@@ -3,6 +3,7 @@ import '../features/accounting/domain/repositories/accounting_query_repository.d
 import '../features/offers/domain/repositories/offer_repository.dart';
 import '../features/accounting/domain/repositories/accounting_repository.dart';
 import '../features/categories/domain/repositories/category_repository.dart';
+import '../features/cheques/domain/repositories/cheque_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
 import '../features/inventory/domain/repositories/inventory_repository.dart';
 import '../features/inventory/domain/repositories/product_repository.dart';
@@ -21,6 +22,7 @@ class AppDependencies {
     this.authSession,
     this.accountingRepository,
     this.categoryRepository,
+    this.chequeRepository,
     this.accountingQueryRepository,
     this.inventoryRepository,
     this.productRepository,
@@ -39,6 +41,7 @@ class AppDependencies {
   final AuthSessionController? authSession;
   final AccountingRepository? accountingRepository;
   final CategoryRepository? categoryRepository;
+  final ChequeRepository? chequeRepository;
   final AccountingQueryRepository? accountingQueryRepository;
   final InventoryRepository? inventoryRepository;
   final ProductRepository? productRepository;
