@@ -208,10 +208,10 @@ class RepairRequest {
       costOfParts: costOfParts ?? this.costOfParts,
     );
   }
+
   static void _ensureIdentifier(String value, String label) {
     if (value.trim().isEmpty || value.contains('/')) {
       throw ArgumentError('$label is invalid.');
     }
   }
-
 }
