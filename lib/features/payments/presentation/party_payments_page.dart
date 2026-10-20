@@ -37,6 +37,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
   static const _cashAccountId = '1110';
   static const _bankAccountId = '1121';
   static const _checksAccountId = '1130';
+  static const _issuedChecksAccountId = '2210';
   static const _cardReceivableAccountId = '1160';
   static const _customerReceivableAccountId = '1140';
   static const _supplierPayableAccountId = '2110';
@@ -158,13 +159,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                           Icons.account_balance_wallet_outlined,
                         ),
                       ),
-                      items: PartyPaymentMethod.values
-                          .where(
-                            (method) =>
-                                isCustomer ||
-                                method != PartyPaymentMethod.cheque,
-                          )
-                          .map(
+                      items: PartyPaymentMethod.values.map(
                             (method) => DropdownMenuItem<PartyPaymentMethod>(
                               value: method,
                               child: Text(method.arabicLabel),
@@ -186,13 +181,15 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                           'للقبض بالبطاقة سيُستخدم حساب ذمم البطاقات 1160.',
                         ),
                       ),
-                    if (_paymentMethod == PartyPaymentMethod.cheque &&
-                        isCustomer) ...[
-                      const Padding(
-                        padding: EdgeInsets.only(top: 8),
+                    if (_paymentMethod == PartyPaymentMethod.cheque) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
                         child: Text(
-                          'يُسجّل الشيك أولاً في حساب الشيكات قيد التحصيل 1130، '
-                          'ولا يزيد الصندوق حتى يتم تحصيله.',
+                          isCustomer
+                              ? 'يُسجّل الشيك الوارد في حساب الشيكات قيد التحصيل '
+                                  '1130، ولا يزيد الصندوق حتى يتم تحصيله.'
+                              : 'يُسجّل الشيك الصادر في حساب الشيكات الصادرة '
+                                  '2210، ولا ينقص البنك حتى يتم صرفه.',
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -383,7 +380,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
 
   String get _settlementAccountId {
     if (_paymentMethod == PartyPaymentMethod.cheque) {
-      return _checksAccountId;
+      return isCustomer ? _checksAccountId : _issuedChecksAccountId;
     }
     if (_paymentMethod == PartyPaymentMethod.card &&
         _partyType == PartyType.customer) {
