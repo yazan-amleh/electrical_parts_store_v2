@@ -25,8 +25,8 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 ## Release gates still open
 
 1. Complete remaining UI parity and responsive review.
-2. Finish PDF/print report adapters, pagination/aggregation for large reports,
-   and the remaining advanced analytics.
+2. Finish PDF/print report adapters and pagination/aggregation for large reports.
+   Sales analytics aggregation is now wired; it still needs the large-period path.
 3. Expand emulator scenarios, including concurrent retries and cheque bounce.
 4. Run a clean-data acceptance pass with representative store workflows.
 5. Configure the separate V2 Firebase project, then deploy only after the
