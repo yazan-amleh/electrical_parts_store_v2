@@ -260,7 +260,7 @@ class FirestoreReportsRepository implements ReportsRepository {
       final customerRows = <String, _AnalyticsAccumulator>{};
 
       for (final document in salesPage.documents) {
-        final data = document.data();
+        final data = document.data() ?? const <String, dynamic>{};
         final postedAt = _analyticsDate(data['postedAt']);
         if (postedAt == null) {
           continue;
@@ -438,7 +438,7 @@ class FirestoreReportsRepository implements ReportsRepository {
           .orderBy('postedAt')
           .limit(currentPageSize);
       if (cursor != null) {
-        query = query.startAfterDocument(cursor!);
+        query = query.startAfterDocument(cursor);
       }
 
       final snapshot = await query.get();
@@ -453,7 +453,7 @@ class FirestoreReportsRepository implements ReportsRepository {
             .where('postedAt', isGreaterThanOrEqualTo: start)
             .where('postedAt', isLessThanOrEqualTo: end)
             .orderBy('postedAt')
-            .startAfterDocument(cursor!)
+            .startAfterDocument(cursor)
             .limit(1)
             .get();
         mayBeTruncated = probe.docs.isNotEmpty;
