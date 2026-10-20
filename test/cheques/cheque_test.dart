@@ -9,12 +9,13 @@ void main() {
   Cheque cheque({
     ChequeStatus status = ChequeStatus.pending,
     String? settlementJournalEntryId,
+    PartyType partyType = PartyType.customer,
   }) {
     return Cheque(
       id: 'cheque-1',
       storeId: 'store-1',
-      partyType: PartyType.customer,
-      partyId: 'customer-1',
+      partyType: partyType,
+      partyId: partyType == PartyType.customer ? 'customer-1' : 'supplier-1',
       amount: const Money(minorUnits: 12500),
       chequeNumber: 'CHK-1',
       bankName: 'Main Bank',
@@ -30,6 +31,13 @@ void main() {
     expect(value.status, ChequeStatus.pending);
     expect(value.amount, const Money(minorUnits: 12500));
     expect(value.partyType, PartyType.customer);
+  });
+
+  test('supports an outbound supplier cheque as a separate direction', () {
+    final value = cheque(partyType: PartyType.supplier);
+
+    expect(value.partyType, PartyType.supplier);
+    expect(value.partyId, 'supplier-1');
   });
 
   test('settled cheque requires a settlement journal', () {
