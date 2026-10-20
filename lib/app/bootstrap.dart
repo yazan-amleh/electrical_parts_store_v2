@@ -22,6 +22,7 @@ import '../features/repairs/data/exporters/pdf_repair_document_builder.dart';
 import '../features/purchase_orders/data/repositories/firestore_purchase_order_repository.dart';
 import '../features/reports/data/repositories/firestore_reports_repository.dart';
 import '../features/reports/data/exporters/pdf_report_document_builder.dart';
+import '../features/chat/data/repositories/firestore_chat_repository.dart';
 import '../features/settings/data/repositories/firestore_settings_repository.dart';
 import '../features/offers/data/repositories/firestore_offer_repository.dart';
 import '../features/expenses/data/repositories/firestore_expense_repository.dart';
@@ -130,6 +131,7 @@ abstract final class AppBootstrap {
       reportDocumentBuilder: PdfReportDocumentBuilder(),
       categoryInventoryDocumentBuilder: PdfCategoryInventoryDocumentBuilder(),
       repairDocumentBuilder: PdfRepairDocumentBuilder(),
+      chatRepository: FirestoreChatRepository(firestore: firestore),
       settingsRepository: FirestoreSettingsRepository(firestore: firestore),
     );
   }

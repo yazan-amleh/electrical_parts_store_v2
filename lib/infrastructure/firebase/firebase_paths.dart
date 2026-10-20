@@ -15,6 +15,29 @@ abstract final class FirebasePaths {
     return store(firestore, storeId).collection('members');
   }
 
+  static CollectionReference<Map<String, dynamic>> chatRooms(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('chatRooms');
+  }
+
+  static DocumentReference<Map<String, dynamic>> chatRoom(
+    FirebaseFirestore firestore,
+    String storeId,
+    String roomId,
+  ) {
+    return chatRooms(firestore, storeId).doc(roomId);
+  }
+
+  static CollectionReference<Map<String, dynamic>> chatMessages(
+    FirebaseFirestore firestore,
+    String storeId,
+    String roomId,
+  ) {
+    return chatRoom(firestore, storeId, roomId).collection('messages');
+  }
+
   static CollectionReference<Map<String, dynamic>> accounts(
     FirebaseFirestore firestore,
     String storeId,

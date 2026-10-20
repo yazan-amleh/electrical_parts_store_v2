@@ -46,6 +46,8 @@ import '../../reports/domain/repositories/reports_repository.dart';
 import '../../reports/domain/services/report_document_builder.dart';
 import '../../reports/presentation/reports_page.dart';
 import '../../reports/presentation/sales_analytics_page.dart';
+import '../../chat/domain/repositories/chat_repository.dart';
+import '../../chat/presentation/chat_page.dart';
 import '../../settings/domain/repositories/settings_repository.dart';
 import '../../settings/presentation/settings_page.dart';
 
@@ -289,7 +291,7 @@ class _AppShellPageState extends State<AppShellPage> {
           icon: Icons.chat_outlined,
           description: 'التواصل والتنبيهات المرتبطة بالعمل.',
           capabilities: ['محادثة', 'إشعارات', 'نشاط'],
-          foundationReady: false,
+          foundationReady: true,
         ),
       ],
     ),
@@ -361,6 +363,7 @@ class _AppShellPageState extends State<AppShellPage> {
           repairDocumentBuilder: widget.dependencies.repairDocumentBuilder,
           reportsRepository: widget.dependencies.reportsRepository,
           reportDocumentBuilder: widget.dependencies.reportDocumentBuilder,
+          chatRepository: widget.dependencies.chatRepository,
           settingsRepository: widget.dependencies.settingsRepository,
           membership: widget.membership,
         ),
@@ -478,6 +481,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.repairDocumentBuilder,
     required this.reportsRepository,
     required this.reportDocumentBuilder,
+    required this.chatRepository,
     required this.settingsRepository,
     required this.membership,
   });
@@ -505,6 +509,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final RepairDocumentBuilder? repairDocumentBuilder;
   final ReportsRepository? reportsRepository;
   final ReportDocumentBuilder? reportDocumentBuilder;
+  final ChatRepository? chatRepository;
   final SettingsRepository? settingsRepository;
   final StoreMembership membership;
 
@@ -673,6 +678,18 @@ class _ModuleLandingPage extends StatelessWidget {
         user: user,
         membership: membership,
       );
+    }
+    if (module.id == 'chat') {
+      final chatRepository = this.chatRepository;
+      final settingsRepository = this.settingsRepository;
+      if (chatRepository != null && settingsRepository != null) {
+        return ChatPage(
+          repository: chatRepository,
+          settingsRepository: settingsRepository,
+          user: user,
+          membership: membership,
+        );
+      }
     }
     if (module.id == 'settings') {
       return SettingsPage(

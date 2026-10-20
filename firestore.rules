@@ -51,6 +51,73 @@ service cloud.firestore {
       return hasRole(storeId, ['owner', 'admin', 'accountant', 'sales']);
     }
 
+
+    function isChatParticipant(storeId, roomId) {
+      return canReadStore(storeId) &&
+        exists(
+          /databases/$(database)/documents/stores/$(storeId)/chatRooms/$(roomId)
+        ) &&
+        get(
+          /databases/$(database)/documents/stores/$(storeId)/chatRooms/$(roomId)
+        ).data.storeId == storeId &&
+        request.auth.uid in get(
+          /databases/$(database)/documents/stores/$(storeId)/chatRooms/$(roomId)
+        ).data.participantIds;
+    }
+
+    function canManageChatRoom(storeId, roomId) {
+      return isChatParticipant(storeId, roomId) &&
+        (
+          get(
+            /databases/$(database)/documents/stores/$(storeId)/chatRooms/$(roomId)
+          ).data.createdBy == request.auth.uid ||
+          canManageStore(storeId)
+        );
+    }
+
+    function sameChatRoomStableFields() {
+      return request.resource.data.storeId == resource.data.storeId &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.participantIds == resource.data.participantIds &&
+        request.resource.data.participants == resource.data.participants &&
+        request.resource.data.type == resource.data.type &&
+        request.resource.data.isGroup == resource.data.isGroup &&
+        request.resource.data.name == resource.data.name &&
+        request.resource.data.groupDescription ==
+          resource.data.groupDescription &&
+        request.resource.data.isArchived == resource.data.isArchived;
+    }
+
+    function canUpdateChatProjection(storeId, roomId) {
+      return isChatParticipant(storeId, roomId) &&
+        sameChatRoomStableFields() &&
+        request.resource.data.lastMessageSenderId == request.auth.uid &&
+        request.resource.data.lastMessageAt is timestamp &&
+        request.resource.data.updatedAt is timestamp;
+    }
+
+    function canMarkChatRead(storeId, roomId) {
+      return isChatParticipant(storeId, roomId) &&
+        sameChatRoomStableFields() &&
+        request.resource.data.lastMessageAt == resource.data.lastMessageAt &&
+        request.resource.data.lastMessageText == resource.data.lastMessageText &&
+        request.resource.data.lastMessageSenderId ==
+          resource.data.lastMessageSenderId &&
+        request.resource.data.updatedAt is timestamp;
+    }
+
+    function canManageChatRoomUpdate(storeId, roomId) {
+      return canManageChatRoom(storeId, roomId) &&
+        request.resource.data.storeId == resource.data.storeId &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.type == resource.data.type &&
+        request.resource.data.isGroup == resource.data.isGroup &&
+        request.resource.data.participantIds is list &&
+        request.resource.data.participants is list;
+    }
+
     function canManageRepairs(storeId) {
       return hasRole(storeId, ['owner', 'admin', 'accountant', 'sales']);
     }
@@ -290,6 +357,55 @@ service cloud.firestore {
 
       match /idempotency_keys/{key} {
         allow read, write: if false;
+      }
+
+
+      match /chatRooms/{roomId} {
+        allow read: if isChatParticipant(storeId, roomId);
+        allow create: if canReadStore(storeId) &&
+          request.resource.data.storeId == storeId &&
+          request.resource.data.createdBy == request.auth.uid &&
+          request.resource.data.name is string &&
+          request.resource.data.participantIds is list &&
+          request.auth.uid in request.resource.data.participantIds &&
+          request.resource.data.participants is list &&
+          request.resource.data.type in [
+            'direct',
+            'group',
+            'support',
+            'announcement'
+          ];
+        allow update: if canUpdateChatProjection(storeId, roomId) ||
+          canMarkChatRead(storeId, roomId) ||
+          canManageChatRoomUpdate(storeId, roomId);
+        allow delete: if false;
+
+        match /messages/{messageId} {
+          allow read: if isChatParticipant(storeId, roomId);
+          allow create: if isChatParticipant(storeId, roomId) &&
+            request.resource.data.storeId == storeId &&
+            request.resource.data.roomId == roomId &&
+            request.resource.data.senderId == request.auth.uid &&
+            request.resource.data.senderName is string &&
+            request.resource.data.content is string &&
+            request.resource.data.type in [
+              'text',
+              'image',
+              'file',
+              'audio',
+              'video',
+              'location',
+              'system'
+            ] &&
+            request.resource.data.attachmentUrls is list;
+          allow update: if isChatParticipant(storeId, roomId) &&
+            resource.data.senderId == request.auth.uid &&
+            request.resource.data.senderId == resource.data.senderId &&
+            request.resource.data.roomId == resource.data.roomId &&
+            request.resource.data.storeId == resource.data.storeId &&
+            request.resource.data.isDeleted == true;
+          allow delete: if false;
+        }
       }
 
       match /{document=**} {

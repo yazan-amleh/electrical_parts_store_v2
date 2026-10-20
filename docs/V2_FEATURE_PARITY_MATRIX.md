@@ -31,7 +31,7 @@ This matrix keeps the V1 surface visible while V2 is rebuilt on a new data set. 
 | --- | --- | --- |
 | Report export and printing | Partial | Operational reports, sales analytics, repair requests and payment receipts, and category inventory support PDF/print/share; V1-specific formats still need final visual review |
 | Advanced product/category/customer sales analytics | Implemented | Sales analytics page with product, category, customer and payment-method aggregation, paginated reads and a visible safety-cap warning |
-| Chat and notifications | Planned | Only after the V1 behavior and ownership rules are specified |
+| Chat and notifications | Partial | Secure participant-scoped chat rooms, direct/group text messages, unread counters and room lifecycle are wired; push notifications and file upload need a separate delivery pass |
 | Store settings and user administration UI | Complete | Store profile, members, roles and preferences (owner transfer/invitations remain separate) |
 | Full responsive UI parity review | Planned | Compare every V1 workflow on phone and desktop |
 | End-to-end emulator scenarios | Planned | Sales, purchases, payments, cheques, repairs and year-end flows |
