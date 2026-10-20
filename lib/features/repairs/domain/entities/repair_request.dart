@@ -64,12 +64,12 @@ class RepairRequest {
     if (deviceModel.trim().isEmpty) {
       throw ArgumentError('Repair device model is required.');
     }
-    if (estimatedCost.isNegative ||
-        laborCost.isNegative ||
-        advancePaid.isNegative ||
-        paid.isNegative ||
-        invoicedTotal.isNegative ||
-        costOfParts.isNegative) {
+    if (this.estimatedCost.isNegative ||
+        this.laborCost.isNegative ||
+        this.advancePaid.isNegative ||
+        this.paid.isNegative ||
+        this.invoicedTotal.isNegative ||
+        this.costOfParts.isNegative) {
       throw ArgumentError('Repair amounts cannot be negative.');
     }
 
