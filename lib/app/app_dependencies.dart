@@ -14,6 +14,7 @@ import '../features/reports/domain/repositories/reports_repository.dart';
 import '../features/reports/domain/services/report_document_builder.dart';
 import '../features/settings/domain/repositories/settings_repository.dart';
 import '../features/repairs/domain/repositories/repair_repository.dart';
+import '../features/repairs/domain/services/repair_document_builder.dart';
 import '../features/purchase_orders/domain/repositories/purchase_order_repository.dart';
 import '../features/expenses/domain/repositories/expense_repository.dart';
 import '../features/payments/domain/repositories/party_payment_repository.dart';
@@ -42,6 +43,7 @@ class AppDependencies {
     this.partyLedgerRepository,
     this.accountTransferRepository,
     this.repairRepository,
+    this.repairDocumentBuilder,
     this.reportsRepository,
     this.reportDocumentBuilder,
     this.settingsRepository,
@@ -66,6 +68,7 @@ class AppDependencies {
   final PartyLedgerRepository? partyLedgerRepository;
   final AccountTransferRepository? accountTransferRepository;
   final RepairRepository? repairRepository;
+  final RepairDocumentBuilder? repairDocumentBuilder;
   final ReportsRepository? reportsRepository;
   final ReportDocumentBuilder? reportDocumentBuilder;
   final SettingsRepository? settingsRepository;
