@@ -1,4 +1,4 @@
-import 'chat_enums.dart';
+import '../enums/chat_enums.dart';
 import 'chat_participant.dart';
 
 class ChatRoom {

@@ -675,7 +675,7 @@ class _CreateChatRoomDialogState extends State<_CreateChatRoomDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               DropdownButtonFormField<ChatRoomType>(
-                value: _type,
+                initialValue: _type,
                 decoration: const InputDecoration(labelText: 'النوع'),
                 items: const [
                   DropdownMenuItem(

@@ -102,7 +102,7 @@ abstract final class ChatFirestoreMapper {
       return const <ChatParticipant>[];
     }
     return value
-        .whereType<Map>()
+        .whereType<Map<Object?, Object?>>()
         .map(
           (value) => ChatParticipant(
             userId: _string(value['userId'], ''),
