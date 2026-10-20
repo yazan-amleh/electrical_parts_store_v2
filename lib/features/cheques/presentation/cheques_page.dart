@@ -5,6 +5,7 @@ import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../parties/domain/enums/party_type.dart';
 import '../domain/entities/cheque.dart';
 import '../domain/entities/cheque_settlement_result.dart';
 import '../domain/enums/cheque_settlement_action.dart';
@@ -173,7 +174,7 @@ class _ChequesPageState extends State<ChequesPage> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'شيك رقم ${cheque.chequeNumber}',
+                    '${cheque.partyType == PartyType.customer ? 'شيك وارد' : 'شيك صادر'} رقم ${cheque.chequeNumber}',
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -187,7 +188,9 @@ class _ChequesPageState extends State<ChequesPage> {
               children: [
                 Text('المبلغ: ${cheque.amount.formatted}'),
                 Text('البنك: ${cheque.bankName}'),
-                Text('العميل: ${cheque.partyId}'),
+                Text(
+                  '${cheque.partyType == PartyType.customer ? 'العميل' : 'المورد'}: ${cheque.partyId}',
+                ),
                 Text('تاريخ الاستلام: ${_formatDate(cheque.receivedAt)}'),
                 if (cheque.dueDate != null)
                   Text('الاستحقاق: ${_formatDate(cheque.dueDate!)}'),
@@ -213,7 +216,11 @@ class _ChequesPageState extends State<ChequesPage> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.account_balance_outlined),
-                      label: const Text('تحصيل في البنك'),
+                      label: Text(
+                        cheque.partyType == PartyType.customer
+                            ? 'تحصيل في البنك'
+                            : 'صرف عبر البنك',
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -237,18 +244,23 @@ class _ChequesPageState extends State<ChequesPage> {
   }
 
   Future<void> _settle(Cheque cheque, ChequeSettlementAction action) async {
+    final isCustomer = cheque.partyType == PartyType.customer;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
           action == ChequeSettlementAction.clear
-              ? 'تأكيد تحصيل الشيك'
+              ? (isCustomer ? 'تأكيد تحصيل الشيك' : 'تأكيد صرف الشيك')
               : 'تأكيد ارتجاع الشيك',
         ),
         content: Text(
           action == ChequeSettlementAction.clear
-              ? 'سيُنقل الشيك من قيد التحصيل إلى البنك.'
-              : 'سيُعاد المبلغ على ذمة العميل ويُسجّل قيد الارتجاع.',
+              ? (isCustomer
+                  ? 'سيُنقل الشيك من قيد التحصيل إلى البنك.'
+                  : 'سيُنقل الشيك من الشيكات الصادرة إلى البنك.')
+              : (isCustomer
+                  ? 'سيُعاد المبلغ على ذمة العميل ويُسجّل قيد الارتجاع.'
+                  : 'ستعود الذمة على المورد ويُسجّل قيد ارتجاع الشيك.'),
         ),
         actions: [
           TextButton(
@@ -290,8 +302,12 @@ class _ChequesPageState extends State<ChequesPage> {
     if (result is Success<ChequeSettlementResult>) {
       _showMessage(
         action == ChequeSettlementAction.clear
-            ? 'تم تحصيل الشيك ونقله إلى البنك.'
-            : 'تم تسجيل ارتجاع الشيك وإعادته على ذمة العميل.',
+            ? (isCustomer
+                ? 'تم تحصيل الشيك ونقله إلى البنك.'
+                : 'تم صرف الشيك ونقله من الالتزام إلى البنك.')
+            : (isCustomer
+                ? 'تم تسجيل ارتجاع الشيك وإعادته على ذمة العميل.'
+                : 'تم تسجيل ارتجاع الشيك وإعادته على ذمة المورد.'),
       );
       await _load();
     }
