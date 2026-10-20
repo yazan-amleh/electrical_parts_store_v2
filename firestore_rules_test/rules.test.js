@@ -299,6 +299,16 @@ describe('Firestore security rules', function () {
         name: 'Unauthorized Rename',
       }),
     );
+    await assertFails(
+      updateDoc(storeDoc(ownerDb), {
+        ownerId: 'owner-2',
+      }),
+    );
+    await assertFails(
+      updateDoc(storeDoc(ownerDb), {
+        currency: 'USD',
+      }),
+    );
 
     await assertSucceeds(
       updateDoc(storeDoc(ownerDb, 'members', 'sales-1'), {
