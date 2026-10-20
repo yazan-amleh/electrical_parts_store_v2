@@ -10,7 +10,7 @@ import '../../domain/services/report_document_builder.dart';
 
 class PdfReportDocumentBuilder implements ReportDocumentBuilder {
   PdfReportDocumentBuilder({AssetBundle? assetBundle})
-      : _assetBundle = assetBundle ?? rootBundle;
+    : _assetBundle = assetBundle ?? rootBundle;
 
   final AssetBundle _assetBundle;
   _PdfFonts? _fonts;
@@ -69,8 +69,9 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
       return cached;
     }
 
-    final regularData =
-        await _assetBundle.load('assets/fonts/Rubik-Regular.ttf');
+    final regularData = await _assetBundle.load(
+      'assets/fonts/Rubik-Regular.ttf',
+    );
     final boldData = await _assetBundle.load('assets/fonts/Rubik-Bold.ttf');
     final fonts = _PdfFonts(
       regular: pw.Font.ttf(regularData),
@@ -84,10 +85,7 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
     return pw.PageTheme(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.fromLTRB(28, 34, 28, 32),
-      theme: pw.ThemeData.withFont(
-        base: fonts.regular,
-        bold: fonts.bold,
-      ),
+      theme: pw.ThemeData.withFont(base: fonts.regular, bold: fonts.bold),
       textDirection: pw.TextDirection.rtl,
     );
   }
@@ -153,7 +151,8 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
     final content = <pw.Widget>[
       _buildTitle(
         title: 'التقرير التشغيلي',
-        subtitle: 'الفترة: ' +
+        subtitle:
+            'الفترة: ' +
             _formatDate(report.from) +
             ' - ' +
             _formatDate(report.to),
@@ -206,7 +205,8 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
     final content = <pw.Widget>[
       _buildTitle(
         title: 'تحليلات المبيعات',
-        subtitle: 'الفترة: ' +
+        subtitle:
+            'الفترة: ' +
             _formatDate(analytics.from) +
             ' - ' +
             _formatDate(analytics.to),
@@ -362,13 +362,8 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
   }) {
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.blue200, width: 0.6),
-      columnWidths: const {
-        0: pw.FlexColumnWidth(1),
-        1: pw.FlexColumnWidth(1),
-      },
-      children: [
-        for (final row in values) _tableRow(row, fonts: fonts),
-      ],
+      columnWidths: const {0: pw.FlexColumnWidth(1), 1: pw.FlexColumnWidth(1)},
+      children: [for (final row in values) _tableRow(row, fonts: fonts)],
     );
   }
 
@@ -381,21 +376,14 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
     }
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.blue200, width: 0.6),
-      columnWidths: const {
-        0: pw.FlexColumnWidth(2),
-        1: pw.FlexColumnWidth(1),
-      },
+      columnWidths: const {0: pw.FlexColumnWidth(2), 1: pw.FlexColumnWidth(1)},
       children: [
-        _tableRow(
-          ['طريقة الدفع', 'العدد'],
-          fonts: fonts,
-          header: true,
-        ),
+        _tableRow(['طريقة الدفع', 'العدد'], fonts: fonts, header: true),
         for (final entry in values.entries)
-          _tableRow(
-            [_paymentLabel(entry.key), entry.value.toString()],
-            fonts: fonts,
-          ),
+          _tableRow([
+            _paymentLabel(entry.key),
+            entry.value.toString(),
+          ], fonts: fonts),
       ],
     );
   }
@@ -418,18 +406,15 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
         header: true,
       ),
       for (final transaction in report.transactions.take(200))
-        _tableRow(
-          [
-            _formatDate(transaction.postedAt),
-            _sourceLabel(transaction.source),
-            transaction.description ?? 'مستند ' + transaction.id,
-            transaction.paymentMethod == null
-                ? '—'
-                : _paymentLabel(transaction.paymentMethod!),
-            transaction.amount.formatted,
-          ],
-          fonts: fonts,
-        ),
+        _tableRow([
+          _formatDate(transaction.postedAt),
+          _sourceLabel(transaction.source),
+          transaction.description ?? 'مستند ' + transaction.id,
+          transaction.paymentMethod == null
+              ? '—'
+              : _paymentLabel(transaction.paymentMethod!),
+          transaction.amount.formatted,
+        ], fonts: fonts),
     ];
 
     final widgets = <pw.Widget>[
@@ -487,17 +472,13 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
     final tableRows = <pw.TableRow>[
       _tableRow(headers, fonts: fonts, header: true),
       for (final row in rows.take(100))
-        _tableRow(
-          [
-            row.label,
-            if (includeQuantity)
-              _formatQuantity(row.quantityMilliUnits),
-            row.revenue.formatted,
-            row.cost.formatted,
-            row.grossProfit.formatted,
-          ],
-          fonts: fonts,
-        ),
+        _tableRow([
+          row.label,
+          if (includeQuantity) _formatQuantity(row.quantityMilliUnits),
+          row.revenue.formatted,
+          row.cost.formatted,
+          row.grossProfit.formatted,
+        ], fonts: fonts),
     ];
 
     final widgets = <pw.Widget>[
@@ -553,10 +534,7 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
       children: [
         for (final value in values)
           pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(
-              vertical: 5,
-              horizontal: 4,
-            ),
+            padding: const pw.EdgeInsets.symmetric(vertical: 5, horizontal: 4),
             child: pw.Text(
               value,
               textAlign: pw.TextAlign.center,
