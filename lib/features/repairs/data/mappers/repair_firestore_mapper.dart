@@ -22,7 +22,7 @@ abstract final class RepairFirestoreMapper {
     final rawParts = data['parts'];
     final parts = rawParts is List
         ? rawParts
-            .whereType<Map>()
+            .whereType<Map<Object?, Object?>>()
             .map(
               (raw) => RepairPart(
                 id: _string(raw['id'], 'part-$id'),
