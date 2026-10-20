@@ -181,7 +181,7 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
 
   Widget _amount(String label, Money amount) {
     return Chip(
-      label: Text(label + ': ' + amount.formatted),
+      label: Text('$label: ${amount.formatted}'),
     );
   }
 
@@ -267,11 +267,7 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
 
   String _formatDate(DateTime value) {
     final local = value.toLocal();
-    return local.year.toString() +
-        '/' +
-        local.month.toString().padLeft(2, '0') +
-        '/' +
-        local.day.toString().padLeft(2, '0');
+    return '${local.year}/${local.month.toString().padLeft(2, '0')}/${local.day.toString().padLeft(2, '0')}';
   }
 }
 
