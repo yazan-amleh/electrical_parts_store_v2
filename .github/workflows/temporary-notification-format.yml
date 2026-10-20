@@ -1,0 +1,24 @@
+name: Temporary notification format diff
+
+on:
+  push:
+    branches:
+      - v2/foundation
+
+permissions:
+  contents: read
+
+jobs:
+  format-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Format notification file and print diff
+        run: |
+          dart format lib/features/notifications/data/repositories/firebase_notification_repository.dart
+          git diff -- lib/features/notifications/data/repositories/firebase_notification_repository.dart
