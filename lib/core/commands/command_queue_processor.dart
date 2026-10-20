@@ -4,8 +4,9 @@ import '../tenancy/store_context.dart';
 import 'command_queue_repository.dart';
 import 'queued_command.dart';
 
-typedef QueuedCommandExecutor =
-    Future<Result<void>> Function(QueuedCommand command);
+typedef QueuedCommandExecutor = Future<Result<void>> Function(
+  QueuedCommand command,
+);
 
 class CommandQueueProcessor {
   const CommandQueueProcessor({

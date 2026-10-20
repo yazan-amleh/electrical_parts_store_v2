@@ -756,9 +756,8 @@ class _CreateRepairDialogState extends State<_CreateRepairDialog> {
       Navigator.of(context).pop(repair);
     } catch (error) {
       setState(() {});
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.toString())));
     }
   }
 

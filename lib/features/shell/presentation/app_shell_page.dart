@@ -176,8 +176,7 @@ class _AppShellPageState extends State<AppShellPage> {
           id: 'ledger',
           label: 'دفتر الأستاذ وكشوف الحساب',
           icon: Icons.book_outlined,
-          description:
-              'الحركة والرصيد من القيود المرحّلة والإسقاطات القابلة لإعادة البناء.',
+          description: 'الحركة والرصيد من القيود المرحّلة والإسقاطات القابلة لإعادة البناء.',
           capabilities: ['دفتر أستاذ', 'كشف عميل', 'كشف مورد'],
           foundationReady: true,
         ),
@@ -674,9 +673,9 @@ class _ModuleLandingPage extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHighest,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(

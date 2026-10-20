@@ -105,10 +105,8 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
                 children: [
                   Text(
                     title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: color,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: Theme.of(context).textTheme.titleLarge
+                        ?.copyWith(color: color, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
                   Text('آخر فحص: ${_formatDate(report.generatedAt)}'),
