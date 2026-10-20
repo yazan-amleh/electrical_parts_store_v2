@@ -55,6 +55,19 @@ void main() {
     expect(paid.calculatedPaymentStatus, BookingPaymentStatus.deposit);
   });
 
+  test('stores the calculated status for a fully paid booking', () {
+    final paid = _booking().withPayment(
+      BookingPayment(
+        id: 'payment-1',
+        amount: Money(minorUnits: 10000),
+        paidAt: DateTime.utc(2026, 1, 1, 9),
+        paymentMethod: 'cash',
+      ),
+    );
+    expect(paid.paymentStatus, BookingPaymentStatus.fullyPaid);
+    expect(paid.calculatedPaymentStatus, BookingPaymentStatus.fullyPaid);
+  });
+
   test('rejects invalid status transitions and excess payments', () {
     expect(
       () => _booking().transitionTo(BookingStatus.completed),
