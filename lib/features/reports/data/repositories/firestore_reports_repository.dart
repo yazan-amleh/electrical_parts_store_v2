@@ -22,15 +22,22 @@ class FirestoreReportsRepository implements ReportsRepository {
     required DateTime from,
     required DateTime to,
     int limit = 500,
+    int maxDocuments = 10000,
   }) async {
     if (from.isAfter(to)) {
       return const FailureResult<OperationalReport>(
         ValidationFailure('Report start date cannot be after end date.'),
       );
     }
-    if (limit <= 0 || limit > 2000) {
+    if (limit <= 0 ||
+        limit > 2000 ||
+        maxDocuments <= 0 ||
+        maxDocuments > 100000) {
       return const FailureResult<OperationalReport>(
-        ValidationFailure('Report limit must be between 1 and 2000.'),
+        ValidationFailure(
+          'Report page size must be between 1 and 2000 and max documents '
+          'must be between 1 and 100000.',
+        ),
       );
     }
 
@@ -38,26 +45,32 @@ class FirestoreReportsRepository implements ReportsRepository {
     final end = Timestamp.fromDate(to.toUtc());
 
     try {
-      final snapshots = await Future.wait<QuerySnapshot<Map<String, dynamic>>>([
-        FirebasePaths.sales(_firestore, context.storeId)
-            .where('postedAt', isGreaterThanOrEqualTo: start)
-            .where('postedAt', isLessThanOrEqualTo: end)
-            .limit(limit)
-            .get(),
-        FirebasePaths.purchases(_firestore, context.storeId)
-            .where('postedAt', isGreaterThanOrEqualTo: start)
-            .where('postedAt', isLessThanOrEqualTo: end)
-            .limit(limit)
-            .get(),
-        FirebasePaths.expenses(_firestore, context.storeId)
-            .where('postedAt', isGreaterThanOrEqualTo: start)
-            .where('postedAt', isLessThanOrEqualTo: end)
-            .limit(limit)
-            .get(),
+      final pages = await Future.wait<_PagedDocuments>([
+        _readPeriodDocuments(
+          collection: FirebasePaths.sales(_firestore, context.storeId),
+          start: start,
+          end: end,
+          pageSize: limit,
+          maxDocuments: maxDocuments,
+        ),
+        _readPeriodDocuments(
+          collection: FirebasePaths.purchases(_firestore, context.storeId),
+          start: start,
+          end: end,
+          pageSize: limit,
+          maxDocuments: maxDocuments,
+        ),
+        _readPeriodDocuments(
+          collection: FirebasePaths.expenses(_firestore, context.storeId),
+          start: start,
+          end: end,
+          pageSize: limit,
+          maxDocuments: maxDocuments,
+        ),
       ]);
 
       final transactions = <ReportTransaction>[];
-      for (final document in snapshots[0].docs) {
+      for (final document in pages[0].documents) {
         final transaction = ReportFirestoreMapper.tryTransaction(
           document,
           source: 'sale',
@@ -66,7 +79,7 @@ class FirestoreReportsRepository implements ReportsRepository {
           transactions.add(transaction);
         }
       }
-      for (final document in snapshots[1].docs) {
+      for (final document in pages[1].documents) {
         final transaction = ReportFirestoreMapper.tryTransaction(
           document,
           source: 'purchase',
@@ -75,7 +88,7 @@ class FirestoreReportsRepository implements ReportsRepository {
           transactions.add(transaction);
         }
       }
-      for (final document in snapshots[2].docs) {
+      for (final document in pages[2].documents) {
         final transaction = ReportFirestoreMapper.tryTransaction(
           document,
           source: 'expense',
@@ -149,9 +162,7 @@ class FirestoreReportsRepository implements ReportsRepository {
           salesByPaymentMethod: Map.unmodifiable(salesByPaymentMethod),
           expensesByPaymentMethod: Map.unmodifiable(expensesByPaymentMethod),
           transactions: List.unmodifiable(transactions),
-          mayBeTruncated: snapshots.any(
-            (snapshot) => snapshot.docs.length >= limit,
-          ),
+          mayBeTruncated: pages.any((page) => page.mayBeTruncated),
         ),
       );
     } on FirebaseException catch (error) {
@@ -171,15 +182,22 @@ class FirestoreReportsRepository implements ReportsRepository {
     required DateTime from,
     required DateTime to,
     int limit = 500,
+    int maxDocuments = 10000,
   }) async {
     if (from.isAfter(to)) {
       return const FailureResult<SalesAnalytics>(
         ValidationFailure('Report start date cannot be after end date.'),
       );
     }
-    if (limit <= 0 || limit > 2000) {
+    if (limit <= 0 ||
+        limit > 2000 ||
+        maxDocuments <= 0 ||
+        maxDocuments > 100000) {
       return const FailureResult<SalesAnalytics>(
-        ValidationFailure('Report limit must be between 1 and 2000.'),
+        ValidationFailure(
+          'Report page size must be between 1 and 2000 and max documents '
+          'must be between 1 and 100000.',
+        ),
       );
     }
 
@@ -187,19 +205,23 @@ class FirestoreReportsRepository implements ReportsRepository {
     final end = Timestamp.fromDate(to.toUtc());
 
     try {
-      final snapshots = await Future.wait<QuerySnapshot<Map<String, dynamic>>>([
-        FirebasePaths.sales(_firestore, context.storeId)
-            .where('postedAt', isGreaterThanOrEqualTo: start)
-            .where('postedAt', isLessThanOrEqualTo: end)
-            .limit(limit)
-            .get(),
+      final salesPageFuture = _readPeriodDocuments(
+        collection: FirebasePaths.sales(_firestore, context.storeId),
+        start: start,
+        end: end,
+        pageSize: limit,
+        maxDocuments: maxDocuments,
+      );
+      final lookupSnapshots =
+          await Future.wait<QuerySnapshot<Map<String, dynamic>>>([
         FirebasePaths.products(_firestore, context.storeId).get(),
         FirebasePaths.categories(_firestore, context.storeId).get(),
         FirebasePaths.parties(_firestore, context.storeId).get(),
       ]);
+      final salesPage = await salesPageFuture;
 
       final productLookup = <String, _ProductAnalyticsLookup>{};
-      for (final document in snapshots[1].docs) {
+      for (final document in lookupSnapshots[0].docs) {
         final data = document.data();
         final productId = document.id;
         final name = _analyticsString(data['name'], productId);
@@ -214,7 +236,7 @@ class FirestoreReportsRepository implements ReportsRepository {
       }
 
       final categoryNames = <String, String>{};
-      for (final document in snapshots[2].docs) {
+      for (final document in lookupSnapshots[1].docs) {
         final data = document.data();
         categoryNames[document.id] = _analyticsString(
           data['name'],
@@ -223,7 +245,7 @@ class FirestoreReportsRepository implements ReportsRepository {
       }
 
       final partyNames = <String, String>{};
-      for (final document in snapshots[3].docs) {
+      for (final document in lookupSnapshots[2].docs) {
         final data = document.data();
         partyNames[document.id] = _analyticsString(data['name'], document.id);
       }
@@ -237,7 +259,7 @@ class FirestoreReportsRepository implements ReportsRepository {
       final categoryRows = <String, _AnalyticsAccumulator>{};
       final customerRows = <String, _AnalyticsAccumulator>{};
 
-      for (final document in snapshots[0].docs) {
+      for (final document in salesPage.documents) {
         final data = document.data();
         final postedAt = _analyticsDate(data['postedAt']);
         if (postedAt == null) {
@@ -382,7 +404,7 @@ class FirestoreReportsRepository implements ReportsRepository {
           customerRows: List.unmodifiable(
             sortedCustomers.map((row) => row.toEntity()),
           ),
-          mayBeTruncated: snapshots[0].docs.length >= limit,
+          mayBeTruncated: salesPage.documents.length >= limit,
         ),
       );
     } on FirebaseException catch (error) {
@@ -394,6 +416,56 @@ class FirestoreReportsRepository implements ReportsRepository {
         InfrastructureFailure(error.toString()),
       );
     }
+  }
+
+  Future<_PagedDocuments> _readPeriodDocuments({
+    required CollectionReference<Map<String, dynamic>> collection,
+    required Timestamp start,
+    required Timestamp end,
+    required int pageSize,
+    required int maxDocuments,
+  }) async {
+    final documents = <DocumentSnapshot<Map<String, dynamic>>>[];
+    DocumentSnapshot<Map<String, dynamic>>? cursor;
+    var mayBeTruncated = false;
+
+    while (documents.length < maxDocuments) {
+      final remaining = maxDocuments - documents.length;
+      final currentPageSize =
+          remaining < pageSize ? remaining : pageSize;
+      Query<Map<String, dynamic>> query = collection
+          .where('postedAt', isGreaterThanOrEqualTo: start)
+          .where('postedAt', isLessThanOrEqualTo: end)
+          .orderBy('postedAt')
+          .limit(currentPageSize);
+      if (cursor != null) {
+        query = query.startAfterDocument(cursor!);
+      }
+
+      final snapshot = await query.get();
+      documents.addAll(snapshot.docs);
+      if (snapshot.docs.length < currentPageSize) {
+        break;
+      }
+
+      cursor = snapshot.docs.last;
+      if (documents.length >= maxDocuments) {
+        final probe = await collection
+            .where('postedAt', isGreaterThanOrEqualTo: start)
+            .where('postedAt', isLessThanOrEqualTo: end)
+            .orderBy('postedAt')
+            .startAfterDocument(cursor!)
+            .limit(1)
+            .get();
+        mayBeTruncated = probe.docs.isNotEmpty;
+        break;
+      }
+    }
+
+    return _PagedDocuments(
+      documents: List.unmodifiable(documents),
+      mayBeTruncated: mayBeTruncated,
+    );
   }
 
   static void _addAnalyticsRow(
