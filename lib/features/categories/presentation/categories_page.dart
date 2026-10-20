@@ -1,21 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
 import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
+import '../../inventory/domain/entities/product.dart';
+import '../../inventory/domain/repositories/product_repository.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../domain/entities/category.dart';
 import '../domain/repositories/category_repository.dart';
+import '../domain/services/category_inventory_document_builder.dart';
 
 class CategoriesPage extends StatefulWidget {
   const CategoriesPage({
     required this.repository,
+    this.productRepository,
+    this.documentBuilder,
     required this.user,
     required this.membership,
     super.key,
   });
 
   final CategoryRepository? repository;
+  final ProductRepository? productRepository;
+  final CategoryInventoryDocumentBuilder? documentBuilder;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -28,6 +36,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
 
   List<Category> _categories = const <Category>[];
   bool _isLoading = true;
+  bool _isExporting = false;
   String? _errorMessage;
 
   StoreContext get _storeContext {
@@ -150,6 +159,32 @@ class _CategoriesPageState extends State<CategoriesPage> {
               onPressed: _loadCategories,
               icon: const Icon(Icons.refresh),
             ),
+            IconButton(
+              tooltip: 'طباعة تقرير المخزون',
+              onPressed: _isExporting ||
+                      widget.productRepository == null ||
+                      widget.documentBuilder == null ||
+                      _categories.isEmpty
+                  ? null
+                  : () => _exportInventoryReport(share: false),
+              icon: _isExporting
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.print_outlined),
+            ),
+            IconButton(
+              tooltip: 'مشاركة تقرير المخزون',
+              onPressed: _isExporting ||
+                      widget.productRepository == null ||
+                      widget.documentBuilder == null ||
+                      _categories.isEmpty
+                  ? null
+                  : () => _exportInventoryReport(share: true),
+              icon: const Icon(Icons.share_outlined),
+            ),
             const SizedBox(width: 4),
             FilledButton.icon(
               onPressed: () => _openEditor(),
@@ -218,6 +253,56 @@ class _CategoriesPageState extends State<CategoriesPage> {
         initialCategory == null ? 'تمت إضافة التصنيف.' : 'تم تحديث التصنيف.',
       );
       await _loadCategories();
+    }
+  }
+
+  Future<void> _exportInventoryReport({required bool share}) async {
+    final productRepository = widget.productRepository;
+    final documentBuilder = widget.documentBuilder;
+    if (productRepository == null || documentBuilder == null) {
+      _showMessage('تصدير تقرير المخزون غير موصول بهذه البيئة.');
+      return;
+    }
+
+    setState(() => _isExporting = true);
+    try {
+      final result = await productRepository.getProducts(
+        context: _storeContext,
+        includeInactive: true,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (result is FailureResult<List<Product>>) {
+        _showMessage(result.failure.message);
+        return;
+      }
+
+      final products = (result as Success<List<Product>>).value;
+      final productsByCategory = <String, List<Product>>{};
+      for (final product in products) {
+        productsByCategory
+            .putIfAbsent(product.categoryId, () => <Product>[])
+            .add(product);
+      }
+      final bytes = await documentBuilder.buildInventoryByCategory(
+        categories: _categories,
+        productsByCategory: productsByCategory,
+        storeName: widget.membership.storeId,
+      );
+      final filename =
+          'category_inventory_${DateTime.now().millisecondsSinceEpoch}';
+      if (share) {
+        await Printing.sharePdf(bytes: bytes, filename: '$filename.pdf');
+      } else {
+        await Printing.layoutPdf(onLayout: (_) async => bytes);
+      }
+    } catch (error) {
+      _showMessage('تعذر تجهيز تقرير المخزون: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting = false);
+      }
     }
   }
 
