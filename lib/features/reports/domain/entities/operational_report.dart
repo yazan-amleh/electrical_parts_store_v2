@@ -34,6 +34,7 @@ class OperationalReport {
     required this.salesByPaymentMethod,
     required this.expensesByPaymentMethod,
     required this.transactions,
+    required this.mayBeTruncated,
   });
 
   final DateTime from;
@@ -48,6 +49,7 @@ class OperationalReport {
   final Map<String, int> salesByPaymentMethod;
   final Map<String, int> expensesByPaymentMethod;
   final List<ReportTransaction> transactions;
+  final bool mayBeTruncated;
 
   Money get grossProfit => salesRevenue - salesCost;
 
