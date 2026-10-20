@@ -10,12 +10,15 @@ import '../../payments/presentation/party_payments_page.dart';
 import '../domain/entities/party.dart';
 import '../domain/entities/party_balance.dart';
 import '../domain/enums/party_type.dart';
+import '../domain/repositories/party_ledger_repository.dart';
 import '../domain/repositories/party_repository.dart';
+import 'party_ledger_page.dart';
 
 class PartyDirectoryPage extends StatefulWidget {
   const PartyDirectoryPage({
     required this.repository,
     required this.paymentRepository,
+    required this.ledgerRepository,
     required this.user,
     required this.membership,
     required this.initialPartyType,
@@ -24,6 +27,7 @@ class PartyDirectoryPage extends StatefulWidget {
 
   final PartyRepository? repository;
   final PartyPaymentRepository? paymentRepository;
+  final PartyLedgerRepository? ledgerRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
   final PartyType initialPartyType;
@@ -191,14 +195,29 @@ class _PartyDirectoryPageState extends State<PartyDirectoryPage> {
             'الرصيد: ${balance.formatted}',
           ].join(' • '),
         ),
-        trailing: IconButton(
-          tooltip: isCustomer ? 'قبض من العميل' : 'دفع للمورد',
-          onPressed: () => _openPayment(party),
-          icon: Icon(
-            isCustomer
-                ? Icons.call_received_outlined
-                : Icons.call_made_outlined,
-          ),
+        trailing: Wrap(
+          spacing: 2,
+          children: [
+            IconButton(
+              tooltip: 'كشف الحساب',
+              onPressed: () => _openLedger(party),
+              icon: const Icon(Icons.menu_book_outlined),
+            ),
+            IconButton(
+              tooltip: 'تعديل',
+              onPressed: () => _openEditor(party),
+              icon: const Icon(Icons.edit_outlined),
+            ),
+            IconButton(
+              tooltip: isCustomer ? 'قبض من العميل' : 'دفع للمورد',
+              onPressed: () => _openPayment(party),
+              icon: Icon(
+                isCustomer
+                    ? Icons.call_received_outlined
+                    : Icons.call_made_outlined,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -239,6 +258,25 @@ class _PartyDirectoryPageState extends State<PartyDirectoryPage> {
       );
       await _loadParties();
     }
+  }
+
+  Future<void> _openLedger(Party party) async {
+    final repository = widget.ledgerRepository;
+    if (repository == null) {
+      _showMessage('مستودع كشوف الحساب غير موصول بهذه البيئة.');
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        child: PartyLedgerPage(
+          repository: repository,
+          user: widget.user,
+          membership: widget.membership,
+          party: party,
+        ),
+      ),
+    );
   }
 
   Future<void> _openPayment(Party party) async {

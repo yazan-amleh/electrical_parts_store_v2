@@ -18,6 +18,7 @@ import '../features/purchase_orders/data/repositories/firestore_purchase_order_r
 import '../features/offers/data/repositories/firestore_offer_repository.dart';
 import '../features/expenses/data/repositories/firestore_expense_repository.dart';
 import '../features/payments/data/repositories/firestore_party_payment_repository.dart';
+import '../features/parties/data/repositories/firestore_party_ledger_repository.dart';
 import '../features/parties/data/repositories/firestore_party_repository.dart';
 import '../features/transfers/data/repositories/firestore_account_transfer_repository.dart';
 import '../infrastructure/queue/firestore_command_queue_repository.dart';
@@ -103,6 +104,9 @@ abstract final class AppBootstrap {
         commandQueue: commandQueue,
       ),
       partyRepository: FirestorePartyRepository(
+        firestore: firestore,
+      ),
+      partyLedgerRepository: FirestorePartyLedgerRepository(
         firestore: firestore,
       ),
       accountTransferRepository: FirestoreAccountTransferRepository(
