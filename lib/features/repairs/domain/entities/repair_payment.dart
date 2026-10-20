@@ -1,6 +1,5 @@
 import '../../../../core/idempotency/idempotency_key.dart';
 import '../../../../core/money/money.dart';
-import '../../../../core/tenancy/store_context.dart';
 import '../../../payments/domain/enums/party_payment_method.dart';
 import '../enums/repair_payment_kind.dart';
 
@@ -18,7 +17,7 @@ class RepairPayment {
     this.description,
     this.chequeNumber,
     this.bankName,
-    this.dueDate,
+    dueDate,
   })  : postedAt = postedAt.toUtc(),
         dueDate = dueDate?.toUtc() {
     _ensureIdentifier(id, 'Repair payment id');
@@ -60,4 +59,11 @@ class RepairPayment {
   final String? chequeNumber;
   final String? bankName;
   final DateTime? dueDate;
+
+
+  static void _ensureIdentifier(String value, String label) {
+    if (value.trim().isEmpty || value.contains('/')) {
+      throw ArgumentError('$label is invalid.');
+    }
+  }
 }
