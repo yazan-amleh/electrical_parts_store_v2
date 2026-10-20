@@ -323,7 +323,9 @@ class _ReportsPageState extends State<ReportsPage> {
             _inventoryTile(
               context,
               title: 'الأصناف الفعالة',
-              value: _products.where((product) => product.isActive).length
+              value: _products
+                  .where((product) => product.isActive)
+                  .length
                   .toString(),
               icon: Icons.inventory_2_outlined,
             ),
@@ -394,8 +396,7 @@ class _ReportsPageState extends State<ReportsPage> {
                     DataColumn(label: Text('المبلغ')),
                   ],
                   rows: [
-                    for (final transaction
-                        in report.transactions.take(100))
+                    for (final transaction in report.transactions.take(100))
                       DataRow(
                         cells: [
                           DataCell(Text(_formatDate(transaction.postedAt))),
