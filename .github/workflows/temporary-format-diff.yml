@@ -1,0 +1,24 @@
+name: Temporary formatter diff
+
+on:
+  push:
+    branches:
+      - "v2/**"
+
+permissions:
+  contents: read
+
+jobs:
+  format-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Apply formatter
+        run: dart format lib/features/reports/data/exporters/pdf_report_document_builder.dart lib/features/reports/presentation/reports_page.dart lib/features/reports/presentation/sales_analytics_page.dart lib/features/shell/presentation/app_shell_page.dart
+      - name: Show formatter diff
+        run: git diff -- lib/features/reports/data/exporters/pdf_report_document_builder.dart lib/features/reports/presentation/reports_page.dart lib/features/reports/presentation/sales_analytics_page.dart lib/features/shell/presentation/app_shell_page.dart
