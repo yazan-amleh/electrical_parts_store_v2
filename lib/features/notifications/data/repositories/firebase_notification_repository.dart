@@ -45,7 +45,8 @@ class FirebaseNotificationRepository implements NotificationRepository {
       final token = await _messaging.getToken();
       if (token == null || token.trim().isEmpty) {
         return const FailureResult<void>(
-          InfrastructureFailure('The device did not return a notification token.'),
+          InfrastructureFailure(
+              'The device did not return a notification token.'),
         );
       }
 
@@ -96,9 +97,7 @@ class FirebaseNotificationRepository implements NotificationRepository {
     StoreContext context,
     String token,
   ) {
-    final tokenId = base64Url
-        .encode(utf8.encode(token))
-        .replaceAll('=', '');
+    final tokenId = base64Url.encode(utf8.encode(token)).replaceAll('=', '');
     return _firestore
         .collection('stores')
         .doc(context.storeId)
