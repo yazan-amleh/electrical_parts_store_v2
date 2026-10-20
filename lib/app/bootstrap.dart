@@ -19,6 +19,7 @@ import '../features/purchases/data/repositories/firestore_purchase_repository.da
 import '../features/repairs/data/repositories/firestore_repair_repository.dart';
 import '../features/purchase_orders/data/repositories/firestore_purchase_order_repository.dart';
 import '../features/reports/data/repositories/firestore_reports_repository.dart';
+import '../features/settings/data/repositories/firestore_settings_repository.dart';
 import '../features/offers/data/repositories/firestore_offer_repository.dart';
 import '../features/expenses/data/repositories/firestore_expense_repository.dart';
 import '../features/payments/data/repositories/firestore_party_payment_repository.dart';
@@ -118,6 +119,7 @@ abstract final class AppBootstrap {
         commandQueue: commandQueue,
       ),
       reportsRepository: FirestoreReportsRepository(firestore: firestore),
+      settingsRepository: FirestoreSettingsRepository(firestore: firestore),
     );
   }
 }
