@@ -135,7 +135,13 @@ service cloud.firestore {
       allow delete: if false;
 
       match /members/{userId} {
-        allow read: if canReadStore(storeId);
+        // A member must be able to read their own active membership to establish
+        // the session. Owners and admins can read the complete member list.
+        allow read: if (
+          signedIn() &&
+          userId == request.auth.uid &&
+          resource.data.isActive == true
+        ) || canManageStore(storeId);
         allow create, update, delete: if canManageStore(storeId);
       }
 
