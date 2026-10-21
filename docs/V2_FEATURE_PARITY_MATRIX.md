@@ -35,8 +35,8 @@ This matrix keeps the V1 surface visible while V2 is rebuilt on a new data set. 
 | Salon and booking workflows | Planned | V1 includes bookings, calendar, photography options, customers, workers, work sessions, discounts and booking expenses; V2 vertical slice is next and will use atomic inventory/accounting commands |
 | Store settings and user administration UI | Complete | Store profile, members, roles and preferences (owner transfer/invitations remain separate) |
 | Full responsive UI parity review | Planned | Compare every V1 workflow on phone and desktop |
-| End-to-end emulator scenarios | Planned | Sales, purchases, payments, cheques, repairs and year-end flows |
-
+| End-to-end emulator scenarios | Partial | Storage rules cover participant access, outsider denial and owner-only deletion; cheque settlement covers concurrent customer retries, idempotent replay and supplier bounce; sales, purchases, payments, repairs and year-end clean-data scenarios remain |
+ 
 ## Accounting source-of-truth policy
 
 - Posted journal entries and their lines are the accounting facts.
