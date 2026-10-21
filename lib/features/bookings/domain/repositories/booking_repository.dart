@@ -13,6 +13,13 @@ abstract interface class BookingRepository {
     BookingStatus? status,
   });
 
+  Future<Result<List<Booking>>> getBookings({
+    required StoreContext context,
+    DateTime? from,
+    DateTime? to,
+    BookingStatus? status,
+  });
+
   Future<Result<Booking>> getBooking({
     required StoreContext context,
     required String bookingId,
