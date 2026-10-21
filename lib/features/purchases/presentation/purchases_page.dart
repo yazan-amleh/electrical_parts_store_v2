@@ -350,7 +350,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DropdownButtonFormField<PurchasePaymentMethod>(
-            initialValue: _paymentMethod,
+            value: _paymentMethod,
             decoration: const InputDecoration(
               labelText: 'طريقة الدفع',
               prefixIcon: Icon(Icons.payments_outlined),

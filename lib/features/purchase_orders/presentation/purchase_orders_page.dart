@@ -477,7 +477,7 @@ class _ReceivePurchaseOrderDialogState
           mainAxisSize: MainAxisSize.min,
           children: [
             DropdownButtonFormField<PurchasePaymentMethod>(
-              initialValue: _paymentMethod,
+              value: _paymentMethod,
               decoration: const InputDecoration(labelText: 'طريقة الدفع'),
               items: PurchasePaymentMethod.values
                   .map(
@@ -575,7 +575,7 @@ class _CreatePurchaseOrderDialogState
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               DropdownButtonFormField<Party>(
-                initialValue: _supplier,
+                value: _supplier,
                 decoration: const InputDecoration(labelText: 'المورد'),
                 items: widget.suppliers
                     .map(
@@ -589,7 +589,7 @@ class _CreatePurchaseOrderDialogState
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<Product>(
-                initialValue: _product,
+                value: _product,
                 decoration: const InputDecoration(labelText: 'الصنف'),
                 items: widget.products
                     .where((product) => !product.isService)

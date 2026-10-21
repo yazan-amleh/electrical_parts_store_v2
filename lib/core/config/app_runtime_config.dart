@@ -9,7 +9,7 @@ class AppRuntimeConfig {
   });
 
   factory AppRuntimeConfig.fromEnvironment() {
-    final environmentName = String.fromEnvironment(
+    final environmentName = const String.fromEnvironment(
       'APP_ENV',
       defaultValue: 'development',
     );
@@ -20,12 +20,12 @@ class AppRuntimeConfig {
 
     return AppRuntimeConfig(
       environment: environment,
-      useFirebase: bool.fromEnvironment('USE_FIREBASE', defaultValue: false),
-      firebaseProjectId: String.fromEnvironment(
+      useFirebase: const bool.fromEnvironment('USE_FIREBASE', defaultValue: false),
+      firebaseProjectId: const String.fromEnvironment(
         'FIREBASE_PROJECT_ID',
         defaultValue: '',
       ),
-      storeId: String.fromEnvironment('STORE_ID', defaultValue: ''),
+      storeId: const String.fromEnvironment('STORE_ID', defaultValue: ''),
     );
   }
 

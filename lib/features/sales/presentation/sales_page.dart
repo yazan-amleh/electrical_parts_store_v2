@@ -323,7 +323,7 @@ class _SalesPageState extends State<SalesPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DropdownButtonFormField<SalePaymentMethod>(
-            initialValue: _paymentMethod,
+            value: _paymentMethod,
             decoration: const InputDecoration(
               labelText: 'طريقة الدفع',
               prefixIcon: Icon(Icons.payments_outlined),

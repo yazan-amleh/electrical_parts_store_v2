@@ -142,7 +142,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
             Text('تسجيل حركة', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
             DropdownButtonFormField<Product>(
-              initialValue: product,
+              value: product,
               decoration: const InputDecoration(
                 labelText: 'الصنف',
                 prefixIcon: Icon(Icons.inventory_2_outlined),
@@ -169,7 +169,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<InventoryMovementType>(
-              initialValue: _movementType,
+              value: _movementType,
               decoration: const InputDecoration(
                 labelText: 'نوع الحركة',
                 prefixIcon: Icon(Icons.category_outlined),
@@ -203,7 +203,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
             if (_movementType == InventoryMovementType.adjustment) ...[
               const SizedBox(height: 12),
               DropdownButtonFormField<bool>(
-                initialValue: _increaseOnAdjustment,
+                value: _increaseOnAdjustment,
                 decoration: const InputDecoration(
                   labelText: 'اتجاه التسوية',
                   prefixIcon: Icon(Icons.compare_arrows_outlined),

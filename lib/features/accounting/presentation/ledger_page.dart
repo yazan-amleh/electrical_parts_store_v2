@@ -99,7 +99,7 @@ class _LedgerPageState extends State<LedgerPage> {
             SizedBox(
               width: 320,
               child: DropdownButtonFormField<String>(
-                initialValue: _selectedAccountId,
+                value: _selectedAccountId,
                 decoration: const InputDecoration(
                   labelText: 'الحساب',
                   prefixIcon: Icon(Icons.account_tree_outlined),

@@ -434,7 +434,7 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              initialValue: _parentId ?? '',
+              value: _parentId ?? '',
               decoration: const InputDecoration(
                 labelText: 'التصنيف الأب',
                 prefixIcon: Icon(Icons.account_tree_outlined),
