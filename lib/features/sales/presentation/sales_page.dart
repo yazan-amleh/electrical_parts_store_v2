@@ -379,7 +379,7 @@ class _SalesPageState extends State<SalesPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DropdownButtonFormField<SalePaymentMethod>(
-            value: _paymentMethod,
+            initialValue: _paymentMethod,
             decoration: const InputDecoration(
               labelText: 'طريقة الدفع',
               prefixIcon: Icon(Icons.payments_outlined),
@@ -548,7 +548,7 @@ class _SalesPageState extends State<SalesPage> {
         ? _customerController.text
         : null;
     return DropdownButtonFormField<String>(
-      value: selectedId,
+      initialValue: selectedId,
       decoration: const InputDecoration(
         labelText: 'العميل',
         prefixIcon: Icon(Icons.person_outline),
