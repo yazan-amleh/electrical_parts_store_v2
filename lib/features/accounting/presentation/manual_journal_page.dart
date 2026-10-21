@@ -193,7 +193,7 @@ class _ManualJournalPageState extends State<ManualJournalPage> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: line.accountId,
+              initialValue: line.accountId,
               decoration: const InputDecoration(
                 labelText: 'الحساب',
                 prefixIcon: Icon(Icons.account_tree_outlined),
