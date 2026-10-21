@@ -549,6 +549,7 @@ class _SettingsPageState extends State<SettingsPage> {
     super.dispose();
   }
 }
+
 class _NewMemberDraft {
   const _NewMemberDraft({
     required this.userId,
