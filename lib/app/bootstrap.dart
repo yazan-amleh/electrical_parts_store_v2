@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import '../core/config/app_runtime_config.dart';
+import '../firebase_options.dart';
 import '../features/accounting/data/repositories/firestore_accounting_query_repository.dart';
 import '../features/accounting/data/repositories/firestore_accounting_repository.dart';
 import '../features/accounting_audit/data/repositories/firestore_accounting_audit_repository.dart';
@@ -51,7 +52,9 @@ abstract final class AppBootstrap {
     }
 
     if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
     }
 
     final firestore = FirebaseFirestore.instance;
