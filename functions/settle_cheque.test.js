@@ -176,9 +176,7 @@ async function getBalance(storeId, accountId) {
   return snapshot.data();
 }
 
-describe('settleCheque accounting scenarios', function () {
-  this.timeout(60000);
-
+describe('settleCheque accounting scenarios', () => {
   after(async () => {
     await admin.app().delete();
   });
