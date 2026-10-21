@@ -11,7 +11,7 @@ class AppRuntimeConfig {
   factory AppRuntimeConfig.fromEnvironment() {
     final environmentName = const String.fromEnvironment(
       'APP_ENV',
-      defaultValue: 'development',
+      defaultValue: 'production',
     );
     final environment = AppEnvironment.values.firstWhere(
       (value) => value.name == environmentName,
@@ -22,13 +22,16 @@ class AppRuntimeConfig {
       environment: environment,
       useFirebase: const bool.fromEnvironment(
         'USE_FIREBASE',
-        defaultValue: false,
+        defaultValue: true,
       ),
       firebaseProjectId: const String.fromEnvironment(
         'FIREBASE_PROJECT_ID',
-        defaultValue: '',
+        defaultValue: 'electrical-store-v2-prod',
       ),
-      storeId: const String.fromEnvironment('STORE_ID', defaultValue: ''),
+      storeId: const String.fromEnvironment(
+        'STORE_ID',
+        defaultValue: 'v2-dev-store',
+      ),
     );
   }
 
