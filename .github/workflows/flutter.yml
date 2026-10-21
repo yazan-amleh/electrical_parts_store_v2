@@ -39,11 +39,6 @@ jobs:
         working-directory: functions
         run: npm install --no-audit --no-fund
 
-      - name: Temporary booking format preview
-        run: |
-          dart format lib/features/bookings/presentation/booking_page.dart
-          git diff --no-color -- lib/features/bookings/presentation/booking_page.dart
-
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed lib test
 
