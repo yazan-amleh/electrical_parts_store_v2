@@ -7653,3 +7653,5 @@ async function postRepairPaymentInTransaction(
     repairId: command.repairId,
   };
 }
+
+Object.assign(exports, require('./bookings'));
