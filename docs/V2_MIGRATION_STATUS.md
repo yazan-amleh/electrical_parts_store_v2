@@ -45,5 +45,6 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 - The manual GitHub Actions workflow is `.github/workflows/firebase-deploy.yml` on `v2/port-v1-complete`.
 - It deploys Firestore rules/indexes, Storage rules, and all Cloud Functions to `electrical-store-v2-prod`.
 - It requires the repository secret `FIREBASE_TOKEN`; keep that token only in GitHub Actions secrets and never in source code or chat.
+- The post-deploy smoke test also requires `SMOKE_TEST_EMAIL` and `SMOKE_TEST_PASSWORD` Actions secrets for the existing V2 test user; it performs Auth, Firestore membership, and read-only accounting-audit checks.
 
 No V1 customer or transaction migration is implied by this document. Migration, if desired after year-end, will be a separate audited project.
