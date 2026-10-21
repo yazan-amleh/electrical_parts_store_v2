@@ -8,6 +8,7 @@ import '../core/config/app_runtime_config.dart';
 import '../features/accounting/data/repositories/firestore_accounting_query_repository.dart';
 import '../features/accounting/data/repositories/firestore_accounting_repository.dart';
 import '../features/accounting_audit/data/repositories/firestore_accounting_audit_repository.dart';
+import '../features/activity_log/data/repositories/firestore_activity_log_repository.dart';
 import '../features/categories/data/repositories/firestore_category_repository.dart';
 import '../features/categories/data/exporters/pdf_category_inventory_document_builder.dart';
 import '../features/cheques/data/repositories/firestore_cheque_repository.dart';
@@ -28,6 +29,7 @@ import '../features/chat/data/repositories/firestore_chat_repository.dart';
 import '../features/settings/data/repositories/firestore_settings_repository.dart';
 import '../features/offers/data/repositories/firestore_offer_repository.dart';
 import '../features/notifications/data/repositories/firebase_notification_repository.dart';
+import '../features/notes/data/repositories/firestore_note_repository.dart';
 import '../features/expenses/data/repositories/firestore_expense_repository.dart';
 import '../features/payments/data/repositories/firestore_party_payment_repository.dart';
 import '../features/parties/data/repositories/firestore_party_ledger_repository.dart';
@@ -142,6 +144,10 @@ abstract final class AppBootstrap {
         firestore: firestore,
       ),
       settingsRepository: FirestoreSettingsRepository(firestore: firestore),
+      noteRepository: FirestoreNoteRepository(firestore: firestore),
+      activityLogRepository: FirestoreActivityLogRepository(
+        firestore: firestore,
+      ),
     );
   }
 }

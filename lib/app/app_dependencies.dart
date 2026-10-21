@@ -3,7 +3,9 @@ import '../features/accounting/domain/repositories/accounting_query_repository.d
 import '../features/offers/domain/repositories/offer_repository.dart';
 import '../features/accounting/domain/repositories/accounting_repository.dart';
 import '../features/accounting_audit/domain/repositories/accounting_audit_repository.dart';
+import '../features/activity_log/domain/repositories/activity_log_repository.dart';
 import '../features/categories/domain/repositories/category_repository.dart';
+import '../features/notes/domain/repositories/note_repository.dart';
 import '../features/categories/domain/services/category_inventory_document_builder.dart';
 import '../features/cheques/domain/repositories/cheque_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
@@ -55,6 +57,8 @@ class AppDependencies {
     this.chatAttachmentRepository,
     this.notificationRepository,
     this.settingsRepository,
+    this.noteRepository,
+    this.activityLogRepository,
   });
 
   final AppRuntimeConfig runtime;
@@ -84,6 +88,8 @@ class AppDependencies {
   final ChatAttachmentRepository? chatAttachmentRepository;
   final NotificationRepository? notificationRepository;
   final SettingsRepository? settingsRepository;
+  final NoteRepository? noteRepository;
+  final ActivityLogRepository? activityLogRepository;
 
   bool get hasFirebaseSession => authSession != null;
 }

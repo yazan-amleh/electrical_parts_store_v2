@@ -390,6 +390,68 @@ describe('Firestore security rules', function () {
     );
   });
 
+  it('scopes personal notes and keeps activity logs read-only', async () => {
+    await assertSucceeds(
+      setDoc(storeDoc(salesDb, 'notes', 'note-1'), {
+        storeId: STORE_ID,
+        userId: 'sales-1',
+        title: 'Follow up',
+        content: 'Call customer',
+        type: 'customer',
+        priority: 'high',
+      }),
+    );
+    await assertFails(
+      setDoc(storeDoc(salesDb, 'notes', 'note-2'), {
+        storeId: STORE_ID,
+        userId: 'owner-1',
+        title: 'Owner note',
+        content: 'Private',
+        type: 'general',
+        priority: 'medium',
+      }),
+    );
+    await assertFails(
+      setDoc(storeDoc(salesDb, 'notes', 'foreign-note'), {
+        storeId: 'store-b',
+        userId: 'sales-1',
+        title: 'Foreign',
+        content: 'Denied',
+        type: 'general',
+        priority: 'low',
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(storeDoc(salesDb, 'notes', 'note-1'), {
+        content: 'Updated customer call',
+      }),
+    );
+    await assertFails(
+      deleteDoc(storeDoc(salesDb, 'notes', 'note-1')),
+    );
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), 'stores', STORE_ID, 'activity_logs', 'log-1'),
+        {
+          storeId: STORE_ID,
+          description: 'Sale posted',
+          timestamp: Timestamp.now(),
+        },
+      );
+    });
+    await assertSucceeds(
+      getDoc(storeDoc(salesDb, 'activity_logs', 'log-1')),
+    );
+    await assertFails(
+      setDoc(storeDoc(salesDb, 'activity_logs', 'log-2'), {
+        storeId: STORE_ID,
+        description: 'Client write',
+        timestamp: Timestamp.now(),
+      }),
+    );
+  });
+
   it('keeps posted business documents immutable from clients', async () => {
     const forbiddenWrites = [
       ['sales', 'sale-2'],

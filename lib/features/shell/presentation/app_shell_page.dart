@@ -11,6 +11,8 @@ import '../../accounting/domain/repositories/accounting_repository.dart';
 import '../../accounting/presentation/financial_statements_page.dart';
 import '../../accounting_audit/domain/repositories/accounting_audit_repository.dart';
 import '../../accounting_audit/presentation/accounting_audit_page.dart';
+import '../../activity_log/domain/repositories/activity_log_repository.dart';
+import '../../activity_log/presentation/activity_log_page.dart';
 import '../../accounting/presentation/ledger_page.dart';
 import '../../accounting/presentation/manual_journal_page.dart';
 import '../../accounting/presentation/chart_of_accounts_page.dart';
@@ -50,7 +52,10 @@ import '../../reports/presentation/sales_analytics_page.dart';
 import '../../chat/domain/repositories/chat_attachment_repository.dart';
 import '../../chat/domain/repositories/chat_repository.dart';
 import '../../chat/presentation/chat_page.dart';
+import '../../chatbot/presentation/chatbot_page.dart';
 import '../../settings/domain/repositories/settings_repository.dart';
+import '../../notes/domain/repositories/note_repository.dart';
+import '../../notes/presentation/notes_page.dart';
 import '../../settings/presentation/settings_page.dart';
 
 class AppShellPage extends StatefulWidget {
@@ -262,6 +267,35 @@ class _AppShellPageState extends State<AppShellPage> {
       ],
     ),
     _NavigationSection(
+      title: 'المتابعة والأدوات',
+      modules: [
+        _Module(
+          id: 'notes',
+          label: 'الملاحظات',
+          icon: Icons.notes_outlined,
+          description: 'ملاحظات شخصية ومهام وتذكيرات مرتبطة بالعمل.',
+          capabilities: ['بحث', 'أولوية', 'أرشفة وتمييز'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'activity-log',
+          label: 'سجل النشاط',
+          icon: Icons.history_outlined,
+          description: 'قراءة الأحداث التشغيلية المرتبطة بالمتجر.',
+          capabilities: ['تغذية زمنية', 'المستخدم', 'نوع الحدث'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'chatbot',
+          label: 'المساعد الذكي',
+          icon: Icons.auto_awesome_outlined,
+          description: 'إجابات سريعة عن المبيعات والمخزون والتصنيفات.',
+          capabilities: ['مبيعات', 'مخزون', 'تصنيفات'],
+          foundationReady: true,
+        ),
+      ],
+    ),
+    _NavigationSection(
       title: 'التشغيل والتقارير',
       modules: [
         _Module(
@@ -401,6 +435,8 @@ class _AppShellPageState extends State<AppShellPage> {
           chatAttachmentRepository:
               widget.dependencies.chatAttachmentRepository,
           settingsRepository: widget.dependencies.settingsRepository,
+          noteRepository: widget.dependencies.noteRepository,
+          activityLogRepository: widget.dependencies.activityLogRepository,
           membership: widget.membership,
         ),
       ),
@@ -520,6 +556,8 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.chatRepository,
     this.chatAttachmentRepository,
     required this.settingsRepository,
+    this.noteRepository,
+    this.activityLogRepository,
     required this.membership,
   });
 
@@ -549,6 +587,8 @@ class _ModuleLandingPage extends StatelessWidget {
   final ChatRepository? chatRepository;
   final ChatAttachmentRepository? chatAttachmentRepository;
   final SettingsRepository? settingsRepository;
+  final NoteRepository? noteRepository;
+  final ActivityLogRepository? activityLogRepository;
   final StoreMembership membership;
 
   @override
@@ -725,6 +765,42 @@ class _ModuleLandingPage extends StatelessWidget {
           repository: chatRepository,
           attachmentRepository: chatAttachmentRepository,
           settingsRepository: settingsRepository,
+          user: user,
+          membership: membership,
+        );
+      }
+    }
+    if (module.id == 'notes') {
+      final noteRepository = this.noteRepository;
+      if (noteRepository != null) {
+        return NotesPage(
+          repository: noteRepository,
+          user: user,
+          membership: membership,
+        );
+      }
+    }
+    if (module.id == 'activity-log') {
+      final activityLogRepository = this.activityLogRepository;
+      if (activityLogRepository != null) {
+        return ActivityLogPage(
+          repository: activityLogRepository,
+          user: user,
+          membership: membership,
+        );
+      }
+    }
+    if (module.id == 'chatbot') {
+      final productRepository = this.productRepository;
+      final categoryRepository = this.categoryRepository;
+      final reportsRepository = this.reportsRepository;
+      if (productRepository != null &&
+          categoryRepository != null &&
+          reportsRepository != null) {
+        return ChatbotPage(
+          productRepository: productRepository,
+          categoryRepository: categoryRepository,
+          reportsRepository: reportsRepository,
           user: user,
           membership: membership,
         );

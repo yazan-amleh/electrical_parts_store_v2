@@ -32,9 +32,10 @@ This matrix keeps the V1 surface visible while V2 is rebuilt on a new data set. 
 | Report export and printing | Partial | Operational reports, sales analytics, repair requests and payment receipts, and category inventory support PDF/print/share; V1-specific formats still need final visual review |
 | Advanced product/category/customer sales analytics | Implemented | Sales analytics page with product, category, customer and payment-method aggregation, paginated reads and a visible safety-cap warning |
 | Chat and notifications | Implemented | Secure participant-scoped rooms, direct/group text, unread counters, attachment upload rules, device token registration and participant-only push notification function are wired; production deployment and device QA remain release gates |
+| Notes, activity log and store assistant | Implemented | User-scoped notes with archive/star/complete states, store-scoped read-only activity feed, and repository-backed Arabic answers for sales, inventory and categories |
 | Store settings and user administration UI | Complete | Store profile, members, roles and preferences (owner transfer/invitations remain separate) |
 | Full responsive UI parity review | Planned | Compare every V1 workflow on phone and desktop |
-| End-to-end emulator scenarios | Partial | Storage rules cover participant access, outsider denial and owner-only deletion; cheque settlement covers concurrent customer retries, idempotent replay and supplier bounce; sales, purchases, payments, repairs and year-end clean-data scenarios remain |
+| End-to-end emulator scenarios | Partial | Storage rules cover participant access, outsider denial and owner-only deletion; cheque settlement covers concurrent customer retries, idempotent replay and supplier bounce; notes ownership and activity-log read-only access are covered; sales, purchases, payments, repairs and year-end clean-data scenarios remain |
 
 ## Accounting source-of-truth policy
 

@@ -372,6 +372,34 @@ service cloud.firestore {
       }
 
 
+      match /notes/{noteId} {
+        allow read: if isMember(storeId) &&
+          resource.data.storeId == storeId &&
+          resource.data.userId == request.auth.uid;
+        allow create: if isMember(storeId) &&
+          request.resource.data.storeId == storeId &&
+          request.resource.data.userId == request.auth.uid &&
+          request.resource.data.title is string &&
+          request.resource.data.content is string &&
+          request.resource.data.type is string &&
+          request.resource.data.priority is string;
+        allow update: if isMember(storeId) &&
+          resource.data.storeId == storeId &&
+          resource.data.userId == request.auth.uid &&
+          request.resource.data.storeId == resource.data.storeId &&
+          request.resource.data.userId == resource.data.userId &&
+          request.resource.data.title is string &&
+          request.resource.data.content is string &&
+          request.resource.data.type is string &&
+          request.resource.data.priority is string;
+        allow delete: if false;
+      }
+
+      match /activity_logs/{activityId} {
+        allow read: if canReadStore(storeId);
+        allow create, update, delete: if false;
+      }
+
       match /chatRooms/{roomId} {
         allow read: if isChatParticipant(storeId, roomId);
         allow create: if canReadStore(storeId) &&

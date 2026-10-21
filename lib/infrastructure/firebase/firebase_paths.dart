@@ -38,6 +38,20 @@ abstract final class FirebasePaths {
     return chatRoom(firestore, storeId, roomId).collection('messages');
   }
 
+  static CollectionReference<Map<String, dynamic>> notes(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('notes');
+  }
+
+  static CollectionReference<Map<String, dynamic>> activityLogs(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('activity_logs');
+  }
+
   static CollectionReference<Map<String, dynamic>> accounts(
     FirebaseFirestore firestore,
     String storeId,
