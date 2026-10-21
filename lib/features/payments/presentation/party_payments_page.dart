@@ -152,7 +152,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<PartyPaymentMethod>(
-                      value: _paymentMethod,
+                      initialValue: _paymentMethod,
                       decoration: const InputDecoration(
                         labelText: 'طريقة الدفع',
                         prefixIcon: Icon(Icons.account_balance_wallet_outlined),
