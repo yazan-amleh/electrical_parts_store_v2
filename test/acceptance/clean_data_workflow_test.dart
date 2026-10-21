@@ -154,8 +154,9 @@ void main() {
     return (result as Success<Money>).value;
   }
 
-  test('runs a clean store workflow across sales, purchases, payments and repairs',
-      () async {
+  test(
+    'runs a clean store workflow across sales, purchases, payments and repairs',
+    () async {
     final repository = InMemoryAccountingRepository(
       accounts: DefaultChartOfAccounts.forStore(context.storeId),
     );
@@ -261,7 +262,10 @@ void main() {
       accounts: const RepairPostingAccounts(),
     );
 
-    expect(repairValue.finalCost, const Money(minorUnits: 4875, currency: 'ILS'));
+    expect(
+      repairValue.finalCost,
+      const Money(minorUnits: 4875, currency: 'ILS'),
+    );
     expect(repairPayload['storeId'], context.storeId);
     expect(
       (repairPayload['repair'] as Map<String, dynamic>)['id'],
@@ -280,8 +284,9 @@ void main() {
     expect(await balance(repository, '1110'), const Money(minorUnits: 3600));
   });
 
-  test('rejects a foreign-store sale before it can enter the clean store ledger',
-      () {
+  test(
+    'rejects a foreign-store sale before it can enter the clean store ledger',
+    () {
     final result = const SalePostingPlanner().prepare(
       context: context,
       sale: sale(storeId: 'store-b', id: 'foreign-sale-1'),
