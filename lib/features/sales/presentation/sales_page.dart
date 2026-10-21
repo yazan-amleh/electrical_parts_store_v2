@@ -10,6 +10,9 @@ import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../inventory/domain/entities/product.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
+import '../../parties/domain/entities/party.dart';
+import '../../parties/domain/enums/party_type.dart';
+import '../../parties/domain/repositories/party_repository.dart';
 import '../domain/entities/sale.dart';
 import '../domain/entities/sale_line.dart';
 import '../domain/entities/sale_posting_plan.dart';
@@ -20,6 +23,7 @@ class SalesPage extends StatefulWidget {
   const SalesPage({
     required this.repository,
     required this.productRepository,
+    this.partyRepository,
     required this.user,
     required this.membership,
     super.key,
@@ -27,6 +31,7 @@ class SalesPage extends StatefulWidget {
 
   final SaleRepository? repository;
   final ProductRepository? productRepository;
+  final PartyRepository? partyRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -50,10 +55,13 @@ class _SalesPageState extends State<SalesPage> {
   final Map<String, _SaleCartLine> _cart = <String, _SaleCartLine>{};
 
   List<Product> _products = const <Product>[];
+  List<Party> _customers = const <Party>[];
   SalePaymentMethod _paymentMethod = SalePaymentMethod.cash;
   bool _isLoading = true;
+  bool _isLoadingCustomers = false;
   bool _isPosting = false;
   String? _errorMessage;
+  String? _customerError;
 
   String get _currency {
     if (_cart.isEmpty) {
@@ -102,6 +110,7 @@ class _SalesPageState extends State<SalesPage> {
   void initState() {
     super.initState();
     _loadProducts();
+    _loadCustomers();
   }
 
   @override
@@ -394,15 +403,7 @@ class _SalesPageState extends State<SalesPage> {
           if (_paymentMethod == SalePaymentMethod.credit)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: TextField(
-                controller: _customerController,
-                enabled: !_isPosting,
-                decoration: const InputDecoration(
-                  labelText: 'معرّف العميل',
-                  hintText: 'أدخل customerId',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-              ),
+              child: _buildCustomerField(),
             ),
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -481,6 +482,131 @@ class _SalesPageState extends State<SalesPage> {
       setState(() {
         _isLoading = false;
         _products = result.value;
+      });
+    }
+  }
+
+  Widget _buildCustomerField() {
+    final repository = widget.partyRepository;
+    if (repository == null) {
+      return TextField(
+        controller: _customerController,
+        enabled: !_isPosting,
+        decoration: const InputDecoration(
+          labelText: 'معرّف العميل',
+          hintText: 'أدخل customerId',
+          prefixIcon: Icon(Icons.person_outline),
+        ),
+      );
+    }
+    if (_isLoadingCustomers) {
+      return const InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'العميل',
+          prefixIcon: Icon(Icons.person_outline),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              height: 16,
+              width: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 8),
+            Text('جارٍ تحميل العملاء...'),
+          ],
+        ),
+      );
+    }
+    if (_customerError != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _customerController,
+            enabled: !_isPosting,
+            decoration: const InputDecoration(
+              labelText: 'معرّف العميل',
+              hintText: 'أدخل customerId',
+              prefixIcon: Icon(Icons.person_outline),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'تعذر تحميل قائمة العملاء؛ يمكنك إدخال المعرّف يدوياً.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final selectedId = _customers.any(
+      (customer) => customer.id == _customerController.text,
+    )
+        ? _customerController.text
+        : null;
+    return DropdownButtonFormField<String>(
+      value: selectedId,
+      decoration: const InputDecoration(
+        labelText: 'العميل',
+        prefixIcon: Icon(Icons.person_outline),
+      ),
+      hint: const Text('اختر العميل'),
+      items: _customers
+          .map(
+            (customer) => DropdownMenuItem<String>(
+              value: customer.id,
+              child: Text(
+                customer.phone?.trim().isNotEmpty == true
+                    ? '${customer.name} • ${customer.phone}'
+                    : customer.name,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          )
+          .toList(growable: false),
+      onChanged: _isPosting
+          ? null
+          : (customerId) {
+              if (customerId != null) {
+                setState(() => _customerController.text = customerId);
+              }
+            },
+    );
+  }
+
+  Future<void> _loadCustomers() async {
+    final repository = widget.partyRepository;
+    if (repository == null) {
+      return;
+    }
+    setState(() {
+      _isLoadingCustomers = true;
+      _customerError = null;
+    });
+    final result = await repository.getParties(
+      context: StoreContext(
+        storeId: widget.membership.storeId,
+        userId: widget.user.id,
+      ),
+      type: PartyType.customer,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (result is FailureResult<List<Party>>) {
+      setState(() {
+        _isLoadingCustomers = false;
+        _customerError = result.failure.message;
+      });
+      return;
+    }
+    if (result is Success<List<Party>>) {
+      setState(() {
+        _isLoadingCustomers = false;
+        _customers = result.value;
       });
     }
   }
