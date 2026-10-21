@@ -224,7 +224,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DropdownButtonFormField<String>(
-        value: currentId ?? items.first.value,
+        initialValue: currentId ?? items.first.value,
         decoration: const InputDecoration(
           labelText: 'التصنيف',
           prefixIcon: Icon(Icons.category_outlined),
