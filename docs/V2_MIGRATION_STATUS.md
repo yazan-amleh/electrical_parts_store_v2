@@ -8,7 +8,7 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 - Branch: v2/port-v1-complete
 - Database policy: Firebase first, behind repository contracts
 - V1 production data: untouched
-- V2 production writes/deploys: Storage and Cloud Functions intentionally deferred; Firebase Auth, Firestore rules and direct reads are being verified
+- V2 production writes/deploys: Storage and Cloud Functions are enabled for production deployment; all V2 services target the independent project `electrical-store-v2-prod`
 
 ## Implemented V2 parity slices
 
@@ -38,6 +38,12 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 2. Review all PDF/print layouts on phone and desktop, including the V1-specific documents now implemented.
    Operational reports and sales analytics use paginated reads with a visible safety cap.
 3. Run the server-backed clean-data acceptance pass with representative store workflows; the domain-level fresh-store scenario is now covered.
-4. When billing is upgraded to Blaze, deploy Cloud Functions and Storage rules, then run the server-backed smoke test. Until then, do not use Storage uploads or callable posting flows against production.
+4. Run the server-backed clean-data acceptance pass after the production deployment, including callable posting flows and a participant-only Storage attachment flow.
+
+## Production deployment
+
+- The manual GitHub Actions workflow is `.github/workflows/firebase-deploy.yml` on `v2/port-v1-complete`.
+- It deploys Firestore rules/indexes, Storage rules, and all Cloud Functions to `electrical-store-v2-prod`.
+- It requires the repository secret `FIREBASE_TOKEN`; keep that token only in GitHub Actions secrets and never in source code or chat.
 
 No V1 customer or transaction migration is implied by this document. Migration, if desired after year-end, will be a separate audited project.
