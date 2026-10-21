@@ -44,7 +44,8 @@ import '../../repairs/domain/repositories/repair_repository.dart';
 import '../../repairs/domain/services/repair_document_builder.dart';
 import '../../repairs/presentation/repairs_page.dart';
 import '../../bookings/domain/repositories/booking_catalog_repository.dart';
-import '../../bookings/presentation/booking_catalog_page.dart';
+import '../../bookings/domain/repositories/booking_repository.dart';
+import '../../bookings/presentation/booking_page.dart';
 import '../../reports/domain/repositories/reports_repository.dart';
 import '../../reports/domain/services/report_document_builder.dart';
 import '../../reports/presentation/reports_page.dart';
@@ -413,6 +414,7 @@ class _AppShellPageState extends State<AppShellPage> {
           settingsRepository: widget.dependencies.settingsRepository,
           bookingCatalogRepository:
               widget.dependencies.bookingCatalogRepository,
+          bookingRepository: widget.dependencies.bookingRepository,
           membership: widget.membership,
         ),
       ),
@@ -533,6 +535,7 @@ class _ModuleLandingPage extends StatelessWidget {
     this.chatAttachmentRepository,
     required this.settingsRepository,
     this.bookingCatalogRepository,
+    this.bookingRepository,
     required this.membership,
   });
 
@@ -563,6 +566,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final ChatAttachmentRepository? chatAttachmentRepository;
   final SettingsRepository? settingsRepository;
   final BookingCatalogRepository? bookingCatalogRepository;
+  final BookingRepository? bookingRepository;
   final StoreMembership membership;
 
   @override
@@ -617,8 +621,9 @@ class _ModuleLandingPage extends StatelessWidget {
       );
     }
     if (module.id == 'booking-catalog') {
-      return BookingCatalogPage(
-        repository: bookingCatalogRepository,
+      return BookingPage(
+        repository: bookingRepository,
+        catalogRepository: bookingCatalogRepository,
         user: user,
         membership: membership,
       );
