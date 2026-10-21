@@ -161,7 +161,13 @@ class _SessionErrorPage extends StatelessWidget {
                 children: [
                   const Icon(Icons.error_outline, size: 48),
                   const SizedBox(height: 16),
-                  Text(message, textAlign: TextAlign.center),
+                  Text(
+                    'تعذر تحميل جلسة المتجر',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 10),
+                  SelectableText(message, textAlign: TextAlign.center),
                   const SizedBox(height: 20),
                   if (onRetry != null)
                     FilledButton.icon(
