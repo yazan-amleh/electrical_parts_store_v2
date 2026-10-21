@@ -586,9 +586,20 @@ class _SalesPageState extends State<SalesPage> {
       return;
     }
 
+    final nextQuantity =
+        current.quantity - const Quantity.fromMilliUnits(1000);
+    final nextGrossMinorUnits =
+        (product.sellingPrice.minorUnits * nextQuantity.milliUnits +
+                Quantity.scale ~/ 2) ~/
+            Quantity.scale;
+    final nextDiscount = current.discount.minorUnits > nextGrossMinorUnits
+        ? Money.zero(currency: product.sellingPrice.currency)
+        : current.discount;
+
     setState(() {
       _cart[product.id] = current.copyWith(
-        quantity: current.quantity - const Quantity.fromMilliUnits(1000),
+        quantity: nextQuantity,
+        discount: nextDiscount,
       );
     });
   }
