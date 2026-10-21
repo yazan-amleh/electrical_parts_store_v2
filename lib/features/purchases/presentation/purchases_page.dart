@@ -10,6 +10,9 @@ import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../inventory/domain/entities/product.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
+import '../../parties/domain/entities/party.dart';
+import '../../parties/domain/enums/party_type.dart';
+import '../../parties/domain/repositories/party_repository.dart';
 import '../domain/entities/purchase.dart';
 import '../domain/entities/purchase_line.dart';
 import '../domain/entities/purchase_posting_plan.dart';
@@ -20,6 +23,7 @@ class PurchasesPage extends StatefulWidget {
   const PurchasesPage({
     required this.repository,
     required this.productRepository,
+    this.partyRepository,
     required this.user,
     required this.membership,
     super.key,
@@ -27,6 +31,7 @@ class PurchasesPage extends StatefulWidget {
 
   final PurchaseRepository? repository;
   final ProductRepository? productRepository;
+  final PartyRepository? partyRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -48,10 +53,13 @@ class _PurchasesPageState extends State<PurchasesPage> {
   final Map<String, _PurchaseCartLine> _cart = <String, _PurchaseCartLine>{};
 
   List<Product> _products = const <Product>[];
+  List<Party> _suppliers = const <Party>[];
   PurchasePaymentMethod _paymentMethod = PurchasePaymentMethod.cash;
   bool _isLoading = true;
+  bool _isLoadingSuppliers = false;
   bool _isPosting = false;
   String? _errorMessage;
+  String? _supplierError;
 
   String get _currency {
     if (_cart.isEmpty) {
@@ -98,6 +106,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
   void initState() {
     super.initState();
     _loadProducts();
+    _loadSuppliers();
   }
 
   @override
@@ -374,15 +383,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
           if (_paymentMethod == PurchasePaymentMethod.credit)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: TextField(
-                controller: _supplierController,
-                enabled: !_isPosting,
-                decoration: const InputDecoration(
-                  labelText: 'معرّف المورد',
-                  hintText: 'أدخل supplierId',
-                  prefixIcon: Icon(Icons.local_shipping_outlined),
-                ),
-              ),
+              child: _buildSupplierField(),
             ),
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -461,6 +462,131 @@ class _PurchasesPageState extends State<PurchasesPage> {
       setState(() {
         _isLoading = false;
         _products = result.value;
+      });
+    }
+  }
+
+  Widget _buildSupplierField() {
+    final repository = widget.partyRepository;
+    if (repository == null) {
+      return TextField(
+        controller: _supplierController,
+        enabled: !_isPosting,
+        decoration: const InputDecoration(
+          labelText: 'معرّف المورد',
+          hintText: 'أدخل supplierId',
+          prefixIcon: Icon(Icons.local_shipping_outlined),
+        ),
+      );
+    }
+    if (_isLoadingSuppliers) {
+      return const InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'المورد',
+          prefixIcon: Icon(Icons.local_shipping_outlined),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              height: 16,
+              width: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 8),
+            Text('جارٍ تحميل الموردين...'),
+          ],
+        ),
+      );
+    }
+    if (_supplierError != null || _suppliers.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _supplierController,
+            enabled: !_isPosting,
+            decoration: const InputDecoration(
+              labelText: 'معرّف المورد',
+              hintText: 'أدخل supplierId',
+              prefixIcon: Icon(Icons.local_shipping_outlined),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              _supplierError ?? 'لا يوجد موردون بعد؛ أدخل المعرّف يدوياً.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final selectedId = _suppliers.any(
+      (supplier) => supplier.id == _supplierController.text,
+    )
+        ? _supplierController.text
+        : null;
+    return DropdownButtonFormField<String>(
+      value: selectedId,
+      decoration: const InputDecoration(
+        labelText: 'المورد',
+        prefixIcon: Icon(Icons.local_shipping_outlined),
+      ),
+      hint: const Text('اختر المورد'),
+      items: _suppliers
+          .map(
+            (supplier) => DropdownMenuItem<String>(
+              value: supplier.id,
+              child: Text(
+                supplier.phone?.trim().isNotEmpty == true
+                    ? '${supplier.name} • ${supplier.phone}'
+                    : supplier.name,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          )
+          .toList(growable: false),
+      onChanged: _isPosting
+          ? null
+          : (supplierId) {
+              if (supplierId != null) {
+                setState(() => _supplierController.text = supplierId);
+              }
+            },
+    );
+  }
+
+  Future<void> _loadSuppliers() async {
+    final repository = widget.partyRepository;
+    if (repository == null) {
+      return;
+    }
+    setState(() {
+      _isLoadingSuppliers = true;
+      _supplierError = null;
+    });
+    final result = await repository.getParties(
+      context: StoreContext(
+        storeId: widget.membership.storeId,
+        userId: widget.user.id,
+      ),
+      type: PartyType.supplier,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (result is FailureResult<List<Party>>) {
+      setState(() {
+        _isLoadingSuppliers = false;
+        _supplierError = result.failure.message;
+      });
+      return;
+    }
+    if (result is Success<List<Party>>) {
+      setState(() {
+        _isLoadingSuppliers = false;
+        _suppliers = result.value;
       });
     }
   }
