@@ -273,10 +273,9 @@ void main() {
     );
     expect(repairPaymentPayload['storeId'], context.storeId);
     expect(repairPaymentPayload['repairId'], repairValue.id);
-    expect(
-      (repairPaymentPayload['payment'] as Map<String, dynamic>)['amountMinorUnits'],
-      1000,
-    );
+    final repairPaymentData =
+        repairPaymentPayload['payment'] as Map<String, dynamic>;
+    expect(repairPaymentData['amountMinorUnits'], 1000);
     expect(deliveryPayload['storeId'], context.storeId);
     expect(deliveryPayload['repairId'], repairValue.id);
 
