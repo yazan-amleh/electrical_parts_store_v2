@@ -21,6 +21,13 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 - Repair workflow and accounting contract.
 - Cash/bank overview, canonical operational reports, sales analytics, CSV clipboard export, PDF/print/share adapters, secure chat with attachment storage, notification-token registration, and participant-only push delivery.
 - CI checks for JavaScript syntax, formatting, analyzer, Flutter tests, Firestore rules, and Storage rules with emulator coverage.
+- Storage emulator coverage for participant-only chat attachment read/write, outsider denial, path spoofing denial, and owner-only deletion.
+- Cheque settlement emulator coverage for concurrent customer-bounce retries, idempotent replay, balanced customer-side reversal, and supplier-bounce reversal.
+
+## Recently closed gates
+
+- Secure Storage attachment rules are verified in CI (16 passing).
+- settleCheque is verified in CI under concurrent retries and repeated replay (2 passing), including customer and supplier bounce accounting paths.
 
 ## Release gates still open
 
@@ -28,9 +35,8 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 2. Complete remaining UI parity and responsive review.
 3. Review all PDF/print layouts on phone and desktop, including the V1-specific documents now implemented.
    Operational reports and sales analytics use paginated reads with a visible safety cap.
-4. Expand emulator scenarios, including concurrent retries and cheque bounce.
-5. Run a clean-data acceptance pass with representative store workflows.
-6. Configure the separate V2 Firebase project, then deploy only after the
+4. Run a clean-data acceptance pass with representative store workflows.
+5. Configure the separate V2 Firebase project, then deploy only after the
    rules and functions review is approved.
 
 No V1 customer or transaction migration is implied by this document. Migration, if desired after year-end, will be a separate audited project.
