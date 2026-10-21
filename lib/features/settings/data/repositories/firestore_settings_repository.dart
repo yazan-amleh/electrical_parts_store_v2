@@ -125,6 +125,61 @@ class FirestoreSettingsRepository implements SettingsRepository {
   }
 
   @override
+  Future<Result<void>> addMember({
+    required StoreContext context,
+    required StoreMember member,
+  }) async {
+    if (member.userId.trim().isEmpty || member.userId.contains('/')) {
+      return const FailureResult<void>(
+        ValidationFailure('Member id is invalid.'),
+      );
+    }
+    if (member.role == StoreRole.owner) {
+      return const FailureResult<void>(
+        ValidationFailure('Owner membership cannot be assigned here.'),
+      );
+    }
+
+    try {
+      final memberRef = FirebasePaths.members(
+        _firestore,
+        context.storeId,
+      ).doc(member.userId.trim());
+      await _firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(memberRef);
+        if (snapshot.exists) {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'already-exists',
+            message: 'This user is already a member of the store.',
+          );
+        }
+        transaction.set(memberRef, {
+          'storeId': context.storeId,
+          'userId': member.userId.trim(),
+          'role': member.role.name,
+          'isActive': member.isActive,
+          if (member.displayName?.trim().isNotEmpty == true)
+            'displayName': member.displayName!.trim(),
+          if (member.email?.trim().isNotEmpty == true)
+            'email': member.email!.trim().toLowerCase(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      });
+      return const Success<void>(null);
+    } on FirebaseException catch (error) {
+      return FailureResult<void>(
+        _mapFirebaseFailure(error, 'Store member could not be added.'),
+      );
+    } catch (error) {
+      return FailureResult<void>(
+        InfrastructureFailure(error.toString()),
+      );
+    }
+  }
+
+  @override
   Future<Result<void>> updateMember({
     required StoreContext context,
     required StoreMember member,
