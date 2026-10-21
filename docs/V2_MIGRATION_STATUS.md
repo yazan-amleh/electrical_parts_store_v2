@@ -31,7 +31,7 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 - Secure Storage attachment rules are verified in CI (16 passing).
 - settleCheque is verified in CI under concurrent retries and repeated replay (2 passing), including customer and supplier bounce accounting paths.
 - Notes ownership and read-only activity-log rules are verified in the Firestore emulator; note domain behavior is covered by Flutter tests.
-- Authentication flow formatting and analyzer validation are covered by CI.
+- Authentication flow formatting and analyzer validation are covered by CI; the dropdown API is compatible with the Flutter SDK used locally.
 
 ## Release gates still open
 
