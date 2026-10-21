@@ -633,6 +633,7 @@ class _ModuleLandingPage extends StatelessWidget {
       return PurchasesPage(
         repository: purchaseRepository,
         productRepository: productRepository,
+        partyRepository: partyRepository,
         user: user,
         membership: membership,
       );
