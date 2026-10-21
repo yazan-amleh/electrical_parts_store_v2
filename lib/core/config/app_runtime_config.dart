@@ -20,7 +20,10 @@ class AppRuntimeConfig {
 
     return AppRuntimeConfig(
       environment: environment,
-      useFirebase: const bool.fromEnvironment('USE_FIREBASE', defaultValue: false),
+      useFirebase: const bool.fromEnvironment(
+        'USE_FIREBASE',
+        defaultValue: false,
+      ),
       firebaseProjectId: const String.fromEnvironment(
         'FIREBASE_PROJECT_ID',
         defaultValue: '',
