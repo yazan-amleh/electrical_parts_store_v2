@@ -81,7 +81,6 @@ class _NotesPageState extends State<NotesPage> {
             type: draft.type,
             priority: draft.priority,
             createdAt: now,
-            reminderAt: draft.reminderAt,
             tags: draft.tags,
           )
         : note.copyWith(
@@ -89,7 +88,6 @@ class _NotesPageState extends State<NotesPage> {
             content: draft.content,
             type: draft.type,
             priority: draft.priority,
-            reminderAt: draft.reminderAt,
             tags: draft.tags,
             updatedAt: now,
           );
@@ -336,7 +334,6 @@ class _NoteDraft {
     required this.type,
     required this.priority,
     required this.tags,
-    this.reminderAt,
   });
 
   final String title;
@@ -344,7 +341,6 @@ class _NoteDraft {
   final NoteType type;
   final NotePriority priority;
   final List<String> tags;
-  final DateTime? reminderAt;
 }
 
 class _NoteDialog extends StatefulWidget {
@@ -422,7 +418,7 @@ class _NoteDialogState extends State<_NoteDialog> {
               decoration: const InputDecoration(labelText: 'المحتوى'),
             ),
             DropdownButtonFormField<NoteType>(
-              value: _type,
+              initialValue: _type,
               decoration: const InputDecoration(labelText: 'النوع'),
               items: NoteType.values
                   .map(
@@ -439,7 +435,7 @@ class _NoteDialogState extends State<_NoteDialog> {
               },
             ),
             DropdownButtonFormField<NotePriority>(
-              value: _priority,
+              initialValue: _priority,
               decoration: const InputDecoration(labelText: 'الأولوية'),
               items: NotePriority.values
                   .map(
