@@ -44,6 +44,13 @@ jobs:
           --only firestore:rules,firestore:indexes,storage,functions
           --non-interactive
 
+      - name: Run production smoke test
+        env:
+          SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
+          SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+          SMOKE_TEST_STORE_ID: v2-dev-store
+        run: node tools/production_smoke_test.mjs
+
       - name: List deployed functions
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
