@@ -42,6 +42,12 @@ jobs:
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed lib test
 
+      - name: Show formatter diff
+        if: failure()
+        run: |
+          dart format lib/features/auth/presentation/register_page.dart lib/features/settings/presentation/settings_page.dart
+          git diff --no-color -- lib/features/auth/presentation/register_page.dart lib/features/settings/presentation/settings_page.dart
+
       - name: Analyze
         run: flutter analyze
 
