@@ -81,6 +81,12 @@ class AuthSessionController extends ChangeNotifier {
     }
   }
 
+  Future<Result<void>> sendPasswordResetEmail({
+    required String email,
+  }) {
+    return _authRepository.sendPasswordResetEmail(email: email);
+  }
+
   Future<void> signOut() async {
     _setState(status: AuthSessionStatus.signingIn, errorMessage: null);
     final result = await _authRepository.signOut();
