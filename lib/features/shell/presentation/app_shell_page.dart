@@ -274,8 +274,6 @@ class _AppShellPageState extends State<AppShellPage> {
           capabilities: ['بيانات', 'كشف حساب', 'دفع'],
           foundationReady: true,
         ),
-      ],
-    ),
         _Module(
           id: 'party-payments',
           label: 'القبض والدفع',
@@ -284,6 +282,8 @@ class _AppShellPageState extends State<AppShellPage> {
           capabilities: ['قبض من عميل', 'دفع لمورد', 'نقدي وبنكي وشيكات'],
           foundationReady: true,
         ),
+      ],
+    ),
     _NavigationSection(
       title: 'المتابعة والأدوات',
       modules: [
