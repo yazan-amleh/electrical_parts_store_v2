@@ -6,6 +6,7 @@ import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
 import '../domain/entities/booking.dart';
 import '../domain/entities/booking_customer.dart';
 import '../domain/entities/photography_option.dart';
@@ -179,9 +180,7 @@ class _BookingPageState extends State<BookingPage> {
                   child: Icon(_statusIcon(booking.status)),
                 ),
                 title: Text(
-                  booking.customerName +
-                      ' • ' +
-                      booking.photographyOptionName,
+                  booking.customerName + ' • ' + booking.photographyOptionName,
                 ),
                 subtitle: Text(
                   [
@@ -457,8 +456,7 @@ class _BookingEditorDialogState extends State<_BookingEditorDialog> {
                       child: Center(child: CircularProgressIndicator()),
                     );
                   }
-                  if (optionResult
-                      is FailureResult<List<PhotographyOption>>) {
+                  if (optionResult is FailureResult<List<PhotographyOption>>) {
                     return Text(optionResult.failure.message);
                   }
                   final options =
@@ -502,7 +500,7 @@ class _BookingEditorDialogState extends State<_BookingEditorDialog> {
       mainAxisSize: MainAxisSize.min,
       children: [
         DropdownButtonFormField<String>(
-          value: selectedCustomerId,
+          initialValue: selectedCustomerId,
           decoration: const InputDecoration(
             labelText: 'عميل الحجز',
             prefixIcon: Icon(Icons.person_outline),
@@ -512,7 +510,7 @@ class _BookingEditorDialogState extends State<_BookingEditorDialog> {
               DropdownMenuItem<String>(
                 value: customer.id,
                 child: Text(
-                  customer.name + ' • ' + customer.phoneNumber,
+                  '${customer.name} • ${customer.phoneNumber}',
                 ),
               ),
           ],
@@ -520,7 +518,7 @@ class _BookingEditorDialogState extends State<_BookingEditorDialog> {
         ),
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(
-          value: selectedOptionId,
+          initialValue: selectedOptionId,
           decoration: const InputDecoration(
             labelText: 'خيار التصوير',
             prefixIcon: Icon(Icons.camera_alt_outlined),
@@ -530,7 +528,7 @@ class _BookingEditorDialogState extends State<_BookingEditorDialog> {
               DropdownMenuItem<String>(
                 value: option.id,
                 child: Text(
-                  option.name + ' • ' + option.price.formatted,
+                  '${option.name} • ${option.price.formatted}',
                 ),
               ),
           ],
@@ -673,13 +671,13 @@ class _BookingEditorDialogState extends State<_BookingEditorDialog> {
       final initial = widget.initial;
       final currency = option.price.currency;
       final now = DateTime.now().toUtc();
-      final generatedId = 'booking-' + DateTime.now().microsecondsSinceEpoch.toString();
+      final generatedId = 'booking-${DateTime.now().microsecondsSinceEpoch}';
       Navigator.of(context).pop(
         Booking(
           id: initial?.id ?? generatedId,
           storeId: widget.storeContext.storeId,
-          idempotencyKey: initial?.idempotencyKey ??
-              IdempotencyKey(generatedId),
+          idempotencyKey:
+              initial?.idempotencyKey ?? IdempotencyKey(generatedId),
           customerId: customer.id,
           customerName: customer.name,
           customerPhone: customer.phoneNumber,
@@ -700,8 +698,7 @@ class _BookingEditorDialogState extends State<_BookingEditorDialog> {
           ),
           paidAmount: initial?.paidAmount ?? Money.zero(currency: currency),
           status: initial?.status ?? BookingStatus.pending,
-          paymentStatus:
-              initial?.paymentStatus ?? BookingPaymentStatus.unpaid,
+          paymentStatus: initial?.paymentStatus ?? BookingPaymentStatus.unpaid,
           payments: initial?.payments ?? const [],
           expenses: initial?.expenses ?? const [],
           totalDiscount: Money(
