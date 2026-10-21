@@ -109,7 +109,7 @@ class _NotesPageState extends State<NotesPage> {
     }
   }
 
-  Future<void> _updateNote(Note note, Note updated) async {
+  Future<void> _updateNote(Note updated) async {
     final result = await widget.repository.saveNote(
       context: _context,
       note: updated,
@@ -226,8 +226,9 @@ class _NotesPageState extends State<NotesPage> {
                   if (result is FailureResult<List<Note>>) {
                     return Center(child: Text(result.failure.message));
                   }
-                  final notes =
-                      result is Success<List<Note>> ? _visibleNotes(result.value) : const <Note>[];
+                  final notes = result is Success<List<Note>>
+                      ? _visibleNotes(result.value)
+                      : const <Note>[];
                   if (notes.isEmpty) {
                     return const Center(child: Text('لا توجد ملاحظات بعد.'));
                   }
@@ -284,7 +285,7 @@ class _NotesPageState extends State<NotesPage> {
                               if (value == 'edit') {
                                 _editNote(note);
                               } else {
-                                _updateNote(note, updated);
+                                _updateNote(updated);
                               }
                             },
                             itemBuilder: (context) => [
