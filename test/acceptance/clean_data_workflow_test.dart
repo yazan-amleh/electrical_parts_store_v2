@@ -155,8 +155,8 @@ void main() {
   }
 
   test(
-    'runs a clean store workflow across sales, purchases, payments and repairs',
-    () async {
+      'runs a clean store workflow across sales, purchases, payments and repairs',
+      () async {
     final repository = InMemoryAccountingRepository(
       accounts: DefaultChartOfAccounts.forStore(context.storeId),
     );
@@ -284,8 +284,8 @@ void main() {
   });
 
   test(
-    'rejects a foreign-store sale before it can enter the clean store ledger',
-    () {
+      'rejects a foreign-store sale before it can enter the clean store ledger',
+      () {
     final result = const SalePostingPlanner().prepare(
       context: context,
       sale: sale(storeId: 'store-b', id: 'foreign-sale-1'),
