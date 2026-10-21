@@ -5,12 +5,12 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 ## Current branch
 
 - Repository: electrical_parts_store_v2
-- Branch: v2/foundation
+- Branch: v2/port-v1-complete
 - Database policy: Firebase first, behind repository contracts
 - V1 production data: untouched
-- V2 production writes/deploys: not performed
+- V2 production writes/deploys: Storage and Cloud Functions intentionally deferred; Firebase Auth, Firestore rules and direct reads are being verified
 
-## Completed foundation
+## Implemented V2 parity slices
 
 - Layered Flutter modules with domain, data and presentation boundaries.
 - Firebase access isolated in repositories and Cloud Functions.
@@ -34,11 +34,10 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 
 ## Release gates still open
 
-1. Complete remaining UI parity and responsive review.
+1. Finish responsive and print visual review across representative V1 workflows.
 2. Review all PDF/print layouts on phone and desktop, including the V1-specific documents now implemented.
    Operational reports and sales analytics use paginated reads with a visible safety cap.
 3. Run the server-backed clean-data acceptance pass with representative store workflows; the domain-level fresh-store scenario is now covered.
-4. Configure the separate V2 Firebase project, then deploy only after the
-   rules and functions review is approved.
+4. When billing is upgraded to Blaze, deploy Cloud Functions and Storage rules, then run the server-backed smoke test. Until then, do not use Storage uploads or callable posting flows against production.
 
 No V1 customer or transaction migration is implied by this document. Migration, if desired after year-end, will be a separate audited project.
