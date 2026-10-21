@@ -16,6 +16,7 @@ import '../../activity_log/presentation/activity_log_page.dart';
 import '../../accounting/presentation/ledger_page.dart';
 import '../../accounting/presentation/manual_journal_page.dart';
 import '../../accounting/presentation/chart_of_accounts_page.dart';
+import '../../accounting/presentation/trial_balance_page.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../auth/domain/enums/store_role.dart';
@@ -179,6 +180,14 @@ class _AppShellPageState extends State<AppShellPage> {
           icon: Icons.account_tree_outlined,
           description: 'دليل حسابات واضح مع حسابات تحكم للعملاء والموردين.',
           capabilities: ['شجرة', 'حسابات رئيسية', 'حسابات فرعية'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'trial-balance',
+          label: 'ميزان المراجعة',
+          icon: Icons.table_chart_outlined,
+          description: 'عرض أرصدة المدين والدائن من القيود المرحّلة.',
+          capabilities: ['مدين', 'دائن', 'فحص التوازن'],
           foundationReady: true,
         ),
         _Module(
@@ -713,6 +722,13 @@ class _ModuleLandingPage extends StatelessWidget {
     }
     if (module.id == 'chart-of-accounts') {
       return ChartOfAccountsPage(
+        repository: accountingQueryRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'trial-balance') {
+      return TrialBalancePage(
         repository: accountingQueryRepository,
         user: user,
         membership: membership,
