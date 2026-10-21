@@ -540,6 +540,16 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _currencyController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+    super.dispose();
+  }
+}
 class _NewMemberDraft {
   const _NewMemberDraft({
     required this.userId,
@@ -693,15 +703,5 @@ String _settingsRoleLabel(StoreRole role) {
       return 'مستودع';
     case StoreRole.viewer:
       return 'مشاهد';
-  }
-}
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _currencyController.dispose();
-    _phoneController.dispose();
-    _addressController.dispose();
-    super.dispose();
   }
 }
