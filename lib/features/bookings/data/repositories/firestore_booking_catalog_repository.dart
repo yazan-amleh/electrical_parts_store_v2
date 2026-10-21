@@ -11,7 +11,7 @@ import '../../domain/repositories/booking_catalog_repository.dart';
 
 class FirestoreBookingCatalogRepository implements BookingCatalogRepository {
   FirestoreBookingCatalogRepository({required FirebaseFirestore firestore})
-    : _firestore = firestore;
+      : _firestore = firestore;
 
   final FirebaseFirestore _firestore;
 
@@ -55,12 +55,11 @@ class FirestoreBookingCatalogRepository implements BookingCatalogRepository {
         query = query.where('isActive', isEqualTo: true);
       }
       await for (final snapshot in query.snapshots()) {
-        final options =
-            snapshot.docs
-                .map(_optionFromSnapshot)
-                .where((option) => option.storeId == context.storeId)
-                .toList()
-              ..sort((left, right) => left.name.compareTo(right.name));
+        final options = snapshot.docs
+            .map(_optionFromSnapshot)
+            .where((option) => option.storeId == context.storeId)
+            .toList()
+          ..sort((left, right) => left.name.compareTo(right.name));
         yield Success<List<PhotographyOption>>(options);
       }
     } on FirebaseException catch (error) {

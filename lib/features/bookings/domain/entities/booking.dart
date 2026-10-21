@@ -29,11 +29,11 @@ class Booking {
     List<BookingExpense> expenses = const [],
     this.totalDiscount = const Money.zero(),
     DateTime? updatedAt,
-  }) : startAt = startAt.toUtc(),
-       createdAt = createdAt.toUtc(),
-       updatedAt = updatedAt?.toUtc(),
-       payments = List.unmodifiable(payments),
-       expenses = List.unmodifiable(expenses) {
+  })  : startAt = startAt.toUtc(),
+        createdAt = createdAt.toUtc(),
+        updatedAt = updatedAt?.toUtc(),
+        payments = List.unmodifiable(payments),
+        expenses = List.unmodifiable(expenses) {
     _ensureIdentifier(id, 'Booking id');
     _ensureIdentifier(storeId, 'Store id');
     _ensureIdentifier(customerId, 'Booking customer id');
@@ -103,9 +103,9 @@ class Booking {
   DateTime get endAt => startAt.add(Duration(minutes: durationMinutes));
 
   Money get totalExpenses => expenses.fold(
-    Money.zero(currency: totalPrice.currency),
-    (total, expense) => total + expense.amount,
-  );
+        Money.zero(currency: totalPrice.currency),
+        (total, expense) => total + expense.amount,
+      );
 
   Money get outstanding {
     final amount = totalPrice.minorUnits - paidAmount.minorUnits;

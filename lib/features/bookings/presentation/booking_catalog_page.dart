@@ -142,7 +142,8 @@ class _BookingCatalogPageState extends State<BookingCatalogPage> {
         if (result is FailureResult<List<BookingCustomer>>) {
           return _errorState(result.failure.message);
         }
-        final customers = (result as Success<List<BookingCustomer>>).value
+        final customers = (result as Success<List<BookingCustomer>>)
+            .value
             .where(_customerMatches)
             .toList(growable: false);
         if (customers.isEmpty) {
@@ -194,7 +195,8 @@ class _BookingCatalogPageState extends State<BookingCatalogPage> {
         if (result is FailureResult<List<PhotographyOption>>) {
           return _errorState(result.failure.message);
         }
-        final options = (result as Success<List<PhotographyOption>>).value
+        final options = (result as Success<List<PhotographyOption>>)
+            .value
             .where(_optionMatches)
             .toList(growable: false);
         if (options.isEmpty) {
@@ -312,9 +314,8 @@ class _BookingCatalogPageState extends State<BookingCatalogPage> {
   }
 
   void _showResult<T>(Result<T> result, String successMessage) {
-    final message = result is FailureResult<T>
-        ? result.failure.message
-        : successMessage;
+    final message =
+        result is FailureResult<T> ? result.failure.message : successMessage;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -442,8 +443,7 @@ class _BookingCustomerDialogState extends State<_BookingCustomerDialog> {
       final initial = widget.initial;
       Navigator.of(context).pop(
         BookingCustomer(
-          id:
-              initial?.id ??
+          id: initial?.id ??
               'booking-customer-${DateTime.now().microsecondsSinceEpoch}',
           storeId: widget.storeId,
           name: name,
@@ -587,8 +587,8 @@ class _PhotographyOptionDialogState extends State<_PhotographyOptionDialog> {
         keyboardType: maxLines > 1
             ? null
             : decimal
-            ? const TextInputType.numberWithOptions(decimal: true)
-            : TextInputType.number,
+                ? const TextInputType.numberWithOptions(decimal: true)
+                : TextInputType.number,
         decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
       ),
     );
@@ -610,8 +610,7 @@ class _PhotographyOptionDialogState extends State<_PhotographyOptionDialog> {
       final initial = widget.initial;
       Navigator.of(context).pop(
         PhotographyOption(
-          id:
-              initial?.id ??
+          id: initial?.id ??
               'photography-option-${DateTime.now().microsecondsSinceEpoch}',
           storeId: widget.storeId,
           name: name,
