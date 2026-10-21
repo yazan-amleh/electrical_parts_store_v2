@@ -42,9 +42,11 @@ class _SalesPageState extends State<SalesPage> {
   static const _inventoryAccountId = '1150';
   static const _salesAccountId = '4100';
   static const _costOfSalesAccountId = '5100';
+  static const _outputTaxAccountId = '2120';
 
   final _searchController = TextEditingController();
   final _customerController = TextEditingController();
+  final _taxController = TextEditingController();
   final Map<String, _SaleCartLine> _cart = <String, _SaleCartLine>{};
 
   List<Product> _products = const <Product>[];
@@ -65,6 +67,35 @@ class _SalesPageState extends State<SalesPage> {
       Money.zero(currency: _currency),
       (total, line) => total + line.subtotal,
     );
+  }
+
+  Money get _taxAmount {
+    return _parseMoney(_taxController.text, currency: _currency) ??
+        Money.zero(currency: _currency);
+  }
+
+  Money? _parseMoney(String raw, {required String currency}) {
+    final normalized = raw.trim().replaceAll(',', '.');
+    if (normalized.isEmpty) {
+      return Money.zero(currency: currency);
+    }
+    final parts = normalized.split('.');
+    if (parts.length > 2 ||
+        parts.first.isEmpty ||
+        int.tryParse(parts.first) == null ||
+        (parts.length == 2 &&
+            parts[1].isNotEmpty &&
+            (parts[1].length > 2 || int.tryParse(parts[1]) == null))) {
+      return null;
+    }
+    final major = int.parse(parts.first);
+    if (major < 0) {
+      return null;
+    }
+    final fraction = parts.length == 1 || parts[1].isEmpty
+        ? 0
+        : int.parse(parts[1].padRight(2, '0'));
+    return Money(minorUnits: major * 100 + fraction, currency: currency);
   }
 
   @override
@@ -270,7 +301,7 @@ class _SalesPageState extends State<SalesPage> {
                 label: Text(
                   _isPosting
                       ? 'جارٍ الترحيل...'
-                      : 'ترحيل البيع • ${_cartTotal.formatted}',
+                      : 'ترحيل البيع • ${(_cartTotal + _taxAmount).formatted}',
                 ),
               ),
             ),
@@ -357,13 +388,37 @@ class _SalesPageState extends State<SalesPage> {
                 ),
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: TextField(
+              controller: _taxController,
+              enabled: !_isPosting,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'ضريبة المخرجات',
+                hintText: '0.00',
+                prefixIcon: Icon(Icons.percent_outlined),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
           const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text('الإجمالي قبل الضريبة'),
+              const Spacer(),
+              Text(_cartTotal.formatted),
+            ],
+          ),
+          const SizedBox(height: 4),
           Row(
             children: [
               const Text('الإجمالي'),
               const Spacer(),
               Text(
-                _cartTotal.formatted,
+                (_cartTotal + _taxAmount).formatted,
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ],
@@ -460,6 +515,7 @@ class _SalesPageState extends State<SalesPage> {
     setState(() {
       _cart.clear();
       _customerController.clear();
+      _taxController.clear();
       _paymentMethod = SalePaymentMethod.cash;
     });
   }
@@ -478,6 +534,11 @@ class _SalesPageState extends State<SalesPage> {
     final customerId = _customerController.text.trim();
     if (_paymentMethod == SalePaymentMethod.credit && customerId.isEmpty) {
       _showMessage('البيع الآجل يحتاج معرّف العميل.');
+      return;
+    }
+    final tax = _parseMoney(_taxController.text, currency: _currency);
+    if (tax == null) {
+      _showMessage('قيمة الضريبة غير صحيحة. استخدم رقماً مثل 12.50.');
       return;
     }
 
@@ -507,7 +568,7 @@ class _SalesPageState extends State<SalesPage> {
             ),
           )
           .toList(growable: false),
-      tax: Money.zero(currency: _currency),
+      tax: tax,
       customerId:
           _paymentMethod == SalePaymentMethod.credit ? customerId : null,
       description: 'بيع من نقطة البيع',
@@ -559,6 +620,7 @@ class _SalesPageState extends State<SalesPage> {
       salesAccountId: _salesAccountId,
       inventoryAccountId: _inventoryAccountId,
       costOfSalesAccountId: _costOfSalesAccountId,
+      taxAccountId: _taxAmount.isZero ? null : _outputTaxAccountId,
     );
   }
 
@@ -575,6 +637,7 @@ class _SalesPageState extends State<SalesPage> {
   void dispose() {
     _searchController.dispose();
     _customerController.dispose();
+    _taxController.dispose();
     super.dispose();
   }
 }
