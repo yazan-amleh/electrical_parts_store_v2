@@ -21,4 +21,9 @@ abstract interface class SettingsRepository {
     required StoreContext context,
     required StoreMember member,
   });
+
+  Future<Result<void>> addMember({
+    required StoreContext context,
+    required StoreMember member,
+  });
 }
