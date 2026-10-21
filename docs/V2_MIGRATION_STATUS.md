@@ -23,15 +23,17 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 - CI checks for JavaScript syntax, formatting, analyzer, Flutter tests, Firestore rules, and Storage rules with emulator coverage.
 - Storage emulator coverage for participant-only chat attachment read/write, outsider denial, path spoofing denial, and owner-only deletion.
 - Cheque settlement emulator coverage for concurrent customer-bounce retries, idempotent replay, balanced customer-side reversal, and supplier-bounce reversal.
+- Booking catalog plus the first transactional booking lifecycle slice: create, edit and status transitions through V2 repository contracts.
 
 ## Recently closed gates
 
 - Secure Storage attachment rules are verified in CI (16 passing).
 - settleCheque is verified in CI under concurrent retries and repeated replay (2 passing), including customer and supplier bounce accounting paths.
+- Booking lifecycle is verified in CI under concurrent create retries, idempotent replay, edit and status transitions (1 passing).
 
 ## Release gates still open
 
-1. Port the salon/booking vertical slice and remaining V1 utility screens (notes, activity log and chatbot) behind V2 repository contracts.
+1. Complete the salon/booking vertical slice with accounting-backed payments and expenses, calendar, workers and work sessions; then finish the remaining V1 utility screens (notes, activity log and chatbot).
 2. Complete remaining UI parity and responsive review.
 3. Review all PDF/print layouts on phone and desktop, including the V1-specific documents now implemented.
    Operational reports and sales analytics use paginated reads with a visible safety cap.
