@@ -49,3 +49,4 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 - The post-deploy smoke test also requires `SMOKE_TEST_EMAIL` and `SMOKE_TEST_PASSWORD` Actions secrets for the existing V2 test user; it performs Auth, Firestore membership, and read-only accounting-audit checks.
 
 No V1 customer or transaction migration is implied by this document. Migration, if desired after year-end, will be a separate audited project.
+
