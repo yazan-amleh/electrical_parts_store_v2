@@ -1,6 +1,7 @@
 import '../../domain/entities/repair_payment.dart';
 import '../../domain/entities/repair_request.dart';
 import '../../domain/entities/repair_posting_accounts.dart';
+import '../../../payments/domain/enums/party_payment_method.dart';
 
 abstract final class RepairCommandMapper {
   static Map<String, dynamic> createRequest(RepairRequest repair) {
@@ -111,18 +112,17 @@ abstract final class RepairCommandMapper {
   }
 
   static String _settlementAccountId(
-    dynamic paymentMethod,
+    PartyPaymentMethod paymentMethod,
     RepairPostingAccounts accounts,
   ) {
-    switch (paymentMethod.name) {
-      case 'bank':
+    switch (paymentMethod) {
+      case PartyPaymentMethod.bank:
         return accounts.bankAccountId;
-      case 'card':
+      case PartyPaymentMethod.card:
         return accounts.cardReceivableAccountId;
-      case 'cheque':
+      case PartyPaymentMethod.cheque:
         return accounts.checksAccountId;
-      case 'cash':
-      default:
+      case PartyPaymentMethod.cash:
         return accounts.settlementAccountId;
     }
   }
