@@ -61,6 +61,30 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<Result<void>> sendPasswordResetEmail({
+    required String email,
+  }) async {
+    if (email.trim().isEmpty) {
+      return const FailureResult<void>(
+        ValidationFailure('Email is required.'),
+      );
+    }
+
+    try {
+      await _auth.sendPasswordResetEmail(email: email.trim());
+      return const Success<void>(null);
+    } on FirebaseAuthException catch (error) {
+      return FailureResult<void>(
+        AuthorizationFailure(_authMessage(error)),
+      );
+    } catch (error) {
+      return FailureResult<void>(
+        InfrastructureFailure(error.toString()),
+      );
+    }
+  }
+
+  @override
   Future<Result<void>> signOut() async {
     try {
       await _auth.signOut();
