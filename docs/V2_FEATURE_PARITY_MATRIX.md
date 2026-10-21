@@ -35,7 +35,7 @@ This matrix keeps the V1 surface visible while V2 is rebuilt on a new data set. 
 | Notes, activity log and store assistant | Implemented | User-scoped notes with archive/star/complete states, store-scoped read-only activity feed, and repository-backed Arabic answers for sales, inventory and categories |
 | Store settings and user administration UI | Complete | Store profile, members, roles and preferences (owner transfer/invitations remain separate) |
 | Full responsive UI parity review | Planned | Compare every V1 workflow on phone and desktop |
-| End-to-end emulator scenarios | Partial | Storage rules cover participant access, outsider denial and owner-only deletion; cheque settlement covers concurrent customer retries, idempotent replay and supplier bounce; notes ownership and activity-log read-only access are covered; sales, purchases, payments, repairs and year-end clean-data scenarios remain |
+| End-to-end emulator scenarios | Partial | Storage rules cover participant access, outsider denial and owner-only deletion; cheque settlement covers concurrent customer retries, idempotent replay and supplier bounce; notes ownership and activity-log read-only access are covered; a Flutter clean-data acceptance scenario now covers balanced sales, purchases, customer/supplier payments, repair command payloads, cross-store rejection and idempotent replay; server-backed sales, purchases, payments, repairs and year-end clean-data emulator scenarios remain |
 
 ## Accounting source-of-truth policy
 
