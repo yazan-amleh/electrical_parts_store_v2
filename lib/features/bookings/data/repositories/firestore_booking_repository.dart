@@ -148,7 +148,7 @@ class FirestoreBookingRepository implements BookingRepository {
           InfrastructureFailure('The booking service returned another id.'),
         );
       }
-      return getBooking(context: context, bookingId: booking.id);
+      return await getBooking(context: context, bookingId: booking.id);
     } on firebase_functions.FirebaseFunctionsException catch (error) {
       return FailureResult<Booking>(_mapFailure(error));
     } catch (error) {
@@ -177,7 +177,7 @@ class FirestoreBookingRepository implements BookingRepository {
           InfrastructureFailure('The booking update returned another id.'),
         );
       }
-      return getBooking(context: context, bookingId: booking.id);
+      return await getBooking(context: context, bookingId: booking.id);
     } on firebase_functions.FirebaseFunctionsException catch (error) {
       return FailureResult<Booking>(_mapFailure(error));
     } catch (error) {
@@ -208,7 +208,7 @@ class FirestoreBookingRepository implements BookingRepository {
           ),
         );
       }
-      return getBooking(context: context, bookingId: bookingId);
+      return await getBooking(context: context, bookingId: bookingId);
     } on firebase_functions.FirebaseFunctionsException catch (error) {
       return FailureResult<Booking>(_mapFailure(error));
     } catch (error) {
@@ -289,7 +289,7 @@ class FirestoreBookingRepository implements BookingRepository {
       id: snapshot.id,
       storeId: _string(data['storeId']),
       idempotencyKey: IdempotencyKey(
-        _string(data['idempotencyKey'], fallback: 'legacy-' + snapshot.id),
+        _string(data['idempotencyKey'], fallback: 'legacy-${snapshot.id}'),
       ),
       customerId: _string(data['customerId']),
       customerName: _string(data['customerName']),
