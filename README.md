@@ -32,5 +32,14 @@ The `v2/port-v1-complete` branch contains the V2 parity implementation: authenti
 
 1. Install Flutter and Dart.
 2. Run `flutter pub get`.
-3. Add the new V2 Firebase configuration files locally; never commit credentials.
+3. The committed web Firebase configuration points to the independent V2 project
+   `electrical-store-v2-prod`. The default launch profile uses Firebase and the
+   test store `v2-dev-store`:
+
+   ```powershell
+   flutter run -d chrome
+   ```
+
+   To use another store, pass `--dart-define=STORE_ID=...`. To run the UI
+   without Firebase, explicitly pass `--dart-define=USE_FIREBASE=false`.
 4. Run `flutter analyze` and `flutter test`.
