@@ -180,7 +180,7 @@ class _BookingPageState extends State<BookingPage> {
                   child: Icon(_statusIcon(booking.status)),
                 ),
                 title: Text(
-                  booking.customerName + ' • ' + booking.photographyOptionName,
+                  '${booking.customerName} • ${booking.photographyOptionName}',
                 ),
                 subtitle: Text(
                   [
