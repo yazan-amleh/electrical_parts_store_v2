@@ -73,7 +73,7 @@ class _AccountTransfersPageState extends State<AccountTransfersPage> {
                     ),
                     const SizedBox(height: 24),
                     DropdownButtonFormField<String>(
-                      initialValue: _fromAccountId,
+                      value: _fromAccountId,
                       decoration: const InputDecoration(
                         labelText: 'من حساب',
                         prefixIcon: Icon(Icons.call_made_outlined),
@@ -103,7 +103,7 @@ class _AccountTransfersPageState extends State<AccountTransfersPage> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      initialValue: _toAccountId,
+                      value: _toAccountId,
                       decoration: const InputDecoration(
                         labelText: 'إلى حساب',
                         prefixIcon: Icon(Icons.call_received_outlined),

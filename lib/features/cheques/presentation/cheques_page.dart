@@ -86,7 +86,7 @@ class _ChequesPageState extends State<ChequesPage> {
                 SizedBox(
                   width: 170,
                   child: DropdownButtonFormField<String>(
-                    initialValue: _filter,
+                    value: _filter,
                     decoration: const InputDecoration(
                       labelText: 'الحالة',
                       isDense: true,

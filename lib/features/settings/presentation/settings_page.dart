@@ -294,7 +294,7 @@ class _SettingsPageState extends State<SettingsPage> {
               SizedBox(
                 width: 180,
                 child: DropdownButtonFormField<StoreRole>(
-                  initialValue:
+                  value:
                       member.role == StoreRole.owner ? null : member.role,
                   decoration: const InputDecoration(labelText: 'الدور'),
                   items: member.role == StoreRole.owner
@@ -645,7 +645,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<StoreRole>(
-                  initialValue: _role,
+                  value: _role,
                   decoration: const InputDecoration(
                     labelText: 'الدور داخل المتجر',
                     prefixIcon: Icon(Icons.admin_panel_settings_outlined),

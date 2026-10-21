@@ -359,7 +359,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DropdownButtonFormField<PurchasePaymentMethod>(
-            initialValue: _paymentMethod,
+            value: _paymentMethod,
             decoration: const InputDecoration(
               labelText: 'طريقة الدفع',
               prefixIcon: Icon(Icons.payments_outlined),
@@ -528,7 +528,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
         ? _supplierController.text
         : null;
     return DropdownButtonFormField<String>(
-      initialValue: selectedId,
+      value: selectedId,
       decoration: const InputDecoration(
         labelText: 'المورد',
         prefixIcon: Icon(Icons.local_shipping_outlined),

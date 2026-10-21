@@ -938,7 +938,7 @@ class _CreateOfferOrderDialogState extends State<_CreateOfferOrderDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           DropdownButtonFormField<Offer>(
-            initialValue: _offer,
+            value: _offer,
             decoration: const InputDecoration(labelText: 'العرض'),
             items: [
               for (final offer in widget.offers)
@@ -954,7 +954,7 @@ class _CreateOfferOrderDialogState extends State<_CreateOfferOrderDialog> {
             },
           ),
           DropdownButtonFormField<Party>(
-            initialValue: _customer,
+            value: _customer,
             decoration: const InputDecoration(labelText: 'العميل'),
             items: [
               for (final customer in widget.customers)

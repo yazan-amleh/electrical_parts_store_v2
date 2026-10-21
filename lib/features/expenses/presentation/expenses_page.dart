@@ -90,7 +90,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
                       ),
                       const SizedBox(height: 24),
                       DropdownButtonFormField<String>(
-                        initialValue: _expenseAccountId,
+                        value: _expenseAccountId,
                         decoration: const InputDecoration(
                           labelText: 'حساب المصروف',
                           prefixIcon: Icon(Icons.account_tree_outlined),
@@ -141,7 +141,7 @@ class _ExpensesPageState extends State<ExpensesPage> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<ExpensePaymentMethod>(
-                        initialValue: _paymentMethod,
+                        value: _paymentMethod,
                         decoration: const InputDecoration(
                           labelText: 'طريقة الدفع',
                           prefixIcon: Icon(

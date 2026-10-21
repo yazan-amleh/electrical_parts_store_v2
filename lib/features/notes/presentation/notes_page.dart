@@ -418,7 +418,7 @@ class _NoteDialogState extends State<_NoteDialog> {
               decoration: const InputDecoration(labelText: 'المحتوى'),
             ),
             DropdownButtonFormField<NoteType>(
-              initialValue: _type,
+              value: _type,
               decoration: const InputDecoration(labelText: 'النوع'),
               items: NoteType.values
                   .map(
@@ -435,7 +435,7 @@ class _NoteDialogState extends State<_NoteDialog> {
               },
             ),
             DropdownButtonFormField<NotePriority>(
-              initialValue: _priority,
+              value: _priority,
               decoration: const InputDecoration(labelText: 'الأولوية'),
               items: NotePriority.values
                   .map(
