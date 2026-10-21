@@ -34,6 +34,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController _addressController;
   bool _isLoading = true;
   bool _isSavingProfile = false;
+  bool _isAddingMember = false;
   String? _errorMessage;
 
   bool get _canManage => widget.membership.role.canManageStore;
@@ -214,6 +215,25 @@ class _SettingsPageState extends State<SettingsPage> {
               'يمكن للمالك أو المدير تعديل دور العضو وتفعيله. لا يمكن نقل '
               'ملكية المتجر من هذه الشاشة.',
             ),
+            if (_canManage) ...[
+              const SizedBox(height: 10),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: OutlinedButton.icon(
+                  onPressed: _isAddingMember ? null : _addMember,
+                  icon: _isAddingMember
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.person_add_alt_1_outlined),
+                  label: Text(
+                    _isAddingMember ? 'جارٍ الإضافة...' : 'إضافة مستخدم موجود',
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             if (_members.isEmpty)
               const Text('لا يوجد أعضاء مسجلون.')
@@ -427,6 +447,43 @@ class _SettingsPageState extends State<SettingsPage> {
     _showMessage('تم حفظ بيانات المتجر.');
   }
 
+  Future<void> _addMember() async {
+    final repository = widget.repository;
+    if (repository == null || !_canManage) {
+      return;
+    }
+
+    final draft = await showDialog<_NewMemberDraft>(
+      context: context,
+      builder: (context) => const _AddMemberDialog(),
+    );
+    if (draft == null || !mounted) {
+      return;
+    }
+
+    setState(() => _isAddingMember = true);
+    final result = await repository.addMember(
+      context: _context,
+      member: StoreMember(
+        userId: draft.userId,
+        role: draft.role,
+        isActive: true,
+        displayName: draft.displayName,
+        email: draft.email,
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isAddingMember = false);
+    if (result is FailureResult<void>) {
+      _showMessage(result.failure.message);
+      return;
+    }
+    _showMessage('تمت إضافة المستخدم إلى المتجر.');
+    await _load();
+  }
+
   Future<void> _saveMember(StoreMember member) async {
     final repository = widget.repository;
     if (repository == null) {
@@ -482,6 +539,162 @@ class _SettingsPageState extends State<SettingsPage> {
         return 'مشاهد';
     }
   }
+
+class _NewMemberDraft {
+  const _NewMemberDraft({
+    required this.userId,
+    required this.role,
+    this.displayName,
+    this.email,
+  });
+
+  final String userId;
+  final StoreRole role;
+  final String? displayName;
+  final String? email;
+}
+
+class _AddMemberDialog extends StatefulWidget {
+  const _AddMemberDialog();
+
+  @override
+  State<_AddMemberDialog> createState() => _AddMemberDialogState();
+}
+
+class _AddMemberDialogState extends State<_AddMemberDialog> {
+  final _userIdController = TextEditingController();
+  final _displayNameController = TextEditingController();
+  final _emailController = TextEditingController();
+  StoreRole _role = StoreRole.viewer;
+
+  @override
+  void dispose() {
+    _userIdController.dispose();
+    _displayNameController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final userId = _userIdController.text.trim();
+    if (userId.isEmpty || userId.contains('/')) {
+      return;
+    }
+    Navigator.of(context).pop(
+      _NewMemberDraft(
+        userId: userId,
+        role: _role,
+        displayName: _displayNameController.text.trim().isEmpty
+            ? null
+            : _displayNameController.text.trim(),
+        email: _emailController.text.trim().isEmpty
+            ? null
+            : _emailController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        title: const Text('إضافة مستخدم للمتجر'),
+        content: SingleChildScrollView(
+          child: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _userIdController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'UID المستخدم في Firebase',
+                    hintText: 'مثال: FqDRlUu2gLdPuawD5A9pVd57DI23',
+                    prefixIcon: Icon(Icons.fingerprint_outlined),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'البريد الإلكتروني (اختياري)',
+                    prefixIcon: Icon(Icons.email_outlined),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _displayNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'اسم العرض (اختياري)',
+                    prefixIcon: Icon(Icons.badge_outlined),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<StoreRole>(
+                  value: _role,
+                  decoration: const InputDecoration(
+                    labelText: 'الدور داخل المتجر',
+                    prefixIcon: Icon(Icons.admin_panel_settings_outlined),
+                  ),
+                  items: StoreRole.values
+                      .where((role) => role != StoreRole.owner)
+                      .map(
+                        (role) => DropdownMenuItem<StoreRole>(
+                          value: role,
+                          child: Text(_settingsRoleLabel(role)),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (role) {
+                    if (role != null) {
+                      setState(() => _role = role);
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'يجب أن يكون المستخدم موجوداً مسبقاً في Firebase Authentication. '
+                  'هذه الشاشة تربطه بالمتجر ولا تنشئ حساب تسجيل دخول جديداً.',
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton.icon(
+            onPressed: _submit,
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+            label: const Text('إضافة'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _settingsRoleLabel(StoreRole role) {
+  switch (role) {
+    case StoreRole.owner:
+      return 'مالك';
+    case StoreRole.admin:
+      return 'مدير';
+    case StoreRole.accountant:
+      return 'محاسب';
+    case StoreRole.sales:
+      return 'مبيعات';
+    case StoreRole.warehouse:
+      return 'مستودع';
+    case StoreRole.viewer:
+      return 'مشاهد';
+  }
+}
 
   @override
   void dispose() {
