@@ -64,7 +64,9 @@ async function main() {
     `stores/${storeId}/members/${authResponse.localId}`,
     idToken,
   );
-  if (!store.name || member.fields?.isActive?.booleanValue !== true) {
+  const storeName = store.fields?.name?.stringValue ||
+    store.fields?.storeId?.stringValue;
+  if (!storeName || member.fields?.isActive?.booleanValue !== true) {
     throw new Error('Store or active membership smoke check failed.');
   }
 
