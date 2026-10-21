@@ -712,8 +712,7 @@ class _SalesPageState extends State<SalesPage> {
       return;
     }
 
-    final nextQuantity =
-        current.quantity - const Quantity.fromMilliUnits(1000);
+    final nextQuantity = current.quantity - const Quantity.fromMilliUnits(1000);
     final nextGrossMinorUnits =
         (product.sellingPrice.minorUnits * nextQuantity.milliUnits +
                 Quantity.scale ~/ 2) ~/
