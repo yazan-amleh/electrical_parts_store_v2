@@ -39,6 +39,7 @@ import '../../purchase_orders/presentation/purchase_orders_page.dart';
 import '../../expenses/domain/repositories/expense_repository.dart';
 import '../../expenses/presentation/expenses_page.dart';
 import '../../payments/domain/repositories/party_payment_repository.dart';
+import '../../payments/presentation/party_payments_page.dart';
 import '../../cheques/domain/repositories/cheque_repository.dart';
 import '../../cheques/presentation/cheques_page.dart';
 import '../../transfers/domain/repositories/account_transfer_repository.dart';
@@ -275,6 +276,14 @@ class _AppShellPageState extends State<AppShellPage> {
         ),
       ],
     ),
+        _Module(
+          id: 'party-payments',
+          label: 'القبض والدفع',
+          icon: Icons.payments_outlined,
+          description: 'تسجيل قبض العملاء ودفع الموردين ضمن قيد متوازن.',
+          capabilities: ['قبض من عميل', 'دفع لمورد', 'نقدي وبنكي وشيكات'],
+          foundationReady: true,
+        ),
     _NavigationSection(
       title: 'المتابعة والأدوات',
       modules: [
@@ -657,6 +666,13 @@ class _ModuleLandingPage extends StatelessWidget {
         documentBuilder: repairDocumentBuilder,
         productRepository: productRepository,
         partyRepository: partyRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'party-payments') {
+      return PartyPaymentsPage(
+        repository: partyPaymentRepository,
         user: user,
         membership: membership,
       );
