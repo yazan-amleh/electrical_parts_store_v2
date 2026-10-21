@@ -26,7 +26,7 @@ V2 is a clean rebuild of the electrical-parts and accounting platform.
 
 ## Current branch
 
-The `v2/foundation` branch contains the initial project and accounting-domain foundation. Feature parity with V1 will be ported module by module and verified with acceptance tests.
+The `v2/port-v1-complete` branch contains the V2 parity implementation: authentication, store membership, inventory, sales, purchases, parties, accounting, offers, repairs, reports, notes, activity log, chat, settings and Firebase access. V1 remains untouched.
 
 ## Local setup
 
