@@ -41,9 +41,12 @@ class AuthSessionController extends ChangeNotifier {
   AuthenticatedUser? get user => _user;
   StoreMembership? get membership => _membership;
   String? get errorMessage => _errorMessage;
+  String get storeId => _storeId;
   bool get isBusy =>
       _status == AuthSessionStatus.signingIn ||
       _status == AuthSessionStatus.loadingMembership;
+
+  int _sessionRequestId = 0;
 
   void start() {
     if (_authSubscription != null) {
@@ -81,6 +84,29 @@ class AuthSessionController extends ChangeNotifier {
     }
   }
 
+  Future<void> register({
+    required String email,
+    required String password,
+    String? displayName,
+  }) async {
+    _setState(status: AuthSessionStatus.signingIn, errorMessage: null);
+
+    final result = await _authRepository.createUserWithEmailPassword(
+      email: email,
+      password: password,
+      displayName: displayName,
+    );
+
+    if (result is FailureResult<AuthenticatedUser>) {
+      _setFailure(result.failure.message);
+      return;
+    }
+
+    if (result is Success<AuthenticatedUser>) {
+      await _handleUser(result.value);
+    }
+  }
+
   Future<Result<void>> sendPasswordResetEmail({
     required String email,
   }) {
@@ -88,6 +114,7 @@ class AuthSessionController extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    _sessionRequestId += 1;
     _setState(status: AuthSessionStatus.signingIn, errorMessage: null);
     final result = await _authRepository.signOut();
     if (result is FailureResult<void>) {
@@ -110,6 +137,7 @@ class AuthSessionController extends ChangeNotifier {
   }
 
   Future<void> _handleUser(AuthenticatedUser? user) async {
+    final requestId = ++_sessionRequestId;
     _user = user;
     _membership = null;
     _errorMessage = null;
@@ -119,7 +147,7 @@ class AuthSessionController extends ChangeNotifier {
       return;
     }
 
-    if (_storeId.isEmpty) {
+    if (_storeId.isEmpty || _storeId.contains('/')) {
       _setState(status: AuthSessionStatus.storeNotConfigured);
       return;
     }
@@ -128,6 +156,10 @@ class AuthSessionController extends ChangeNotifier {
     final result = await _membershipRepository.getMembership(
       context: StoreContext(storeId: _storeId, userId: user.id),
     );
+
+    if (requestId != _sessionRequestId) {
+      return;
+    }
 
     if (result is FailureResult<StoreMembership>) {
       _setFailure(result.failure.message);

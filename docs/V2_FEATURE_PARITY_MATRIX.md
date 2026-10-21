@@ -6,7 +6,7 @@ This matrix keeps the V1 surface visible while V2 is rebuilt on a new data set. 
 
 | V1 area | V2 status | V2 entry point |
 | --- | --- | --- |
-| Authentication and store membership | Complete | features/auth |
+| Authentication and store membership | Complete | features/auth (sign-in, registration, password reset, membership session) |
 | Dashboard and low-stock summary | Complete | features/dashboard |
 | Products, services, units, prices and categories | Complete | features/inventory, features/categories |
 | Inventory movements and atomic stock effects | Complete | features/inventory |

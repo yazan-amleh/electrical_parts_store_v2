@@ -42,4 +42,8 @@ The `v2/port-v1-complete` branch contains the V2 parity implementation: authenti
 
    To use another store, pass `--dart-define=STORE_ID=...`. To run the UI
    without Firebase, explicitly pass `--dart-define=USE_FIREBASE=false`.
+   The login screen supports email/password sign-in, new Firebase account
+   registration, and password reset. A newly registered account still needs an
+   active membership under `stores/{storeId}/members/{Firebase UID}` before it
+   can access store data.
 4. Run `flutter analyze` and `flutter test`.

@@ -42,6 +42,30 @@ void main() {
     await auth.dispose();
   });
 
+  test('registration also loads membership before exposing a ready session',
+      () async {
+    final auth = _FakeAuthRepository();
+    final memberships = _FakeMembershipRepository();
+    final controller = AuthSessionController(
+      authRepository: auth,
+      membershipRepository: memberships,
+      storeId: 'store-1',
+    )..start();
+
+    await controller.register(
+      email: user.email,
+      password: 'password',
+      displayName: 'Test User',
+    );
+
+    expect(controller.status, AuthSessionStatus.ready);
+    expect(controller.user, user);
+    expect(controller.membership, membership);
+
+    controller.dispose();
+    await auth.dispose();
+  });
+
   test('does not claim ready when the store is not configured', () async {
     final auth = _FakeAuthRepository();
     final controller = AuthSessionController(
@@ -95,6 +119,19 @@ class _FakeAuthRepository implements AuthRepository {
   Future<Result<AuthenticatedUser>> signInWithEmailPassword({
     required String email,
     required String password,
+  }) async {
+    _currentUser = const AuthenticatedUser(
+      id: 'user-1',
+      email: 'user@example.com',
+    );
+    return Success<AuthenticatedUser>(_currentUser!);
+  }
+
+  @override
+  Future<Result<AuthenticatedUser>> createUserWithEmailPassword({
+    required String email,
+    required String password,
+    String? displayName,
   }) async {
     _currentUser = const AuthenticatedUser(
       id: 'user-1',

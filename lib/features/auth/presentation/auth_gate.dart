@@ -4,6 +4,7 @@ import '../../../app/app_dependencies.dart';
 import '../../../core/config/app_runtime_config.dart';
 import '../../shell/presentation/app_shell_page.dart';
 import '../application/auth_session_controller.dart';
+import '../domain/entities/authenticated_user.dart';
 import 'login_page.dart';
 
 class AuthGate extends StatelessWidget {
@@ -31,8 +32,12 @@ class AuthGate extends StatelessWidget {
             final user = controller.user;
             final membership = controller.membership;
             if (user == null || membership == null) {
-              return const _SessionErrorPage(
+              return _SessionErrorPage(
                 message: 'تعذر بناء جلسة المتجر. حاول مرة أخرى.',
+                storeId: controller.storeId,
+                user: user,
+                onRetry: controller.reloadMembership,
+                onSignOut: controller.signOut,
               );
             }
             return AppShellPage(
@@ -46,6 +51,8 @@ class AuthGate extends StatelessWidget {
           case AuthSessionStatus.failure:
             return _SessionErrorPage(
               message: controller.errorMessage ?? 'تعذر تحميل جلسة المتجر.',
+              storeId: controller.storeId,
+              user: controller.user,
               onRetry: controller.reloadMembership,
               onSignOut: controller.signOut,
             );
@@ -99,6 +106,11 @@ class FirebaseSetupPage extends StatelessWidget {
                         'المشروع: ${runtime.firebaseProjectId}',
                         textAlign: TextAlign.center,
                       ),
+                    if (runtime.storeId.isNotEmpty)
+                      Text(
+                        'المتجر: ${runtime.storeId}',
+                        textAlign: TextAlign.center,
+                      ),
                   ],
                 ),
               ),
@@ -138,11 +150,15 @@ class _LoadingPage extends StatelessWidget {
 class _SessionErrorPage extends StatelessWidget {
   const _SessionErrorPage({
     required this.message,
+    this.storeId,
+    this.user,
     this.onRetry,
     this.onSignOut,
   });
 
   final String message;
+  final String? storeId;
+  final AuthenticatedUser? user;
   final Future<void> Function()? onRetry;
   final Future<void> Function()? onSignOut;
 
@@ -168,6 +184,32 @@ class _SessionErrorPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   SelectableText(message, textAlign: TextAlign.center),
+                  if (user != null || (storeId?.isNotEmpty ?? false)) ...[
+                    const SizedBox(height: 14),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    if (user?.email.isNotEmpty == true)
+                      SelectableText(
+                        'الحساب: ${user!.email}',
+                        textAlign: TextAlign.center,
+                      ),
+                    if (user?.id.isNotEmpty == true)
+                      SelectableText(
+                        'Firebase UID: ${user!.id}',
+                        textAlign: TextAlign.center,
+                      ),
+                    if (storeId?.isNotEmpty == true)
+                      SelectableText(
+                        'Store ID: $storeId',
+                        textAlign: TextAlign.center,
+                      ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'إذا كان الحساب جديدًا، يجب أن يضيفه مالك المتجر كعضو '
+                      'نشط، ثم اضغط «إعادة المحاولة».',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   if (onRetry != null)
                     FilledButton.icon(

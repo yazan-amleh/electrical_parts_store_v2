@@ -18,6 +18,15 @@ class FirestoreStoreMembershipRepository implements StoreMembershipRepository {
   Future<Result<StoreMembership>> getMembership({
     required StoreContext context,
   }) async {
+    if (context.storeId.trim().isEmpty ||
+        context.storeId.contains('/') ||
+        context.userId.trim().isEmpty ||
+        context.userId.contains('/')) {
+      return const FailureResult<StoreMembership>(
+        ValidationFailure('Store or user identity is not configured.'),
+      );
+    }
+
     try {
       final snapshot = await FirebasePaths.members(
         _firestore,
@@ -25,8 +34,29 @@ class FirestoreStoreMembershipRepository implements StoreMembershipRepository {
       ).doc(context.userId).get();
 
       if (!snapshot.exists) {
+        return FailureResult<StoreMembership>(
+          AuthorizationFailure(
+            'الحساب ${context.userId} غير مضاف إلى المتجر ${context.storeId}. '
+            'أضف عضوية نشطة في stores/${context.storeId}/members/${context.userId}.',
+          ),
+        );
+      }
+
+      final data = snapshot.data() ?? const <String, dynamic>{};
+      final storedStoreId = data['storeId'];
+      if (storedStoreId is String &&
+          storedStoreId.trim().isNotEmpty &&
+          storedStoreId.trim() != context.storeId) {
         return const FailureResult<StoreMembership>(
-          AuthorizationFailure('The user is not a member of this store.'),
+          AuthorizationFailure('عضوية المستخدم مرتبطة بمتجر مختلف.'),
+        );
+      }
+      final storedUserId = data['userId'];
+      if (storedUserId is String &&
+          storedUserId.trim().isNotEmpty &&
+          storedUserId.trim() != context.userId) {
+        return const FailureResult<StoreMembership>(
+          AuthorizationFailure('معرّف المستخدم داخل العضوية غير صحيح.'),
         );
       }
 
@@ -37,19 +67,40 @@ class FirestoreStoreMembershipRepository implements StoreMembershipRepository {
       );
       if (!membership.canAccessStore) {
         return const FailureResult<StoreMembership>(
-          AuthorizationFailure('The user membership is inactive.'),
+          AuthorizationFailure('عضوية المستخدم غير مفعّلة في هذا المتجر.'),
         );
       }
 
       return Success<StoreMembership>(membership);
     } on FirebaseException catch (error) {
       return FailureResult<StoreMembership>(
-        InfrastructureFailure(error.message ?? error.code),
+        _mapFirebaseFailure(error),
       );
     } catch (error) {
       return FailureResult<StoreMembership>(
         InfrastructureFailure(error.toString()),
       );
+    }
+  }
+
+  Failure _mapFirebaseFailure(FirebaseException error) {
+    switch (error.code) {
+      case 'permission-denied':
+        return const AuthorizationFailure(
+          'تعذر قراءة عضوية المتجر. تأكد أن العضوية نشطة وأن قواعد Firestore '
+          'منشورة على مشروع Firebase الصحيح.',
+        );
+      case 'unauthenticated':
+        return const AuthorizationFailure(
+          'انتهت جلسة Firebase. سجّل الدخول من جديد.',
+        );
+      case 'unavailable':
+      case 'deadline-exceeded':
+        return const InfrastructureFailure(
+          'تعذر الاتصال بقاعدة بيانات المتجر. تحقق من الإنترنت وحاول مرة أخرى.',
+        );
+      default:
+        return InfrastructureFailure(error.message ?? error.code);
     }
   }
 }

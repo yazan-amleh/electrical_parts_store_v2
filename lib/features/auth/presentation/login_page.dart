@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../application/auth_session_controller.dart';
+import 'register_page.dart';
 import 'reset_password_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -155,8 +156,25 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ),
                           const SizedBox(height: 16),
+                          OutlinedButton.icon(
+                            onPressed: controller.isBusy
+                                ? null
+                                : () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => RegisterPage(
+                                          controller: controller,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                            icon: const Icon(Icons.person_add_alt_1),
+                            label: const Text('إنشاء حساب جديد'),
+                          ),
+                          const SizedBox(height: 10),
                           Text(
-                            'إنشاء المستخدمين وإدارة الصلاحيات تتم من إدارة المتجر.',
+                            'إنشاء الحساب لا يمنح صلاحية متجر تلقائيًا؛ يجب أن '
+                            'تتم إضافتك كعضو نشط من مالك المتجر.',
                             textAlign: TextAlign.center,
                             style: Theme.of(context).textTheme.bodySmall,
                           ),

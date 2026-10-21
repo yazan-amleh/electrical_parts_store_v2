@@ -61,6 +61,57 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<Result<AuthenticatedUser>> createUserWithEmailPassword({
+    required String email,
+    required String password,
+    String? displayName,
+  }) async {
+    final normalizedEmail = email.trim();
+    if (normalizedEmail.isEmpty || password.isEmpty) {
+      return const FailureResult<AuthenticatedUser>(
+        ValidationFailure('Email and password are required.'),
+      );
+    }
+    if (password.length < 6) {
+      return const FailureResult<AuthenticatedUser>(
+        ValidationFailure('Password must be at least 6 characters.'),
+      );
+    }
+
+    try {
+      final credential = await _auth.createUserWithEmailAndPassword(
+        email: normalizedEmail,
+        password: password,
+      );
+      var user = credential.user;
+      if (user == null) {
+        return const FailureResult<AuthenticatedUser>(
+          AuthorizationFailure(
+            'Firebase did not return an authenticated user.',
+          ),
+        );
+      }
+
+      final normalizedDisplayName = displayName?.trim() ?? '';
+      if (normalizedDisplayName.isNotEmpty) {
+        await user.updateDisplayName(normalizedDisplayName);
+        await user.reload();
+        user = _auth.currentUser ?? user;
+      }
+
+      return Success<AuthenticatedUser>(_fromFirebaseUser(user));
+    } on FirebaseAuthException catch (error) {
+      return FailureResult<AuthenticatedUser>(
+        AuthorizationFailure(_authMessage(error)),
+      );
+    } catch (error) {
+      return FailureResult<AuthenticatedUser>(
+        InfrastructureFailure(error.toString()),
+      );
+    }
+  }
+
+  @override
   Future<Result<void>> sendPasswordResetEmail({
     required String email,
   }) async {
@@ -110,15 +161,26 @@ class FirebaseAuthRepository implements AuthRepository {
       case 'invalid-credential':
       case 'wrong-password':
       case 'user-not-found':
-        return 'The email or password is incorrect.';
+        return 'البريد الإلكتروني أو كلمة المرور غير صحيحة.';
       case 'invalid-email':
-        return 'The email address is invalid.';
+        return 'صيغة البريد الإلكتروني غير صحيحة.';
       case 'user-disabled':
-        return 'This user is disabled.';
+        return 'هذا الحساب موقوف.';
       case 'too-many-requests':
-        return 'Too many attempts. Try again later.';
+        return 'محاولات كثيرة. حاول مرة أخرى لاحقًا.';
+      case 'email-already-in-use':
+        return 'هذا البريد مستخدم مسبقًا. سجّل الدخول أو استعد كلمة المرور.';
+      case 'weak-password':
+        return 'كلمة المرور ضعيفة. استخدم 6 أحرف على الأقل.';
+      case 'operation-not-allowed':
+        return 'تسجيل البريد وكلمة المرور غير مفعّل في Firebase Authentication.';
+      case 'network-request-failed':
+        return 'تعذر الاتصال بخدمة تسجيل الدخول. تحقق من الإنترنت وحاول مرة أخرى.';
+      case 'invalid-api-key':
+      case 'app-not-authorized':
+        return 'إعداد Firebase غير صحيح لهذا التطبيق.';
       default:
-        return error.message ?? 'Authentication failed.';
+        return error.message ?? 'تعذر إكمال عملية تسجيل الدخول.';
     }
   }
 }
