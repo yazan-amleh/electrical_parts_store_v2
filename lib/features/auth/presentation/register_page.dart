@@ -49,9 +49,8 @@ class _RegisterPageState extends State<RegisterPage> {
                               Text(
                                 'حساب جديد',
                                 textAlign: TextAlign.center,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineSmall,
+                                style:
+                                    Theme.of(context).textTheme.headlineSmall,
                               ),
                               const SizedBox(height: 8),
                               const Text(
@@ -100,7 +99,9 @@ class _RegisterPageState extends State<RegisterPage> {
                                 obscureText: _obscurePassword,
                                 textDirection: TextDirection.ltr,
                                 textInputAction: TextInputAction.next,
-                                autofillHints: const [AutofillHints.newPassword],
+                                autofillHints: const [
+                                  AutofillHints.newPassword
+                                ],
                                 decoration: InputDecoration(
                                   labelText: 'كلمة المرور',
                                   prefixIcon: const Icon(Icons.lock_outline),
@@ -133,7 +134,9 @@ class _RegisterPageState extends State<RegisterPage> {
                                 obscureText: _obscureConfirmation,
                                 textDirection: TextDirection.ltr,
                                 textInputAction: TextInputAction.done,
-                                autofillHints: const [AutofillHints.newPassword],
+                                autofillHints: const [
+                                  AutofillHints.newPassword
+                                ],
                                 decoration: InputDecoration(
                                   labelText: 'تأكيد كلمة المرور',
                                   prefixIcon:
@@ -169,8 +172,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                   controller.errorMessage!,
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
-                                    color:
-                                        Theme.of(context).colorScheme.error,
+                                    color: Theme.of(context).colorScheme.error,
                                   ),
                                 ),
                               ],

@@ -24,14 +24,13 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 - Storage emulator coverage for participant-only chat attachment read/write, outsider denial, path spoofing denial, and owner-only deletion.
 - Cheque settlement emulator coverage for concurrent customer-bounce retries, idempotent replay, balanced customer-side reversal, and supplier-bounce reversal.
 - Notes, activity log and the store assistant are wired through repository contracts with user/store-scoped access.
-- Authentication UI and session handling cover email/password sign-in, account registration, password reset, logout, explicit store membership loading, and actionable membership diagnostics.
 - A clean-data domain acceptance scenario covers a fresh store workflow across sales, purchases, customer/supplier payments, repair commands, balanced ledger projections, cross-store rejection, and idempotent replay.
 
 ## Recently closed gates
 
 - Secure Storage attachment rules are verified in CI (16 passing).
 - settleCheque is verified in CI under concurrent retries and repeated replay (2 passing), including customer and supplier bounce accounting paths.
-- Notes ownership and read-only activity-log access are verified in the Firestore emulator; note domain behavior is covered by Flutter tests.
+- Notes ownership and read-only activity-log rules are verified in the Firestore emulator; note domain behavior is covered by Flutter tests.
 
 ## Release gates still open
 
@@ -49,4 +48,3 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 - The post-deploy smoke test also requires `SMOKE_TEST_EMAIL` and `SMOKE_TEST_PASSWORD` Actions secrets for the existing V2 test user; it performs Auth, Firestore membership, and read-only accounting-audit checks.
 
 No V1 customer or transaction migration is implied by this document. Migration, if desired after year-end, will be a separate audited project.
-

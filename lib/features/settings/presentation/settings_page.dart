@@ -294,8 +294,7 @@ class _SettingsPageState extends State<SettingsPage> {
               SizedBox(
                 width: 180,
                 child: DropdownButtonFormField<StoreRole>(
-                  value:
-                      member.role == StoreRole.owner ? null : member.role,
+                  value: member.role == StoreRole.owner ? null : member.role,
                   decoration: const InputDecoration(labelText: 'الدور'),
                   items: member.role == StoreRole.owner
                       ? const [
