@@ -892,7 +892,7 @@ class _CreateRepairDialogState extends State<_CreateRepairDialog> {
               child: Column(
                 children: [
                   DropdownButtonFormField<String>(
-                    value: _customerId,
+                    initialValue: _customerId,
                     decoration: const InputDecoration(labelText: 'العميل'),
                     items: [
                       for (final customer in widget.customers)
@@ -940,7 +940,7 @@ class _CreateRepairDialogState extends State<_CreateRepairDialog> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<RepairPriority>(
-                          value: _priority,
+                          initialValue: _priority,
                           decoration: const InputDecoration(
                             labelText: 'الأولوية',
                           ),
@@ -961,7 +961,7 @@ class _CreateRepairDialogState extends State<_CreateRepairDialog> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: DropdownButtonFormField<DeviceCondition>(
-                          value: _condition,
+                          initialValue: _condition,
                           decoration: const InputDecoration(
                             labelText: 'حالة الجهاز',
                           ),
@@ -1100,7 +1100,7 @@ class _PartDialogState extends State<_PartDialog> {
             children: [
               if (_error != null) _Banner(text: _error!),
               DropdownButtonFormField<Product>(
-                value: _product,
+                initialValue: _product,
                 decoration: const InputDecoration(labelText: 'الصنف'),
                 items: [
                   for (final product in _available)
@@ -1240,7 +1240,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<PartyPaymentMethod>(
-                value: _method,
+                initialValue: _method,
                 decoration: const InputDecoration(labelText: 'طريقة الدفع'),
                 items: [
                   for (final method in methods)
