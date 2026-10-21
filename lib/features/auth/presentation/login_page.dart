@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../application/auth_session_controller.dart';
+import 'reset_password_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({required this.controller, super.key});
@@ -15,6 +16,7 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +41,7 @@ class _LoginPageState extends State<LoginPage> {
                         children: [
                           const Icon(
                             Icons.electrical_services_outlined,
-                            size: 56,
+                            size: 64,
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -64,10 +66,11 @@ class _LoginPageState extends State<LoginPage> {
                               prefixIcon: Icon(Icons.email_outlined),
                             ),
                             validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
+                              final email = value?.trim() ?? '';
+                              if (email.isEmpty) {
                                 return 'أدخل البريد الإلكتروني';
                               }
-                              if (!value.contains('@')) {
+                              if (!email.contains('@')) {
                                 return 'تحقق من صيغة البريد الإلكتروني';
                               }
                               return null;
@@ -76,12 +79,27 @@ class _LoginPageState extends State<LoginPage> {
                           const SizedBox(height: 16),
                           TextFormField(
                             controller: _passwordController,
-                            obscureText: true,
+                            obscureText: _obscurePassword,
                             textDirection: TextDirection.ltr,
                             autofillHints: const [AutofillHints.password],
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'كلمة المرور',
-                              prefixIcon: Icon(Icons.lock_outline),
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                tooltip: _obscurePassword
+                                    ? 'إظهار كلمة المرور'
+                                    : 'إخفاء كلمة المرور',
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                ),
+                              ),
                             ),
                             validator: (value) {
                               if (value == null || value.isEmpty) {
@@ -91,16 +109,34 @@ class _LoginPageState extends State<LoginPage> {
                             },
                             onFieldSubmitted: (_) => _submit(),
                           ),
+                          Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: TextButton(
+                              onPressed: controller.isBusy
+                                  ? null
+                                  : () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => ResetPasswordPage(
+                                            controller: controller,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                              child: const Text('نسيت كلمة المرور؟'),
+                            ),
+                          ),
                           if (controller.errorMessage != null) ...[
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 8),
                             Text(
                               controller.errorMessage!,
+                              textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Theme.of(context).colorScheme.error,
                               ),
                             ),
                           ],
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
                           FilledButton.icon(
                             onPressed: controller.isBusy ? null : _submit,
                             icon: controller.isBusy
@@ -117,6 +153,12 @@ class _LoginPageState extends State<LoginPage> {
                                   ? 'جارٍ التحقق...'
                                   : 'تسجيل الدخول',
                             ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'إنشاء المستخدمين وإدارة الصلاحيات تتم من إدارة المتجر.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
                       ),
