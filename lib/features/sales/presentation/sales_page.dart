@@ -328,7 +328,23 @@ class _SalesPageState extends State<SalesPage> {
                 item.subtotal.formatted,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
+              if (!item.discount.isZero)
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(start: 6),
+                  child: Text(
+                    'خصم ${item.discount.formatted}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
               const Spacer(),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: 'تعديل الخصم',
+                onPressed: item.product.discountable && !_isPosting
+                    ? () => _editDiscount(item.product)
+                    : null,
+                icon: const Icon(Icons.percent_outlined),
+              ),
               IconButton(
                 visualDensity: VisualDensity.compact,
                 onPressed: () => _decrementProduct(item.product),
@@ -486,10 +502,76 @@ class _SalesPageState extends State<SalesPage> {
           ? _SaleCartLine(
               product: product,
               quantity: const Quantity.fromMilliUnits(1000),
+              discount: Money.zero(
+                currency: product.sellingPrice.currency,
+              ),
             )
           : current.copyWith(
               quantity: current.quantity + const Quantity.fromMilliUnits(1000),
             );
+    });
+  }
+
+  Future<void> _editDiscount(Product product) async {
+    final current = _cart[product.id];
+    if (current == null || !product.discountable || _isPosting) {
+      return;
+    }
+
+    final controller = TextEditingController(
+      text: (current.discount.minorUnits / 100).toStringAsFixed(2),
+    );
+    final raw = await showDialog<String>(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Text('خصم: ${product.name}'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(
+              decimal: true,
+            ),
+            decoration: const InputDecoration(
+              labelText: 'قيمة الخصم',
+              hintText: '0.00',
+              prefixIcon: Icon(Icons.percent_outlined),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (raw == null || !mounted) {
+      return;
+    }
+
+    final discount = _parseMoney(
+      raw,
+      currency: product.sellingPrice.currency,
+    );
+    if (discount == null) {
+      _showMessage('قيمة الخصم غير صحيحة.');
+      return;
+    }
+    if (discount.minorUnits > current.grossTotal.minorUnits) {
+      _showMessage('الخصم لا يمكن أن يتجاوز قيمة السطر.');
+      return;
+    }
+
+    setState(() {
+      _cart[product.id] = current.copyWith(discount: discount);
     });
   }
 
@@ -559,9 +641,7 @@ class _SalesPageState extends State<SalesPage> {
               unitFactorToBase: const Quantity.fromMilliUnits(1000),
               unitPrice: item.product.sellingPrice,
               unitCost: item.product.purchasePrice,
-              discount: Money.zero(
-                currency: item.product.sellingPrice.currency,
-              ),
+              discount: item.discount,
               unitId: item.product.baseUnitId,
               unitName: item.product.baseUnitName,
               isService: item.product.isService,
@@ -643,12 +723,17 @@ class _SalesPageState extends State<SalesPage> {
 }
 
 class _SaleCartLine {
-  const _SaleCartLine({required this.product, required this.quantity});
+  _SaleCartLine({
+    required this.product,
+    required this.quantity,
+    required this.discount,
+  });
 
   final Product product;
   final Quantity quantity;
+  final Money discount;
 
-  Money get subtotal {
+  Money get grossTotal {
     final numerator = product.sellingPrice.minorUnits * quantity.milliUnits;
     final minorUnits = (numerator + Quantity.scale ~/ 2) ~/ Quantity.scale;
     return Money(
@@ -657,8 +742,14 @@ class _SaleCartLine {
     );
   }
 
-  _SaleCartLine copyWith({Quantity? quantity}) {
-    return _SaleCartLine(product: product, quantity: quantity ?? this.quantity);
+  Money get subtotal => grossTotal - discount;
+
+  _SaleCartLine copyWith({Quantity? quantity, Money? discount}) {
+    return _SaleCartLine(
+      product: product,
+      quantity: quantity ?? this.quantity,
+      discount: discount ?? this.discount,
+    );
   }
 }
 
