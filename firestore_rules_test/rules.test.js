@@ -390,65 +390,6 @@ describe('Firestore security rules', function () {
     );
   });
 
-  it('protects booking catalog by role and tenant', async () => {
-    await assertSucceeds(
-      setDoc(storeDoc(salesDb, 'booking_customers', 'booking-customer-1'), {
-        storeId: STORE_ID,
-        name: 'Booking Customer',
-        phoneNumber: '0590000000',
-      }),
-    );
-    await assertSucceeds(
-      setDoc(storeDoc(accountantDb, 'booking_customers', 'booking-customer-2'), {
-        storeId: STORE_ID,
-        name: 'Accounting Customer',
-        phoneNumber: '0590000001',
-      }),
-    );
-    await assertFails(
-      setDoc(storeDoc(warehouseDb, 'booking_customers', 'booking-customer-3'), {
-        storeId: STORE_ID,
-        name: 'Warehouse Customer',
-        phoneNumber: '0590000002',
-      }),
-    );
-    await assertFails(
-      setDoc(storeDoc(salesDb, 'booking_customers', 'foreign-customer'), {
-        storeId: 'store-b',
-        name: 'Foreign Customer',
-        phoneNumber: '0590000003',
-      }),
-    );
-    await assertFails(
-      deleteDoc(storeDoc(salesDb, 'booking_customers', 'booking-customer-1')),
-    );
-
-    await assertSucceeds(
-      setDoc(storeDoc(salesDb, 'photography_options', 'option-1'), {
-        storeId: STORE_ID,
-        name: 'Basic Session',
-        priceMinorUnits: 15000,
-        durationMinutes: 60,
-      }),
-    );
-    await assertFails(
-      setDoc(storeDoc(accountantDb, 'photography_options', 'option-2'), {
-        storeId: STORE_ID,
-        name: 'Accountant Session',
-        priceMinorUnits: 10000,
-        durationMinutes: 30,
-      }),
-    );
-    await assertFails(
-      updateDoc(storeDoc(salesDb, 'photography_options', 'option-1'), {
-        storeId: 'store-b',
-      }),
-    );
-    await assertFails(
-      deleteDoc(storeDoc(salesDb, 'photography_options', 'option-1')),
-    );
-  });
-
   it('keeps posted business documents immutable from clients', async () => {
     const forbiddenWrites = [
       ['sales', 'sale-2'],

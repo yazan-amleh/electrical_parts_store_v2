@@ -7654,4 +7654,3 @@ async function postRepairPaymentInTransaction(
   };
 }
 
-Object.assign(exports, require('./bookings'));

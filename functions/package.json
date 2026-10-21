@@ -6,8 +6,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "check": "node --check index.js && node --check bookings.js",
-    "test": "node --test settle_cheque.test.js && node --test bookings.test.js"
+    "check": "node --check index.js",
+    "test": "node --test settle_cheque.test.js"
   },
   "dependencies": {
     "firebase-admin": "^13.0.1",
