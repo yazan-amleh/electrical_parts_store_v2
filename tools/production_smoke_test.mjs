@@ -1,5 +1,5 @@
 const projectId = process.env.FIREBASE_PROJECT_ID || 'electrical-store-v2-prod';
-const webApiKey = process.env.FIREBASE_WEB_API_KEY;
+const webApiKey = process.env.FIREBASE_WEB_API_KEY || 'AIzaSyBIG_sfRb4S8aEAHHLhFPy0tsh3BHPwyI';
 const email = process.env.SMOKE_TEST_EMAIL;
 const password = process.env.SMOKE_TEST_PASSWORD;
 const storeId = process.env.SMOKE_TEST_STORE_ID || 'v2-dev-store';
