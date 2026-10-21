@@ -7,7 +7,7 @@ const region = process.env.FUNCTIONS_REGION || 'europe-west1';
 
 if (!webApiKey || !email || !password) {
   throw new Error(
-    'FIREBASE_WEB_API_KEY, SMOKE_TEST_EMAIL and SMOKE_TEST_PASSWORD are required.',
+    'SMOKE_TEST_EMAIL and SMOKE_TEST_PASSWORD are required.',
   );
 }
 
