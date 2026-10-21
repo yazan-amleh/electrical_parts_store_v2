@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const {after, describe, it} = require('node:test');
 
 const admin = require('firebase-admin');
 const functions = require('./index');
