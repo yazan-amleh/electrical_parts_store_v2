@@ -75,7 +75,7 @@ class AuthSessionController extends ChangeNotifier {
     );
 
     if (result is FailureResult<AuthenticatedUser>) {
-      _setFailure(result.failure.message);
+      _setAuthFailure(result.failure.message);
       return;
     }
 
@@ -98,7 +98,7 @@ class AuthSessionController extends ChangeNotifier {
     );
 
     if (result is FailureResult<AuthenticatedUser>) {
-      _setFailure(result.failure.message);
+      _setAuthFailure(result.failure.message);
       return;
     }
 
@@ -174,6 +174,10 @@ class AuthSessionController extends ChangeNotifier {
 
   void _setFailure(String message) {
     _setState(status: AuthSessionStatus.failure, errorMessage: message);
+  }
+
+  void _setAuthFailure(String message) {
+    _setState(status: AuthSessionStatus.signedOut, errorMessage: message);
   }
 
   void _setState({required AuthSessionStatus status, String? errorMessage}) {
