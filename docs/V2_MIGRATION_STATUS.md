@@ -24,6 +24,7 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 - Storage emulator coverage for participant-only chat attachment read/write, outsider denial, path spoofing denial, and owner-only deletion.
 - Cheque settlement emulator coverage for concurrent customer-bounce retries, idempotent replay, balanced customer-side reversal, and supplier-bounce reversal.
 - Notes, activity log and the store assistant are wired through repository contracts with user/store-scoped access.
+- A clean-data domain acceptance scenario covers a fresh store workflow across sales, purchases, customer/supplier payments, repair commands, balanced ledger projections, cross-store rejection, and idempotent replay.
 
 ## Recently closed gates
 
@@ -36,7 +37,7 @@ V2 is a new application and a new data set. It is not synchronized with V1 durin
 1. Complete remaining UI parity and responsive review.
 2. Review all PDF/print layouts on phone and desktop, including the V1-specific documents now implemented.
    Operational reports and sales analytics use paginated reads with a visible safety cap.
-3. Run a clean-data acceptance pass with representative store workflows.
+3. Run the server-backed clean-data acceptance pass with representative store workflows; the domain-level fresh-store scenario is now covered.
 4. Configure the separate V2 Firebase project, then deploy only after the
    rules and functions review is approved.
 
