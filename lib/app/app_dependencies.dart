@@ -3,6 +3,7 @@ import '../features/accounting/domain/repositories/accounting_query_repository.d
 import '../features/offers/domain/repositories/offer_repository.dart';
 import '../features/accounting/domain/repositories/accounting_repository.dart';
 import '../features/bookings/domain/repositories/booking_catalog_repository.dart';
+import '../features/bookings/domain/repositories/booking_repository.dart';
 import '../features/accounting_audit/domain/repositories/accounting_audit_repository.dart';
 import '../features/categories/domain/repositories/category_repository.dart';
 import '../features/categories/domain/services/category_inventory_document_builder.dart';
@@ -57,6 +58,7 @@ class AppDependencies {
     this.notificationRepository,
     this.settingsRepository,
     this.bookingCatalogRepository,
+    this.bookingRepository,
   });
 
   final AppRuntimeConfig runtime;
@@ -87,6 +89,7 @@ class AppDependencies {
   final NotificationRepository? notificationRepository;
   final SettingsRepository? settingsRepository;
   final BookingCatalogRepository? bookingCatalogRepository;
+  final BookingRepository? bookingRepository;
 
   bool get hasFirebaseSession => authSession != null;
 }
