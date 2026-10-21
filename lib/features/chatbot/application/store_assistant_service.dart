@@ -34,7 +34,7 @@ class StoreAssistantService {
     if (query.contains('مخزون') ||
         query.contains('منتج') ||
         query.contains('قطعة')) {
-      return _inventoryAnswer(context, query);
+      return _inventoryAnswer(context);
     }
     if (query.contains('تصنيف') || query.contains('فئة')) {
       return _categoryAnswer(context);
@@ -63,24 +63,19 @@ class StoreAssistantService {
       maxDocuments: 10000,
     );
     if (result is FailureResult<OperationalReport>) {
-      return 'تعذر تحميل تقرير المبيعات: ' + result.failure.message;
+      return 'تعذر تحميل تقرير المبيعات: ${result.failure.message}';
     }
     final report = (result as Success<OperationalReport>).value;
     final period = query.contains('اليوم') ? 'اليوم' : 'هذا الشهر';
-    return 'مبيعات ' +
-        period +
-        ': ' +
-        report.salesRevenue.formatted +
-        '\nعدد العمليات: ' +
-        report.salesCount.toString() +
-        '\nالربح الإجمالي: ' +
-        report.grossProfit.formatted;
+    return 'مبيعات $period: ${report.salesRevenue.formatted}\n'
+        'عدد العمليات: ${report.salesCount}\n'
+        'الربح الإجمالي: ${report.grossProfit.formatted}';
   }
 
   Future<String> _inventoryAnswer(StoreContext context) async {
     final result = await productRepository.getProducts(context: context);
     if (result is FailureResult<List<Product>>) {
-      return 'تعذر تحميل المخزون: ' + result.failure.message;
+      return 'تعذر تحميل المخزون: ${result.failure.message}';
     }
     final products = (result as Success<List<Product>>).value;
     final lowStock = products.where((product) => product.isLowStock).toList();
@@ -88,18 +83,15 @@ class StoreAssistantService {
       return 'لا توجد أصناف منخفضة المخزون حالياً.';
     }
     final names = lowStock.take(5).map((product) => product.name).join('، ');
-    return 'الأصناف منخفضة المخزون (' +
-        lowStock.length.toString() +
-        '): ' +
-        names;
+    return 'الأصناف منخفضة المخزون (${lowStock.length}): $names';
   }
 
   Future<String> _categoryAnswer(StoreContext context) async {
     final result = await categoryRepository.getCategories(context: context);
     if (result is FailureResult<List<Category>>) {
-      return 'تعذر تحميل التصنيفات: ' + result.failure.message;
+      return 'تعذر تحميل التصنيفات: ${result.failure.message}';
     }
     final categories = (result as Success<List<Category>>).value;
-    return 'عدد التصنيفات النشطة: ' + categories.length.toString();
+    return 'عدد التصنيفات النشطة: ${categories.length}';
   }
 }
