@@ -6,6 +6,7 @@ import '../../shell/presentation/app_shell_page.dart';
 import '../application/auth_session_controller.dart';
 import '../domain/entities/authenticated_user.dart';
 import 'login_page.dart';
+import 'store_setup_page.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({required this.dependencies, super.key});
@@ -46,6 +47,10 @@ class AuthGate extends StatelessWidget {
               membership: membership,
               onSignOut: controller.signOut,
             );
+          case AuthSessionStatus.storeSetupRequired:
+            return StoreSetupPage(controller: controller);
+          case AuthSessionStatus.creatingStore:
+            return const _LoadingPage(message: 'جارٍ إنشاء المتجر...');
           case AuthSessionStatus.storeNotConfigured:
             return FirebaseSetupPage(runtime: dependencies.runtime);
           case AuthSessionStatus.failure:
