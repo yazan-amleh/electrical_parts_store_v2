@@ -37,7 +37,8 @@ class _LoginPageState extends State<LoginPage> {
     final enabled = preferences.getBool(_rememberKey) ?? false;
     setState(() {
       _rememberMe = enabled;
-      if (enabled) _emailController.text = preferences.getString(_emailKey) ?? '';
+      if (enabled)
+        _emailController.text = preferences.getString(_emailKey) ?? '';
     });
   }
 
@@ -148,9 +149,11 @@ class _LoginPageState extends State<LoginPage> {
                   children: [
                     Flexible(
                       child: InkWell(
-                        onTap: busy ? null : () => setState(() {
-                          _rememberMe = !_rememberMe;
-                        }),
+                        onTap: busy
+                            ? null
+                            : () => setState(() {
+                                  _rememberMe = !_rememberMe;
+                                }),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -163,9 +166,11 @@ class _LoginPageState extends State<LoginPage> {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                onChanged: busy ? null : (value) => setState(() {
-                                  _rememberMe = value ?? false;
-                                }),
+                                onChanged: busy
+                                    ? null
+                                    : (value) => setState(() {
+                                          _rememberMe = value ?? false;
+                                        }),
                               ),
                             ),
                             const SizedBox(width: 8),
