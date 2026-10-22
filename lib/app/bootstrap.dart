@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import '../core/config/app_runtime_config.dart';
+import '../core/config/firebase_project_guard.dart';
 import '../firebase_options.dart';
 import '../features/accounting/data/repositories/firestore_accounting_query_repository.dart';
 import '../features/accounting/data/repositories/firestore_accounting_repository.dart';
@@ -56,6 +57,11 @@ abstract final class AppBootstrap {
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
+
+    FirebaseProjectGuard.requireMatchingProject(
+      expectedProjectId: runtime.firebaseProjectId,
+      actualProjectId: Firebase.app().options.projectId,
+    );
 
     final firestore = FirebaseFirestore.instance;
     final functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
