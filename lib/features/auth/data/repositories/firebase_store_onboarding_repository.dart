@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:cloud_functions/cloud_functions.dart' hide Result;
 
 import '../../../../core/errors/failure.dart';
 import '../../../../core/result/result.dart';
