@@ -23,7 +23,9 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> _register() async {
     if (widget.controller.isBusy ||
-        !(_formKey.currentState?.validate() ?? false)) return;
+        !(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
     await widget.controller.register(
       email: _emailController.text.trim(),
       password: _passwordController.text,
