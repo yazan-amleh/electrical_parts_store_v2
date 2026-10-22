@@ -853,4 +853,58 @@ describe('Firestore security rules', function () {
     await assertSucceeds(deleteDoc(tokenRef));
   });
 
+
+  it('requires server-side bootstrap for new stores', async () => {
+    await assertFails(
+      setDoc(doc(outsiderDb, 'stores', 'unowned-new-store'), {
+        ownerId: 'outsider-1', name: 'Fake Store', currency: 'ILS',
+      }),
+    );
+    await assertFails(
+      setDoc(doc(ownerDb, 'stores', 'owner-new-store'), {
+        ownerId: 'owner-1', name: 'New Store', currency: 'ILS',
+      }),
+    );
+  });
+
+  it('allows self membership lookup when not provisioned, but no tenant reads', async () => {
+    const missing = await assertSucceeds(
+      getDoc(storeDoc(outsiderDb, 'members', 'outsider-1')),
+    );
+    assert.equal(missing.exists(), false);
+    await assertSucceeds(
+      getDoc(storeDoc(inactiveDb, 'members', 'inactive-1')),
+    );
+    await assertFails(
+      getDoc(storeDoc(outsiderDb, 'members', 'owner-1')),
+    );
+    await assertFails(
+      getDoc(storeDoc(outsiderDb, 'products', 'product-1')),
+    );
+  });
+
+  it('restricts the selected-store preference to the user and server writes', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'user_store_preferences', 'owner-1'), {
+        userId: 'owner-1', selectedStoreId: STORE_ID,
+      });
+    });
+    await assertSucceeds(
+      getDoc(doc(ownerDb, 'user_store_preferences', 'owner-1')),
+    );
+    await assertFails(
+      getDoc(doc(outsiderDb, 'user_store_preferences', 'owner-1')),
+    );
+    await assertFails(
+      setDoc(doc(ownerDb, 'user_store_preferences', 'owner-1'), {
+        userId: 'owner-1', selectedStoreId: 'other-store',
+      }),
+    );
+    await assertFails(
+      setDoc(doc(outsiderDb, 'user_store_preferences', 'outsider-1'), {
+        userId: 'outsider-1', selectedStoreId: STORE_ID,
+      }),
+    );
+  });
+
 });
