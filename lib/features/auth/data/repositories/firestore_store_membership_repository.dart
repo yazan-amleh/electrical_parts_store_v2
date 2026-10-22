@@ -35,7 +35,7 @@ class FirestoreStoreMembershipRepository implements StoreMembershipRepository {
 
       if (!snapshot.exists) {
         return FailureResult<StoreMembership>(
-          AuthorizationFailure(
+          StoreMembershipNotFoundFailure(
             'الحساب ${context.userId} غير مضاف إلى المتجر ${context.storeId}. '
             'أضف عضوية نشطة في stores/${context.storeId}/members/${context.userId}.',
           ),
