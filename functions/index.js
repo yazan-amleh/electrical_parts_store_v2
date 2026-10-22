@@ -15,6 +15,16 @@ setGlobalOptions({
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
+const { createStoreHandler, selectStoreHandler } = require('./store_onboarding');
+
+exports.createStore = onCall((request) =>
+  createStoreHandler({ db, FieldValue, HttpsError, request }),
+);
+
+exports.selectStore = onCall((request) =>
+  selectStoreHandler({ db, FieldValue, HttpsError, request }),
+);
+
 const QUANTITY_SCALE = 1000;
 const MAX_LINES = 100;
 const POSTING_ROLES = new Set(['owner', 'admin', 'accountant', 'sales']);
