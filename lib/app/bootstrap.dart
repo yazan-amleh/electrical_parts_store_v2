@@ -17,6 +17,7 @@ import '../features/cheques/data/repositories/firestore_cheque_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
 import '../features/auth/data/repositories/firebase_auth_repository.dart';
 import '../features/auth/data/repositories/firestore_store_membership_repository.dart';
+import '../features/auth/data/repositories/firebase_store_onboarding_repository.dart';
 import '../features/inventory/data/repositories/firestore_inventory_repository.dart';
 import '../features/inventory/data/repositories/firestore_product_repository.dart';
 import '../features/sales/data/repositories/firestore_sale_repository.dart';
@@ -72,6 +73,10 @@ abstract final class AppBootstrap {
         firestore: firestore,
       ),
       storeId: runtime.storeId,
+      onboardingRepository: FirebaseStoreOnboardingRepository(
+        firestore: firestore,
+        functions: functions,
+      ),
     );
 
     session.start();
