@@ -149,7 +149,8 @@ class AuthSessionController extends ChangeNotifier {
 
   void openStoreSetup() {
     if (_user != null && _onboardingRepository != null && !isBusy) {
-      _setState(status: AuthSessionStatus.storeSetupRequired, errorMessage: null);
+      _setState(
+          status: AuthSessionStatus.storeSetupRequired, errorMessage: null);
     }
   }
 
