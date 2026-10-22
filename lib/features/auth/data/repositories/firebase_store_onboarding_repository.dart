@@ -94,12 +94,14 @@ class FirebaseStoreOnboardingRepository implements StoreOnboardingRepository {
     switch (error.code) {
       case 'unauthenticated':
       case 'permission-denied':
-        return const AuthorizationFailure('ليس لديك صلاحية الوصول لهذا المتجر.');
+        return const AuthorizationFailure(
+            'ليس لديك صلاحية الوصول لهذا المتجر.');
       case 'invalid-argument':
         return ValidationFailure(error.message ?? 'بيانات المتجر غير صالحة.');
       case 'already-exists':
       case 'aborted':
-        return ConflictFailure(error.message ?? 'حدث تعارض أثناء إنشاء المتجر.');
+        return ConflictFailure(
+            error.message ?? 'حدث تعارض أثناء إنشاء المتجر.');
       default:
         return InfrastructureFailure(
           error.message ?? 'تعذّر إتمام العملية مع خادم Firebase.',
