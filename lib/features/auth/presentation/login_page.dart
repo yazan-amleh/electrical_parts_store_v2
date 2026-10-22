@@ -37,14 +37,17 @@ class _LoginPageState extends State<LoginPage> {
     final enabled = preferences.getBool(_rememberKey) ?? false;
     setState(() {
       _rememberMe = enabled;
-      if (enabled)
+      if (enabled) {
         _emailController.text = preferences.getString(_emailKey) ?? '';
+      }
     });
   }
 
   Future<void> _submit() async {
     if (widget.controller.isBusy ||
-        !(_formKey.currentState?.validate() ?? false)) return;
+        !(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
 
     // Unlike V1, never persist the password to SharedPreferences.
     final preferences = await SharedPreferences.getInstance();
