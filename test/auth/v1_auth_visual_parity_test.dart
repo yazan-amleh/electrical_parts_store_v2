@@ -89,6 +89,8 @@ void main() {
         find.byType(TextFormField).at(0), 'tester@example.com');
     await tester.enterText(
         find.byType(TextFormField).at(1), 'do-not-save-this');
+    await tester.ensureVisible(find.byType(Checkbox));
+    await tester.pumpAndSettle();
     await tester.tap(find.byType(Checkbox));
     await tester.pump();
     await tester
