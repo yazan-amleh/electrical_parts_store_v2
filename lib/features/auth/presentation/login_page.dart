@@ -147,45 +147,48 @@ class _LoginPageState extends State<LoginPage> {
                   onFieldSubmitted: (_) => _submit(),
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                // V1's paired controls wrap on compact screens instead of
+                // overflowing the right edge in Arabic RTL.
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12,
+                  runSpacing: 8,
                   children: [
-                    Flexible(
-                      child: InkWell(
-                        onTap: busy
-                            ? null
-                            : () => setState(() {
-                                  _rememberMe = !_rememberMe;
-                                }),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: Checkbox(
-                                value: _rememberMe,
-                                activeColor: Colors.blue.shade700,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                onChanged: busy
-                                    ? null
-                                    : (value) => setState(() {
-                                          _rememberMe = value ?? false;
-                                        }),
+                    InkWell(
+                      onTap: busy
+                          ? null
+                          : () => setState(() {
+                                _rememberMe = !_rememberMe;
+                              }),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: Checkbox(
+                              value: _rememberMe,
+                              activeColor: Colors.blue.shade700,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4),
                               ),
+                              onChanged: busy
+                                  ? null
+                                  : (value) => setState(() {
+                                        _rememberMe = value ?? false;
+                                      }),
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'تذكرني',
-                              style: TextStyle(
-                                color: Colors.grey.shade700,
-                                fontSize: 14,
-                              ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'تذكرني',
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontSize: 14,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                     TextButton(
