@@ -116,14 +116,23 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
                               child: Hero(
                                 tag: 'app_logo',
                                 child: Container(
-                                  height: isLogin ? 120 : isReset ? 100 : 90,
-                                  width: isLogin ? 120 : isReset ? 100 : 90,
+                                  height: isLogin
+                                      ? 120
+                                      : isReset
+                                          ? 100
+                                          : 90,
+                                  width: isLogin
+                                      ? 120
+                                      : isReset
+                                          ? 100
+                                          : 90,
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.2),
+                                        color:
+                                            Colors.black.withValues(alpha: 0.2),
                                         blurRadius: 15,
                                         offset: const Offset(0, 5),
                                       ),
@@ -141,7 +150,12 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
                                 ),
                               ),
                             ),
-                            SizedBox(height: isLogin ? 40 : isReset ? 30 : 20),
+                            SizedBox(
+                                height: isLogin
+                                    ? 40
+                                    : isReset
+                                        ? 30
+                                        : 20),
                             Text(
                               widget.title,
                               textAlign: TextAlign.center,
@@ -168,7 +182,12 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
                                 letterSpacing: 0.5,
                               ),
                             ),
-                            SizedBox(height: isLogin ? 50 : isReset ? 40 : 25),
+                            SizedBox(
+                                height: isLogin
+                                    ? 50
+                                    : isReset
+                                        ? 40
+                                        : 25),
                             Card(
                               elevation: 8,
                               shadowColor: Colors.black.withValues(alpha: 0.2),
@@ -253,7 +272,8 @@ class V1AuthCurvePainter extends CustomPainter {
     paint.color = Colors.white.withValues(alpha: 0.15);
     var path = Path()
       ..moveTo(0, height * 0.7)
-      ..quadraticBezierTo(width * 0.25, height * 0.55, width * 0.5, height * 0.75)
+      ..quadraticBezierTo(
+          width * 0.25, height * 0.55, width * 0.5, height * 0.75)
       ..quadraticBezierTo(width * 0.75, height * 0.95, width, height * 0.7)
       ..lineTo(width, 0)
       ..lineTo(0, 0);
@@ -261,7 +281,8 @@ class V1AuthCurvePainter extends CustomPainter {
     paint.color = Colors.white.withValues(alpha: 0.1);
     path = Path()
       ..moveTo(0, height * 0.8)
-      ..quadraticBezierTo(width * 0.3, height * 0.65, width * 0.6, height * 0.85)
+      ..quadraticBezierTo(
+          width * 0.3, height * 0.65, width * 0.6, height * 0.85)
       ..quadraticBezierTo(width * 0.8, height * 0.95, width, height * 0.8)
       ..lineTo(width, 0)
       ..lineTo(0, 0);
@@ -308,7 +329,8 @@ class V1AuthControls {
         borderSide: const BorderSide(color: Colors.red, width: 2),
       ),
       contentPadding: const EdgeInsets.symmetric(
-        vertical: 16, horizontal: 16,
+        vertical: 16,
+        horizontal: 16,
       ),
       filled: true,
       fillColor: Colors.grey.shade50,
