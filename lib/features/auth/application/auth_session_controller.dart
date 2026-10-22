@@ -147,6 +147,12 @@ class AuthSessionController extends ChangeNotifier {
     await _handleUser(user);
   }
 
+  void openStoreSetup() {
+    if (_user != null && _onboardingRepository != null && !isBusy) {
+      _setState(status: AuthSessionStatus.storeSetupRequired, errorMessage: null);
+    }
+  }
+
   /// Creates a fresh, server-generated V2 store with the current user as owner.
   Future<void> createStore({required String name}) async {
     final onboarding = _onboardingRepository;
