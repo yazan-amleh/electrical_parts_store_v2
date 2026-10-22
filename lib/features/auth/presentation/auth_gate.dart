@@ -39,6 +39,7 @@ class AuthGate extends StatelessWidget {
                 user: user,
                 onRetry: controller.reloadMembership,
                 onSignOut: controller.signOut,
+                onChooseStore: controller.openStoreSetup,
               );
             }
             return AppShellPage(
@@ -159,6 +160,7 @@ class _SessionErrorPage extends StatelessWidget {
     this.user,
     this.onRetry,
     this.onSignOut,
+    this.onChooseStore,
   });
 
   final String message;
@@ -166,6 +168,7 @@ class _SessionErrorPage extends StatelessWidget {
   final AuthenticatedUser? user;
   final Future<void> Function()? onRetry;
   final Future<void> Function()? onSignOut;
+  final VoidCallback? onChooseStore;
 
   @override
   Widget build(BuildContext context) {
@@ -221,6 +224,12 @@ class _SessionErrorPage extends StatelessWidget {
                       onPressed: onRetry,
                       icon: const Icon(Icons.refresh),
                       label: const Text('إعادة المحاولة'),
+                    ),
+                  if (onChooseStore != null)
+                    TextButton.icon(
+                      onPressed: onChooseStore,
+                      icon: const Icon(Icons.storefront_outlined),
+                      label: const Text('اختيار متجر آخر'),
                     ),
                   if (onSignOut != null)
                     TextButton(
