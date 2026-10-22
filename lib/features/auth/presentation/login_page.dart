@@ -173,8 +173,8 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            'إنشاء الحساب لا يمنح صلاحية متجر تلقائيًا؛ يجب أن '
-                            'تتم إضافتك كعضو نشط من مالك المتجر.',
+                            'يمكنك بعد التسجيل إنشاء متجرك الخاص أو الدخول إلى متجر '
+                            'أضافك مالكه كعضو نشط.',
                             textAlign: TextAlign.center,
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
