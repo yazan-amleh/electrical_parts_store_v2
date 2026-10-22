@@ -77,6 +77,20 @@ void main() {
     expect(auth.resetCalls, 0);
   });
 
+  testWidgets('V1 auth layouts stay responsive at 320px and desktop widths',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    for (final size in [const Size(320, 700), const Size(1200, 900)]) {
+      await tester.binding.setSurfaceSize(size);
+      await tester.pumpWidget(
+          MaterialApp(home: LoginPage(controller: controller)));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('تذكرني'), findsOneWidget);
+      expect(find.text('نسيت كلمة المرور؟'), findsOneWidget);
+    }
+  });
+
   testWidgets('remember-me stores email only and never password',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(420, 920));
