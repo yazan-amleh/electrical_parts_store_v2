@@ -38,7 +38,8 @@ void main() {
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(420, 920));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(MaterialApp(home: LoginPage(controller: controller)));
+    await tester
+        .pumpWidget(MaterialApp(home: LoginPage(controller: controller)));
     await tester.pumpAndSettle();
 
     expect(find.text('مرحباً بك في متجر القطع الكهربائية'), findsOneWidget);
@@ -61,7 +62,8 @@ void main() {
   testWidgets('reset page is reachable and validates email', (tester) async {
     await tester.binding.setSurfaceSize(const Size(420, 920));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(MaterialApp(home: LoginPage(controller: controller)));
+    await tester
+        .pumpWidget(MaterialApp(home: LoginPage(controller: controller)));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('نسيت كلمة المرور؟'));
     await tester.tap(find.text('نسيت كلمة المرور؟'));
@@ -75,27 +77,35 @@ void main() {
     expect(auth.resetCalls, 0);
   });
 
-  testWidgets('remember-me stores email only and never password', (tester) async {
+  testWidgets('remember-me stores email only and never password',
+      (tester) async {
     await tester.binding.setSurfaceSize(const Size(420, 920));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(MaterialApp(home: LoginPage(controller: controller)));
+    await tester
+        .pumpWidget(MaterialApp(home: LoginPage(controller: controller)));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextFormField).at(0), 'tester@example.com');
-    await tester.enterText(find.byType(TextFormField).at(1), 'do-not-save-this');
+    await tester.enterText(
+        find.byType(TextFormField).at(0), 'tester@example.com');
+    await tester.enterText(
+        find.byType(TextFormField).at(1), 'do-not-save-this');
     await tester.tap(find.byType(Checkbox));
     await tester.pump();
-    await tester.ensureVisible(find.widgetWithText(ElevatedButton, 'تسجيل الدخول'));
+    await tester
+        .ensureVisible(find.widgetWithText(ElevatedButton, 'تسجيل الدخول'));
     await tester.tap(find.widgetWithText(ElevatedButton, 'تسجيل الدخول'));
     await tester.pumpAndSettle();
 
     final saved = await SharedPreferences.getInstance();
     expect(saved.getBool('auth_remember_email'), isTrue);
     expect(saved.getString('auth_saved_email'), 'tester@example.com');
-    expect(saved.getKeys().where((key) => key.toLowerCase().contains('password')),
+    expect(
+        saved.getKeys().where((key) => key.toLowerCase().contains('password')),
         isEmpty);
-    expect(saved.getKeys().map(saved.get).where((value) =>
-        value is String && value.contains('do-not-save-this')), isEmpty);
+    expect(
+        saved.getKeys().map(saved.get).where(
+            (value) => value is String && value.contains('do-not-save-this')),
+        isEmpty);
   });
 }
 
