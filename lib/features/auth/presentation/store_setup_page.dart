@@ -93,7 +93,8 @@ class _StoreSetupPageState extends State<StoreSetupPage> {
                             ),
                             const SizedBox(height: 14),
                             FilledButton(
-                              onPressed: controller.isBusy ? null : _createStore,
+                              onPressed:
+                                  controller.isBusy ? null : _createStore,
                               child: const Text('إنشاء المتجر والمتابعة'),
                             ),
                           ],
@@ -113,7 +114,8 @@ class _StoreSetupPageState extends State<StoreSetupPage> {
                             Text('الدخول إلى متجر موجود',
                                 style: Theme.of(context).textTheme.titleMedium),
                             const SizedBox(height: 10),
-                            const Text('يجب أن يكون مالك المتجر قد أضاف حسابك كعضو نشط.'),
+                            const Text(
+                                'يجب أن يكون مالك المتجر قد أضاف حسابك كعضو نشط.'),
                             const SizedBox(height: 14),
                             TextFormField(
                               controller: _storeIdController,
@@ -131,7 +133,8 @@ class _StoreSetupPageState extends State<StoreSetupPage> {
                             ),
                             const SizedBox(height: 14),
                             OutlinedButton(
-                              onPressed: controller.isBusy ? null : _selectStore,
+                              onPressed:
+                                  controller.isBusy ? null : _selectStore,
                               child: const Text('التحقق من العضوية والدخول'),
                             ),
                           ],
@@ -141,9 +144,8 @@ class _StoreSetupPageState extends State<StoreSetupPage> {
                   ),
                   const SizedBox(height: 16),
                   TextButton.icon(
-                    onPressed: controller.isBusy
-                        ? null
-                        : controller.reloadMembership,
+                    onPressed:
+                        controller.isBusy ? null : controller.reloadMembership,
                     icon: const Icon(Icons.refresh),
                     label: const Text('إعادة فحص عضويتي الحالية'),
                   ),
