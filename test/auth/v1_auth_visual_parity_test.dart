@@ -82,8 +82,8 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     for (final size in [const Size(320, 700), const Size(1200, 900)]) {
       await tester.binding.setSurfaceSize(size);
-      await tester.pumpWidget(
-          MaterialApp(home: LoginPage(controller: controller)));
+      await tester
+          .pumpWidget(MaterialApp(home: LoginPage(controller: controller)));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.text('تذكرني'), findsOneWidget);
