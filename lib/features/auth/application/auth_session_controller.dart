@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../core/errors/failure.dart';
 import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../domain/entities/authenticated_user.dart';
 import '../domain/entities/store_membership.dart';
 import '../domain/repositories/auth_repository.dart';
 import '../domain/repositories/store_membership_repository.dart';
+import '../domain/repositories/store_onboarding_repository.dart';
 
 enum AuthSessionStatus {
   signedOut,
@@ -15,6 +17,8 @@ enum AuthSessionStatus {
   loadingMembership,
   ready,
   storeNotConfigured,
+  storeSetupRequired,
+  creatingStore,
   failure,
 }
 
@@ -22,14 +26,19 @@ class AuthSessionController extends ChangeNotifier {
   AuthSessionController({
     required AuthRepository authRepository,
     required StoreMembershipRepository membershipRepository,
+    StoreOnboardingRepository? onboardingRepository,
     required String storeId,
   })  : _authRepository = authRepository,
         _membershipRepository = membershipRepository,
+        _onboardingRepository = onboardingRepository,
+        _configuredStoreId = storeId.trim(),
         _storeId = storeId.trim();
 
   final AuthRepository _authRepository;
   final StoreMembershipRepository _membershipRepository;
-  final String _storeId;
+  final StoreOnboardingRepository? _onboardingRepository;
+  final String _configuredStoreId;
+  String _storeId;
 
   StreamSubscription<AuthenticatedUser?>? _authSubscription;
   AuthSessionStatus _status = AuthSessionStatus.signedOut;
@@ -44,7 +53,8 @@ class AuthSessionController extends ChangeNotifier {
   String get storeId => _storeId;
   bool get isBusy =>
       _status == AuthSessionStatus.signingIn ||
-      _status == AuthSessionStatus.loadingMembership;
+      _status == AuthSessionStatus.loadingMembership ||
+      _status == AuthSessionStatus.creatingStore;
 
   int _sessionRequestId = 0;
 
@@ -124,6 +134,7 @@ class AuthSessionController extends ChangeNotifier {
 
     _user = null;
     _membership = null;
+    _storeId = _configuredStoreId;
     _setState(status: AuthSessionStatus.signedOut);
   }
 
@@ -134,6 +145,56 @@ class AuthSessionController extends ChangeNotifier {
       return;
     }
     await _handleUser(user);
+  }
+
+  /// Creates a fresh, server-generated V2 store with the current user as owner.
+  Future<void> createStore({required String name}) async {
+    final onboarding = _onboardingRepository;
+    final user = _user;
+    if (onboarding == null || user == null) {
+      _setFailure('يرجى تسجيل الدخول قبل إنشاء متجر.');
+      return;
+    }
+    final requestId = ++_sessionRequestId;
+    _setState(status: AuthSessionStatus.creatingStore, errorMessage: null);
+    final result = await onboarding.createStore(name: name);
+    if (requestId != _sessionRequestId || _user?.id != user.id) return;
+    if (result is FailureResult<String>) {
+      _setState(
+        status: AuthSessionStatus.storeSetupRequired,
+        errorMessage: result.failure.message,
+      );
+      return;
+    }
+    if (result is Success<String>) {
+      _storeId = result.value;
+      await _handleUser(user);
+    }
+  }
+
+  /// Selects an existing store only after the server confirms active membership.
+  Future<void> selectStore({required String storeId}) async {
+    final onboarding = _onboardingRepository;
+    final user = _user;
+    if (onboarding == null || user == null) {
+      _setFailure('يرجى تسجيل الدخول قبل اختيار متجر.');
+      return;
+    }
+    final requestId = ++_sessionRequestId;
+    _setState(status: AuthSessionStatus.loadingMembership, errorMessage: null);
+    final result = await onboarding.selectStore(storeId: storeId);
+    if (requestId != _sessionRequestId || _user?.id != user.id) return;
+    if (result is FailureResult<String>) {
+      _setState(
+        status: AuthSessionStatus.storeSetupRequired,
+        errorMessage: result.failure.message,
+      );
+      return;
+    }
+    if (result is Success<String>) {
+      _storeId = result.value;
+      await _handleUser(user);
+    }
   }
 
   Future<void> _handleUser(AuthenticatedUser? user) async {
@@ -147,12 +208,29 @@ class AuthSessionController extends ChangeNotifier {
       return;
     }
 
+    _setState(status: AuthSessionStatus.loadingMembership);
+    final onboarding = _onboardingRepository;
+    if (onboarding != null) {
+      final preferred = await onboarding.getSelectedStoreId(userId: user.id);
+      if (requestId != _sessionRequestId) return;
+      if (preferred is FailureResult<String?>) {
+        _setFailure(preferred.failure.message);
+        return;
+      }
+      if (preferred is Success<String?>) {
+        _storeId = preferred.value ?? _configuredStoreId;
+      }
+    }
+
     if (_storeId.isEmpty || _storeId.contains('/')) {
-      _setState(status: AuthSessionStatus.storeNotConfigured);
+      _setState(
+        status: onboarding == null
+            ? AuthSessionStatus.storeNotConfigured
+            : AuthSessionStatus.storeSetupRequired,
+      );
       return;
     }
 
-    _setState(status: AuthSessionStatus.loadingMembership);
     final result = await _membershipRepository.getMembership(
       context: StoreContext(storeId: _storeId, userId: user.id),
     );
@@ -162,7 +240,15 @@ class AuthSessionController extends ChangeNotifier {
     }
 
     if (result is FailureResult<StoreMembership>) {
-      _setFailure(result.failure.message);
+      if (onboarding != null &&
+          result.failure is StoreMembershipNotFoundFailure) {
+        _setState(
+          status: AuthSessionStatus.storeSetupRequired,
+          errorMessage: null,
+        );
+      } else {
+        _setFailure(result.failure.message);
+      }
       return;
     }
 
