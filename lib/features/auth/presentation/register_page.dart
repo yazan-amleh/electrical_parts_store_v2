@@ -227,7 +227,8 @@ class _RegisterPageState extends State<RegisterPage> {
       displayName: _nameController.text,
     );
     // Return to AuthGate so the new user's store onboarding becomes visible.
-    if (mounted && widget.controller.user != null &&
+    if (mounted &&
+        widget.controller.user != null &&
         widget.controller.status != AuthSessionStatus.signingIn) {
       Navigator.of(context).pop();
     }
