@@ -122,10 +122,16 @@ service cloud.firestore {
       return hasRole(storeId, ['owner', 'admin', 'accountant', 'sales']);
     }
 
+    // Only the authenticated user can read their selection.
+    // All mutations are handled by callable Functions after membership checks.
+    match /user_store_preferences/{userId} {
+      allow get: if signedIn() && request.auth.uid == userId;
+      allow list, create, update, delete: if false;
+    }
+
     match /stores/{storeId} {
       allow read: if canReadStore(storeId);
-      allow create: if signedIn() &&
-        request.resource.data.ownerId == request.auth.uid;
+      allow create: if false;
       allow update: if canManageStore(storeId) &&
         request.resource.data.ownerId == resource.data.ownerId &&
         (
@@ -137,11 +143,12 @@ service cloud.firestore {
       match /members/{userId} {
         // A member must be able to read their own active membership to establish
         // the session. Owners and admins can read the complete member list.
-        allow read: if (
-          signedIn() &&
-          userId == request.auth.uid &&
-          resource.data.isActive == true
+        // Own membership GET must also work for missing/inactive docs so
+        // onboarding can distinguish no membership from network/permission errors.
+        allow get: if (
+          signedIn() && userId == request.auth.uid
         ) || canManageStore(storeId);
+        allow list: if canManageStore(storeId);
         allow create, update, delete: if canManageStore(storeId);
       }
 
