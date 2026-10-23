@@ -115,8 +115,7 @@ class AccountingAuditReport {
       issues.every((issue) => !issue.isError);
   int get errorCount =>
       reportedErrorCount ?? issues.where((issue) => issue.isError).length;
-  int get warningCount =>
-      (reportedIssueCount ?? issues.length) - errorCount;
+  int get warningCount => (reportedIssueCount ?? issues.length) - errorCount;
 
   factory AccountingAuditReport.fromMap(Map<String, dynamic> map) {
     final checked = _map(map['checked']);
@@ -148,12 +147,10 @@ class AccountingAuditReport {
       isComplete: map['complete'] != false && map['status'] != 'incomplete',
       isPointInTimeConsistent: map['consistency'] == 'atomic',
       serverStatus: map['status'] as String? ?? '',
-      reportedIssueCount: map['issueCount'] is int
-          ? map['issueCount'] as int
-          : null,
-      reportedErrorCount: map['errorCount'] is int
-          ? map['errorCount'] as int
-          : null,
+      reportedIssueCount:
+          map['issueCount'] is int ? map['issueCount'] as int : null,
+      reportedErrorCount:
+          map['errorCount'] is int ? map['errorCount'] as int : null,
       issuesTruncated: map['issuesTruncated'] == true,
     );
   }
