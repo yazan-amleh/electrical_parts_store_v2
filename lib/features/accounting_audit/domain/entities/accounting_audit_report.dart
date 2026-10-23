@@ -144,8 +144,7 @@ class AccountingAuditReport {
       journalEntriesChecked: _int(checked['journalEntries']),
       journalLinesChecked: _int(checked['journalLines']),
       indexedLineDiscoveryChecked: _int(checked['indexedLineDiscovery']),
-      orphanDiscoveryCoverage:
-          map['orphanDiscoveryCoverage'] as String? ?? '',
+      orphanDiscoveryCoverage: map['orphanDiscoveryCoverage'] as String? ?? '',
       partiesChecked: _int(checked['parties']),
       partyLedgerEntriesChecked: _int(checked['partyLedgerEntries']),
       productsChecked: _int(checked['products']),
