@@ -43,7 +43,8 @@ void main() {
     expect(report.isPointInTimeConsistent, isFalse);
   });
 
-  test('server-wide issue count blocks false healthy when details are capped', () {
+  test('server-wide issue count blocks false healthy when details are capped',
+      () {
     final report = AccountingAuditReport.fromMap({
       'status': 'issues_found',
       'complete': true,
