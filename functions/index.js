@@ -38,6 +38,11 @@ const {
   sameLegacyPartyPayment,
   sameLegacyPartyPaymentLines,
 } = require('./accounting/party_payment_integrity');
+const {
+  fingerprintChequeSettlement,
+  sameLegacyChequeSettlement,
+  sameLegacyChequeLines,
+} = require('./accounting/cheque_settlement_integrity');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -5462,18 +5467,44 @@ async function settleChequeInTransaction(transaction, userId, command) {
     'settle cheques',
     PAYMENT_POSTING_ROLES,
   );
+  const fingerprint = fingerprintChequeSettlement(command);
   const idempotencySnapshot = await transaction.get(settlementIdempotencyRef);
   if (idempotencySnapshot.exists) {
     const existing = idempotencySnapshot.data();
-    if (existing.chequeId === command.chequeId &&
-        existing.action === command.action) {
-      return {
-        status: command.action === 'clear' ? 'cleared' : 'bounced',
-        chequeId: command.chequeId,
-        journalEntryId: existing.journalEntryId,
-      };
+    if (existing.chequeId !== command.chequeId ||
+        existing.action !== command.action ||
+        existing.journalEntryId !== journalEntryId) {
+      conflict('The cheque settlement idempotency key is already assigned.');
     }
-    conflict('The cheque settlement idempotency key is already assigned.');
+    if (existing.requestFingerprint != null) {
+      if (existing.requestFingerprint !== fingerprint) {
+        conflict('Cheque settlement retry changed its financial details.');
+      }
+    } else {
+      const previousCheque = await transaction.get(chequeRef);
+      const previousJournal = await transaction.get(journalRef);
+      const previousMarker = await transaction.get(journalIdempotencyRef);
+      if (!previousCheque.exists || !previousJournal.exists ||
+          !previousMarker.exists ||
+          previousMarker.data().entryId !== journalEntryId ||
+          !sameLegacyChequeSettlement(
+            previousJournal.data(), previousCheque.data(),
+            command, journalEntryId,
+          )) {
+        conflict('Cannot confirm old cheque settlement for retry.');
+      }
+      const previousLines = await transaction.get(journalRef.collection('lines'));
+      if (!sameLegacyChequeLines(
+        previousLines, previousCheque.data(), command, journalEntryId,
+      )) {
+        conflict('Historical cheque journal differs from settlement request.');
+      }
+    }
+    return {
+      status: command.action === 'clear' ? 'cleared' : 'bounced',
+      chequeId: command.chequeId,
+      journalEntryId,
+    };
   }
 
   const chequeSnapshot = await transaction.get(chequeRef);
@@ -5577,9 +5608,15 @@ async function settleChequeInTransaction(transaction, userId, command) {
     const bouncedBalanceSnapshot = await transaction.get(
       bouncedPartyBalanceRef,
     );
-    bouncedPartyBalance = bouncedBalanceSnapshot.exists
-      ? bouncedBalanceSnapshot.data()
-      : {};
+    bouncedPartyBalance = readPartyBalanceForPosting(
+      bouncedBalanceSnapshot,
+      {
+        storeId: command.storeId,
+        partyType: cheque.partyType,
+        partyId: cheque.partyId,
+        currency: cheque.currency,
+      },
+    );
   }
 
   const debitAccountId = isCustomerCheque
@@ -5657,10 +5694,17 @@ async function settleChequeInTransaction(transaction, userId, command) {
   }
 
   if (command.action === 'bounce') {
-    const currentDebit = storedInt(bouncedPartyBalance.debitMinorUnits, 0);
-    const currentCredit = storedInt(bouncedPartyBalance.creditMinorUnits, 0);
     const partyDebit = isCustomerCheque ? amount : 0;
     const partyCredit = isCustomerCheque ? 0 : amount;
+    const nextPartyDebit = checkedMinorAdd(
+      bouncedPartyBalance.debit, partyDebit, 'Bounced cheque party debit',
+    );
+    const nextPartyCredit = checkedMinorAdd(
+      bouncedPartyBalance.credit, partyCredit, 'Bounced cheque party credit',
+    );
+    const nextPartyNet = checkedMinorAdd(
+      nextPartyDebit, -nextPartyCredit, 'Bounced cheque party net',
+    );
     transaction.set(bouncedPartyLedgerRef, {
       storeId: command.storeId,
       partyType: cheque.partyType,
@@ -5680,31 +5724,41 @@ async function settleChequeInTransaction(transaction, userId, command) {
       partyType: cheque.partyType,
       partyId: cheque.partyId,
       currency: cheque.currency,
-      debitMinorUnits: currentDebit + partyDebit,
-      creditMinorUnits: currentCredit + partyCredit,
-      balanceMinorUnits:
-        currentDebit + partyDebit - currentCredit - partyCredit,
+      debitMinorUnits: nextPartyDebit,
+      creditMinorUnits: nextPartyCredit,
+      balanceMinorUnits: nextPartyNet,
       updatedAt: FieldValue.serverTimestamp(),
     });
   }
 
   for (const accountId of accountIds) {
-    const balance = balanceSnapshots.get(accountId).exists
-      ? balanceSnapshots.get(accountId).data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
+    const previous = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: cheque.currency,
+      },
+    );
     const delta = deltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      previous.debit, delta.debit, 'Cheque settlement GL debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      previous.credit, delta.credit, 'Cheque settlement GL credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Cheque settlement GL net',
+    );
     transaction.set(
       storeRef.collection('account_balances').doc(accountId),
       {
         storeId: command.storeId,
         accountId,
         currency: cheque.currency,
-        debitMinorUnits: currentDebit + delta.debit,
-        creditMinorUnits: currentCredit + delta.credit,
-        balanceMinorUnits:
-          currentDebit + delta.debit - currentCredit - delta.credit,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -5716,6 +5770,7 @@ async function settleChequeInTransaction(transaction, userId, command) {
     action: command.action,
     journalEntryId,
     idempotencyKey: command.idempotencyKey,
+    requestFingerprint: fingerprint,
     createdAt: FieldValue.serverTimestamp(),
   });
   transaction.set(journalIdempotencyRef, {
