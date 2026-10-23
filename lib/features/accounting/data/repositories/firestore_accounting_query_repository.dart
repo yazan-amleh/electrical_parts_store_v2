@@ -224,7 +224,7 @@ class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
           );
         }
         final currency = data['currency'];
-        if (currency != account.currency) {
+        if (currency is! String || currency != account.currency) {
           throw FormatException(
             'Journal ledger currency mismatch: ${document.id}',
           );
