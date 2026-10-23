@@ -43,6 +43,12 @@ const {
   sameLegacyChequeSettlement,
   sameLegacyChequeLines,
 } = require('./accounting/cheque_settlement_integrity');
+const {
+  fingerprintPurchase,
+  matchesLegacyPurchaseHeader,
+  matchesLegacyPurchaseLines,
+  matchesLegacyPurchaseJournal,
+} = require('./accounting/purchase_integrity');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -2584,19 +2590,47 @@ async function postPurchaseInTransaction(
     allowedRoles,
   );
 
+  const fingerprint = fingerprintPurchase(command);
   const purchaseIdempotencySnapshot = await transaction.get(
     purchaseIdempotencyRef,
   );
   if (purchaseIdempotencySnapshot.exists) {
-    const existingPurchaseId = purchaseIdempotencySnapshot.data().purchaseId;
-    if (existingPurchaseId === command.purchase.id) {
-      return {
-        status: 'already_posted',
-        purchaseId: command.purchase.id,
-        journalEntryId,
-      };
+    const marker = purchaseIdempotencySnapshot.data();
+    if (marker.purchaseId !== command.purchase.id) {
+      conflict('The purchase idempotency key is already assigned.');
     }
-    conflict('The purchase idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('The purchase key was reused with changed invoice details.');
+      }
+    } else {
+      const oldInvoice = await transaction.get(purchaseRef);
+      const oldJournal = await transaction.get(journalRef);
+      const oldMarker = await transaction.get(journalIdempotencyRef);
+      if (!oldInvoice.exists ||
+          !oldJournal.exists ||
+          !oldMarker.exists ||
+          oldMarker.data().entryId !== journalEntryId ||
+          !matchesLegacyPurchaseHeader(
+            oldInvoice.data(), command, journalEntryId,
+          )) {
+        conflict('Historical purchase cannot be verified for replay.');
+      }
+      const invoiceLines = await transaction.get(purchaseRef.collection('lines'));
+      const journalLines = await transaction.get(journalRef.collection('lines'));
+      if (!matchesLegacyPurchaseLines(invoiceLines, command) ||
+          !matchesLegacyPurchaseJournal(
+            oldJournal.data(), journalLines, command,
+            journalEntryId, oldInvoice.data(),
+          )) {
+        conflict('Historical purchase lines/journal differ from replay.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      purchaseId: command.purchase.id,
+      journalEntryId,
+    };
   }
 
   const existingPurchaseSnapshot = await transaction.get(purchaseRef);
@@ -2937,6 +2971,7 @@ async function postPurchaseInTransaction(
   const purchaseData = {
     storeId: command.storeId,
     idempotencyKey: command.purchase.idempotencyKey,
+    requestFingerprint: fingerprint,
     postedAt: Timestamp.fromDate(command.purchase.postedAt),
     paymentMethod: command.purchase.paymentMethod,
     supplierId: command.purchase.supplierId,
@@ -3018,6 +3053,7 @@ async function postPurchaseInTransaction(
       journalRef.collection('lines').doc(line.id),
       {
         ...line,
+        currency: command.purchase.currency,
         entryId: journalEntryId,
         postedAt: Timestamp.fromDate(command.purchase.postedAt),
       },
@@ -3097,6 +3133,7 @@ async function postPurchaseInTransaction(
       storeId: command.storeId,
       purchaseId: command.purchase.id,
       idempotencyKey: command.purchase.idempotencyKey,
+      requestFingerprint: fingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
