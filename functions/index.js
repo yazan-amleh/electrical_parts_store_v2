@@ -4096,10 +4096,13 @@ async function postSaleInTransaction(
       invalid('Product currency does not match the sale currency.');
     }
 
-    const purchasePriceMinorUnits = storedInt(
-      product.purchasePriceMinorUnits,
-      0,
-    );
+    const purchasePriceMinorUnits = product.purchasePriceMinorUnits ?? 0;
+    if (!Number.isSafeInteger(purchasePriceMinorUnits) ||
+        purchasePriceMinorUnits < 0) {
+      throw new HttpsError(
+        'failed-precondition', 'Product purchase cost is corrupt.',
+      );
+    }
     if (line.isService) {
       if (line.unitCostMinorUnits !== 0) {
         invalid('A service line must have zero inventory cost.');
@@ -4135,8 +4138,12 @@ async function postSaleInTransaction(
         baseQuantityMilliUnits,
       );
 
-    subtotalMinorUnits += totalMinorUnits;
-    costTotalMinorUnits += costMinorUnits;
+    subtotalMinorUnits = checkedMinorAdd(
+      subtotalMinorUnits, totalMinorUnits, 'Sale subtotal',
+    );
+    costTotalMinorUnits = checkedMinorAdd(
+      costTotalMinorUnits, costMinorUnits, 'Sale COGS total',
+    );
 
     if (!line.isService) {
       const previousIssued = issuedByProduct.get(line.productId) || {
@@ -4144,8 +4151,12 @@ async function postSaleInTransaction(
         cost: 0,
       };
       issuedByProduct.set(line.productId, {
-        quantity: previousIssued.quantity + baseQuantityMilliUnits,
-        cost: previousIssued.cost + costMinorUnits,
+        quantity: checkedMinorAdd(
+          previousIssued.quantity, baseQuantityMilliUnits, 'Sale issue quantity',
+        ),
+        cost: checkedMinorAdd(
+          previousIssued.cost, costMinorUnits, 'Sale issue cost',
+        ),
       });
     }
 
@@ -4173,8 +4184,9 @@ async function postSaleInTransaction(
     invalid('A sale total must be greater than zero.');
   }
 
-  const grandTotalMinorUnits =
-    subtotalMinorUnits + command.sale.taxMinorUnits;
+  const grandTotalMinorUnits = checkedMinorAdd(
+    subtotalMinorUnits, command.sale.taxMinorUnits, 'Sale gross total',
+  );
   if (grandTotalMinorUnits <= 0) {
     invalid('A sale total must be greater than zero.');
   }
@@ -4183,26 +4195,35 @@ async function postSaleInTransaction(
   for (const [productId, issued] of issuedByProduct) {
     const productSnapshot = productSnapshots.get(productId);
     const product = productSnapshot.data();
-    const currentQuantity = storedInt(
-      product.quantityOnHandMilliUnits,
-      0,
+    const currentQuantity = product.quantityOnHandMilliUnits ?? 0;
+    const currentUnitCost = product.purchasePriceMinorUnits ?? 0;
+    if (!Number.isSafeInteger(currentQuantity) || currentQuantity < 0 ||
+        !Number.isSafeInteger(currentUnitCost) || currentUnitCost < 0) {
+      throw new HttpsError(
+        'failed-precondition', 'Sale product quantity or price is corrupt.',
+      );
+    }
+    const currentInventoryValue = product.inventoryValueMinorUnits ??
+      multiplyAndRound(currentUnitCost, currentQuantity);
+    if (!Number.isSafeInteger(currentInventoryValue) ||
+        currentInventoryValue < 0 ||
+        (currentQuantity === 0 && currentInventoryValue !== 0)) {
+      throw new HttpsError(
+        'failed-precondition', 'Sale product inventory value is corrupt.',
+      );
+    }
+    const nextQuantity = checkedMinorAdd(
+      currentQuantity, -issued.quantity, 'Sale stock quantity',
     );
-    const currentUnitCost = storedInt(
-      product.purchasePriceMinorUnits,
-      0,
-    );
-    const currentInventoryValue = storedInt(
-      product.inventoryValueMinorUnits,
-      multiplyAndRound(currentUnitCost, currentQuantity),
-    );
-    const nextQuantity = currentQuantity - issued.quantity;
     if (nextQuantity < 0) {
       throw new HttpsError(
         'failed-precondition',
         'The sale would create negative stock for ' + productId + '.',
       );
     }
-    const nextInventoryValue = currentInventoryValue - issued.cost;
+    const nextInventoryValue = checkedMinorAdd(
+      currentInventoryValue, -issued.cost, 'Sale stock value',
+    );
     if (nextInventoryValue < 0) {
       throw new HttpsError(
         'failed-precondition',
@@ -4252,11 +4273,15 @@ async function postSaleInTransaction(
     );
   }
 
-  const totalDebitMinorUnits = grandTotalMinorUnits +
-    costTotalMinorUnits;
-  const totalCreditMinorUnits = subtotalMinorUnits +
-    command.sale.taxMinorUnits +
-    costTotalMinorUnits;
+  const totalDebitMinorUnits = checkedMinorAdd(
+    grandTotalMinorUnits, costTotalMinorUnits, 'Sale total debits',
+  );
+  const totalCreditMinorUnits = checkedMinorAdd(
+    checkedMinorAdd(
+      subtotalMinorUnits, command.sale.taxMinorUnits, 'Sale sales + tax',
+    ),
+    costTotalMinorUnits, 'Sale total credits',
+  );
   if (totalDebitMinorUnits !== totalCreditMinorUnits) {
     throw new HttpsError(
       'internal',
