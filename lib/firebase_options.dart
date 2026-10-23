@@ -46,7 +46,8 @@ class DefaultFirebaseOptions {
         appId: const String.fromEnvironment('FIREBASE_IOS_APP_ID'),
         senderId: const String.fromEnvironment('FIREBASE_IOS_SENDER_ID'),
         projectId: const String.fromEnvironment('FIREBASE_IOS_PROJECT_ID'),
-        storageBucket: const String.fromEnvironment('FIREBASE_IOS_STORAGE_BUCKET'),
+        storageBucket:
+            const String.fromEnvironment('FIREBASE_IOS_STORAGE_BUCKET'),
         iosBundleId: const String.fromEnvironment('FIREBASE_IOS_BUNDLE_ID'),
       );
 
