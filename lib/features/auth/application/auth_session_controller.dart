@@ -320,8 +320,8 @@ class AuthSessionController extends ChangeNotifier {
 
     _membershipSubscription = repo
         .watchMembership(
-          context: StoreContext(storeId: storeId, userId: user.id),
-        )
+      context: StoreContext(storeId: storeId, userId: user.id),
+    )
         .listen(
       (result) {
         if (requestId != _sessionRequestId ||
@@ -369,7 +369,8 @@ class AuthSessionController extends ChangeNotifier {
           return;
         }
         _membership = null;
-        _setFailure('تعذر متابعة صلاحيات المتجر. تحقق من الاتصال وأعد المحاولة.');
+        _setFailure(
+            'تعذر متابعة صلاحيات المتجر. تحقق من الاتصال وأعد المحاولة.');
       },
     );
   }
