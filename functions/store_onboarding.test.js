@@ -38,6 +38,17 @@ describe('store onboarding emulator: server authority and atomic creation', () =
     assert.equal(store.exists, true);
     assert.equal(store.data().ownerId, uid);
     assert.equal(store.data().currency, 'ILS');
+    assert.equal(store.data().initialChartVersion, 1);
+    assert.equal(store.data().initialChartAccountCount, 25);
+    const accounts = await storeRef.collection('accounts').get();
+    assert.equal(accounts.size, 25);
+    const cash = accounts.docs.find((doc) => doc.id === '1110');
+    assert.equal(cash.data().storeId, first.storeId);
+    assert.equal(cash.data().currency, 'ILS');
+    assert.equal(cash.data().controlType, 'cashBox');
+    assert.equal(cash.data().isHeader, false);
+    assert.equal((await storeRef.collection('journal_entries').get()).empty, true);
+    assert.equal((await storeRef.collection('account_balances').get()).empty, true);
     assert.equal(member.data().role, 'owner');
     assert.equal(member.data().isActive, true);
     assert.equal(member.data().storeId, first.storeId);
@@ -46,6 +57,7 @@ describe('store onboarding emulator: server authority and atomic creation', () =
     const again = await functions.createStore.run(request({ name: 'Electrical Shop' }, uid));
     assert.equal(again.storeId, first.storeId);
     assert.equal(again.alreadyCreated, true);
+    assert.equal((await storeRef.collection('accounts').get()).size, 25);
     await db.recursiveDelete(storeRef);
     await prefRef.delete();
   });
