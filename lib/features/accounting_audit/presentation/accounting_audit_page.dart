@@ -124,6 +124,13 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
                   Text(
                     'الأخطاء: ${report.errorCount} — التنبيهات: ${report.warningCount}',
                   ),
+                  if (report.issuesTruncated) ...[
+                    const SizedBox(height: 4),
+                    const Text(
+                      'عدد الفروقات المعروضة محدود؛ توجد أخطاء إضافية '
+                      'خارج القائمة المختصرة.',
+                    ),
+                  ],
                   if (!report.isPointInTimeConsistent) ...[
                     const SizedBox(height: 4),
                     const Text(
