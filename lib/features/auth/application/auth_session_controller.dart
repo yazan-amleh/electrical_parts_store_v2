@@ -315,15 +315,18 @@ class AuthSessionController extends ChangeNotifier {
     required AuthenticatedUser user,
     required String storeId,
   }) {
-    final repo = _membershipRepository;
-    if (repo is! StoreMembershipWatcher) return;
+    final StoreMembershipWatcher? watcher =
+        _membershipRepository is StoreMembershipWatcher
+            ? _membershipRepository as StoreMembershipWatcher
+            : null;
+    if (watcher == null) return;
 
-    _membershipSubscription = repo
+    _membershipSubscription = watcher
         .watchMembership(
       context: StoreContext(storeId: storeId, userId: user.id),
     )
         .listen(
-      (result) {
+      (Result<StoreMembership> result) {
         if (requestId != _sessionRequestId ||
             _user?.id != user.id ||
             _storeId != storeId) {
