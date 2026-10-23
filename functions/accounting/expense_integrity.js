@@ -62,7 +62,7 @@ function sameLegacyExpenseLines(snapshot, command, journalEntryId, totalMinorUni
     return data.entryId === journalEntryId &&
       data.storeId === command.storeId &&
       data.accountId === line.accountId &&
-      data.currency === e.currency &&
+      (data.currency == null || data.currency === e.currency) &&
       data.lineNumber === line.lineNumber &&
       data.debitMinorUnits === line.debit &&
       data.creditMinorUnits === line.credit &&
