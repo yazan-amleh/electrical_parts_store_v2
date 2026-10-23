@@ -207,14 +207,28 @@ class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
       final lines = <AccountLedgerLine>[];
       for (final document in snapshot.docs) {
         final data = document.data();
-        final postedAt = _date(data['postedAt']);
-        final entryId =
-            _string(data['entryId']) ?? document.reference.parent.parent?.id;
-        if (postedAt == null || entryId == null || entryId.isEmpty) {
+        // Collection-group 'lines' may also match non-journal line data.
+        // Only journal_entries/{entryId}/lines/{lineId} may enter a GL.
+        final journalRef = document.reference.parent.parent;
+        if (journalRef?.parent.id != 'journal_entries') {
           continue;
         }
-
-        final currency = _string(data['currency'], fallback: account.currency)!;
+        final postedAt = _date(data['postedAt']);
+        final entryId = _string(data['entryId']);
+        if (postedAt == null ||
+            entryId != journalRef!.id ||
+            data['storeId'] != context.storeId ||
+            data['accountId'] != accountId) {
+          throw FormatException(
+            'Invalid journal ledger line identity: ${document.id}',
+          );
+        }
+        final currency = data['currency'];
+        if (currency != account.currency) {
+          throw FormatException(
+            'Journal ledger currency mismatch: ${document.id}',
+          );
+        }
         lines.add(
           AccountLedgerLine(
             id: document.id,
@@ -222,11 +236,11 @@ class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
             accountId: accountId,
             postedAt: postedAt,
             debit: Money(
-              minorUnits: _int(data['debitMinorUnits']),
+              minorUnits: _ledgerMinor(data['debitMinorUnits'], document.id),
               currency: currency,
             ),
             credit: Money(
-              minorUnits: _int(data['creditMinorUnits']),
+              minorUnits: _ledgerMinor(data['creditMinorUnits'], document.id),
               currency: currency,
             ),
             description: _string(data['description']),
@@ -254,6 +268,15 @@ class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
       return value.toUtc();
     }
     return null;
+  }
+
+  static int _ledgerMinor(Object? value, String lineId) {
+    if (value is! int ||
+        value < 0 ||
+        value > AccountBalanceFirestoreMapper.maxSafeMinorUnits) {
+      throw FormatException('Invalid money amount on ledger line $lineId');
+    }
+    return value;
   }
 
   static String? _string(Object? value, {String? fallback}) {
