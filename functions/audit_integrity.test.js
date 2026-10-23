@@ -8,6 +8,7 @@ const {
   readAuditPages,
   readJournalAuditLines,
   isJournalLinePath,
+  findIndexedOrphanJournalLines,
   auditInteger,
   auditSum,
 } = require('./accounting/audit_integrity');
@@ -27,6 +28,56 @@ describe('accounting audit safe parsing and data selection', () => {
     ]) {
       assert.equal(isJournalLinePath(ref(path), 'shop-a'), false, path);
     }
+  });
+
+  it('detects missing journal headers via exact tenant-owned indexed paths', () => {
+    const indexedDocument = (path) => {
+      const segments = path.split('/');
+      return {
+        id: segments[segments.length - 1],
+        ref: {
+          path,
+          parent: {parent: {id: segments[segments.length - 3]}},
+        },
+      };
+    };
+    const indexed = [
+      indexedDocument('stores/shop-a/journal_entries/deleted/lines/line-1'),
+      indexedDocument('stores/shop-a/journal_entries/existing/lines/line-2'),
+      indexedDocument('stores/shop-a/sales/deleted/lines/invoice-line'),
+      indexedDocument('stores/shop-b/journal_entries/deleted/lines/foreign-line'),
+      indexedDocument('stores/shop-a/journal_entries/deleted/lines/line-3'),
+    ];
+    const orphans = findIndexedOrphanJournalLines(
+      indexed, new Set(['existing']), 'shop-a',
+    );
+    assert.deepEqual(orphans, [
+      {
+        entryId: 'deleted',
+        lineId: 'line-1',
+        path: 'stores/shop-a/journal_entries/deleted/lines/line-1',
+      },
+      {
+        entryId: 'deleted',
+        lineId: 'line-3',
+        path: 'stores/shop-a/journal_entries/deleted/lines/line-3',
+      },
+    ]);
+  });
+
+  it('rejects invalid orphan discovery inputs', () => {
+    assert.throws(
+      () => findIndexedOrphanJournalLines([], [], 'store-a'),
+      /must be a Set/,
+    );
+  });
+
+  it('fails closed when no document budget remains but an indexed line exists', async () => {
+    const query = await readAuditPages(mockCollection(['indexed-line']), {
+      maxDocuments: 0,
+    });
+    assert.equal(query.truncated, true);
+    assert.equal(query.size, 1);
   });
 
   it('flags strings, fractions, missing values and unsafe integers', () => {
