@@ -75,6 +75,8 @@ class AccountingAuditReport {
     required this.journalEntriesChecked,
     required this.journalLinesChecked,
     required this.partiesChecked,
+    this.indexedLineDiscoveryChecked = 0,
+    this.orphanDiscoveryCoverage = '',
     required this.partyLedgerEntriesChecked,
     required this.productsChecked,
     required this.inventoryMovementsChecked,
@@ -92,6 +94,8 @@ class AccountingAuditReport {
   final int accountsChecked;
   final int journalEntriesChecked;
   final int journalLinesChecked;
+  final int indexedLineDiscoveryChecked;
+  final String orphanDiscoveryCoverage;
   final int partiesChecked;
   final int partyLedgerEntriesChecked;
   final int productsChecked;
@@ -139,6 +143,9 @@ class AccountingAuditReport {
       accountsChecked: _int(checked['accounts']),
       journalEntriesChecked: _int(checked['journalEntries']),
       journalLinesChecked: _int(checked['journalLines']),
+      indexedLineDiscoveryChecked: _int(checked['indexedLineDiscovery']),
+      orphanDiscoveryCoverage:
+          map['orphanDiscoveryCoverage'] as String? ?? '',
       partiesChecked: _int(checked['parties']),
       partyLedgerEntriesChecked: _int(checked['partyLedgerEntries']),
       productsChecked: _int(checked['products']),
