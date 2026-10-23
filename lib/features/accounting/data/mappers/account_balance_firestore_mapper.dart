@@ -27,7 +27,8 @@ abstract final class AccountBalanceFirestoreMapper {
     }
 
     final debit = _minor(data['debitMinorUnits'], 'debit', documentAccountId);
-    final credit = _minor(data['creditMinorUnits'], 'credit', documentAccountId);
+    final credit =
+        _minor(data['creditMinorUnits'], 'credit', documentAccountId);
     final net = _minor(
       data['balanceMinorUnits'],
       'net balance',
