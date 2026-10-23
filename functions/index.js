@@ -6357,7 +6357,15 @@ async function runAccountingIntegrityAudit(userId, command) {
   const storedAccountBalances = new Map();
   for (const document of accountBalancesSnapshot.docs) {
     const data = document.data();
-    const accountId = data.accountId || document.id;
+    const accountId = document.id;
+    if (data.storeId !== command.storeId || data.accountId !== accountId) {
+      addIssue({
+        code: 'ACCOUNT_BALANCE_IDENTITY_MISMATCH',
+        scope: 'accountBalance',
+        referenceId: document.id,
+        message: 'Balance projection has a wrong store or account identity.',
+      });
+    }
     storedAccountBalances.set(accountId, data);
   }
 
@@ -6393,11 +6401,14 @@ async function runAccountingIntegrityAudit(userId, command) {
     }
 
     const storedCurrency = stored.currency || expected.currency;
-    const storedDebit = storedInt(stored.debitMinorUnits, 0);
-    const storedCredit = storedInt(stored.creditMinorUnits, 0);
-    const storedBalance = storedInt(
-      stored.balanceMinorUnits,
-      storedDebit - storedCredit,
+    const storedDebit = readMinor(
+      stored.debitMinorUnits, 'accountBalance', accountId,
+    );
+    const storedCredit = readMinor(
+      stored.creditMinorUnits, 'accountBalance', accountId,
+    );
+    const storedBalance = readMinor(
+      stored.balanceMinorUnits, 'accountBalance', accountId, true,
     );
 
     if (storedCurrency !== expected.currency) {
@@ -6512,8 +6523,16 @@ async function runAccountingIntegrityAudit(userId, command) {
       continue;
     }
     const total = ensurePartyTotal(partyType, partyId, currency);
-    total.debit += storedInt(data.debitMinorUnits, 0);
-    total.credit += storedInt(data.creditMinorUnits, 0);
+    total.debit = addMinor(
+      total.debit,
+      readMinor(data.debitMinorUnits, 'partyLedger', document.id),
+      'partyBalance', partyType + ':' + partyId,
+    );
+    total.credit = addMinor(
+      total.credit,
+      readMinor(data.creditMinorUnits, 'partyLedger', document.id),
+      'partyBalance', partyType + ':' + partyId,
+    );
 
     if (!partyMap.has(partyType + ':' + partyId)) {
       addIssue({
@@ -6538,6 +6557,15 @@ async function runAccountingIntegrityAudit(userId, command) {
         message: 'إسقاط الطرف بلا نوع أو معرف طرف.',
       });
       continue;
+    }
+    if (data.storeId !== command.storeId ||
+        document.id !== partyType + '-' + partyId) {
+      addIssue({
+        code: 'PARTY_BALANCE_IDENTITY_MISMATCH',
+        scope: 'partyBalance',
+        referenceId: document.id,
+        message: 'Party projection store or document identity does not match.',
+      });
     }
     storedPartyBalances.set(partyType + ':' + partyId, data);
   }
@@ -6569,14 +6597,19 @@ async function runAccountingIntegrityAudit(userId, command) {
       continue;
     }
 
-    const storedDebit = storedInt(stored.debitMinorUnits, 0);
-    const storedCredit = storedInt(stored.creditMinorUnits, 0);
-    const storedBalance = storedInt(
-      stored.balanceMinorUnits,
-      storedDebit - storedCredit,
+    const storedDebit = readMinor(
+      stored.debitMinorUnits, 'partyBalance', key,
+    );
+    const storedCredit = readMinor(
+      stored.creditMinorUnits, 'partyBalance', key,
+    );
+    const storedBalance = readMinor(
+      stored.balanceMinorUnits, 'partyBalance', key, true,
     );
     if (storedDebit !== expected.debit ||
-        storedCredit !== expected.credit) {
+        storedCredit !== expected.credit ||
+        storedBalance !== storedDebit - storedCredit ||
+        storedBalance !== expected.debit - expected.credit) {
       addIssue({
         code: 'PARTY_BALANCE_MISMATCH',
         scope: 'partyBalance',
@@ -6616,10 +6649,19 @@ async function runAccountingIntegrityAudit(userId, command) {
       value: 0,
       currency: data.currency || 'ILS',
     };
-    const quantity = storedInt(data.quantityDeltaMilliUnits, 0);
-    const value = storedInt(data.totalCostMinorUnits, 0);
-    total.quantity += quantity;
-    total.value += quantity < 0 ? -value : value;
+    const quantity = readMinor(
+      data.quantityDeltaMilliUnits, 'inventoryMovement', document.id, true,
+    );
+    const value = readMinor(
+      data.totalCostMinorUnits, 'inventoryMovement', document.id,
+    );
+    total.quantity = addMinor(
+      total.quantity, quantity, 'inventory', productId, 'milliUnits',
+    );
+    total.value = addMinor(
+      total.value, quantity < 0 ? -value : value,
+      'inventory', productId,
+    );
     inventoryTotals.set(productId, total);
   }
 
@@ -6635,8 +6677,12 @@ async function runAccountingIntegrityAudit(userId, command) {
       continue;
     }
 
-    const actualQuantity = storedInt(product.quantityOnHandMilliUnits, 0);
-    const actualValue = storedInt(product.inventoryValueMinorUnits, 0);
+    const actualQuantity = readMinor(
+      product.quantityOnHandMilliUnits, 'inventory', productId,
+    );
+    const actualValue = readMinor(
+      product.inventoryValueMinorUnits, 'inventory', productId,
+    );
     if (actualQuantity !== expected.quantity) {
       addIssue({
         code: 'INVENTORY_QUANTITY_MISMATCH',
