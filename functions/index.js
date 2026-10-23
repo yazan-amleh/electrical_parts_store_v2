@@ -33,6 +33,11 @@ const {
   sameLegacyExpense,
   sameLegacyExpenseLines,
 } = require('./accounting/expense_integrity');
+const {
+  fingerprintPartyPayment,
+  sameLegacyPartyPayment,
+  sameLegacyPartyPaymentLines,
+} = require('./accounting/party_payment_integrity');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -2030,20 +2035,54 @@ async function postPartyPaymentInTransaction(
     PAYMENT_POSTING_ROLES,
   );
 
+  const fingerprint = fingerprintPartyPayment(command);
   const paymentIdempotencySnapshot = await transaction.get(
     paymentIdempotencyRef,
   );
   if (paymentIdempotencySnapshot.exists) {
-    const existingPaymentId =
-      paymentIdempotencySnapshot.data().paymentId;
-    if (existingPaymentId === command.payment.id) {
-      return {
-        status: 'already_posted',
-        paymentId: command.payment.id,
-        journalEntryId,
-      };
+    const marker = paymentIdempotencySnapshot.data();
+    if (marker.paymentId !== command.payment.id) {
+      conflict('The payment idempotency key is already assigned.');
     }
-    conflict('The payment idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('Payment idempotency key reused with changed financial details.');
+      }
+    } else {
+      const previousPayment = await transaction.get(paymentRef);
+      const previousJournal = await transaction.get(journalRef);
+      const previousJournalMarker = await transaction.get(journalIdempotencyRef);
+      const type = command.payment.partyType === 'customer'
+        ? 'customerReceipt' : 'supplierPayment';
+      if (!previousPayment.exists ||
+          !sameLegacyPartyPayment(
+            previousPayment.data(), command, journalEntryId,
+          ) ||
+          !previousJournal.exists ||
+          previousJournal.data().storeId !== command.storeId ||
+          previousJournal.data().status !== 'posted' ||
+          previousJournal.data().sourceType !== type ||
+          previousJournal.data().currency !== command.payment.currency ||
+          previousJournal.data().totalDebitMinorUnits !==
+            command.payment.amountMinorUnits ||
+          previousJournal.data().totalCreditMinorUnits !==
+            command.payment.amountMinorUnits ||
+          !previousJournalMarker.exists ||
+          previousJournalMarker.data().entryId !== journalEntryId) {
+        conflict('Historical party payment cannot be verified for replay.');
+      }
+      const previousLines = await transaction.get(journalRef.collection('lines'));
+      if (!sameLegacyPartyPaymentLines(
+        previousLines, command, journalEntryId,
+      )) {
+        conflict('Historical party payment journal lines differ from replay.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      paymentId: command.payment.id,
+      journalEntryId,
+    };
   }
 
   const existingPaymentSnapshot = await transaction.get(paymentRef);
@@ -2193,6 +2232,7 @@ async function postPartyPaymentInTransaction(
   const paymentData = {
     storeId: command.storeId,
     idempotencyKey: command.payment.idempotencyKey,
+    requestFingerprint: fingerprint,
     postedAt: Timestamp.fromDate(command.payment.postedAt),
     partyType: command.payment.partyType,
     partyId: command.payment.partyId,
@@ -2231,21 +2271,26 @@ async function postPartyPaymentInTransaction(
     },
   );
 
-  const partyBalance = partyBalanceSnapshot.exists
-    ? partyBalanceSnapshot.data()
-    : {};
-  const currentPartyDebit = storedInt(
-    partyBalance.debitMinorUnits,
-    0,
+  const previousParty = readPartyBalanceForPosting(
+    partyBalanceSnapshot,
+    {
+      storeId: command.storeId,
+      partyId: command.payment.partyId,
+      partyType: command.payment.partyType,
+      currency: command.payment.currency,
+    },
   );
-  const currentPartyCredit = storedInt(
-    partyBalance.creditMinorUnits,
-    0,
+  const nextPartyDebit = checkedMinorAdd(
+    previousParty.debit, isCustomerPayment ? 0 : amount,
+    'Party settlement debit',
   );
-  const nextPartyDebit = currentPartyDebit +
-    (isCustomerPayment ? 0 : amount);
-  const nextPartyCredit = currentPartyCredit +
-    (isCustomerPayment ? amount : 0);
+  const nextPartyCredit = checkedMinorAdd(
+    previousParty.credit, isCustomerPayment ? amount : 0,
+    'Party settlement credit',
+  );
+  const nextPartyNet = checkedMinorAdd(
+    nextPartyDebit, -nextPartyCredit, 'Party settlement net',
+  );
   transaction.set(
     partyBalanceRef,
     {
@@ -2255,7 +2300,7 @@ async function postPartyPaymentInTransaction(
       currency: command.payment.currency,
       debitMinorUnits: nextPartyDebit,
       creditMinorUnits: nextPartyCredit,
-      balanceMinorUnits: nextPartyDebit - nextPartyCredit,
+      balanceMinorUnits: nextPartyNet,
       updatedAt: FieldValue.serverTimestamp(),
     },
   );
@@ -2281,6 +2326,7 @@ async function postPartyPaymentInTransaction(
       journalRef.collection('lines').doc(line.id),
       {
         ...line,
+        currency: command.payment.currency,
         entryId: journalEntryId,
         postedAt: Timestamp.fromDate(command.payment.postedAt),
       },
@@ -2288,19 +2334,24 @@ async function postPartyPaymentInTransaction(
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-    const nextDebit = currentDebit + delta.debit;
-    const nextCredit = currentCredit + delta.credit;
-
+    const previous = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.payment.currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      previous.debit, delta.debit, 'Payment GL debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      previous.credit, delta.credit, 'Payment GL credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Payment GL net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
@@ -2309,7 +2360,7 @@ async function postPartyPaymentInTransaction(
         currency: command.payment.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -2321,6 +2372,7 @@ async function postPartyPaymentInTransaction(
       storeId: command.storeId,
       paymentId: command.payment.id,
       idempotencyKey: command.payment.idempotencyKey,
+      requestFingerprint: fingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
