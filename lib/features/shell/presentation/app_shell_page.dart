@@ -66,6 +66,7 @@ class AppShellPage extends StatefulWidget {
     required this.user,
     required this.membership,
     required this.onSignOut,
+    required this.onChooseStore,
     super.key,
   });
 
@@ -73,6 +74,7 @@ class AppShellPage extends StatefulWidget {
   final AuthenticatedUser user;
   final StoreMembership membership;
   final Future<void> Function() onSignOut;
+  final VoidCallback onChooseStore;
 
   @override
   State<AppShellPage> createState() => _AppShellPageState();
@@ -389,7 +391,7 @@ class _AppShellPageState extends State<AppShellPage> {
     );
   }
 
-  Future<void> _signOut() async {
+  Future<void> _unregisterNotifications() async {
     final repository = widget.dependencies.notificationRepository;
     if (repository != null) {
       await repository.unregisterCurrentDevice(
@@ -399,7 +401,16 @@ class _AppShellPageState extends State<AppShellPage> {
         ),
       );
     }
+  }
+
+  Future<void> _signOut() async {
+    await _unregisterNotifications();
     await widget.onSignOut();
+  }
+
+  Future<void> _chooseStore() async {
+    await _unregisterNotifications();
+    widget.onChooseStore();
   }
 
   @override
@@ -531,6 +542,14 @@ class _AppShellPageState extends State<AppShellPage> {
               ),
             ),
             const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.storefront_outlined),
+              title: const Text('تغيير المتجر'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _chooseStore();
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('تسجيل الخروج'),
