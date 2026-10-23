@@ -141,6 +141,40 @@ describe('accounting audit safe parsing and data selection', () => {
     assert.deepEqual(result.docs.map((d) => d.id), ['a', 'b', 'c', 'd', 'e']);
   });
 
+  it('holds concurrent journal page scans to a bounded global limit', async () => {
+    const makeJournal = (id) => ({
+      id,
+      ref: {
+        collection(name) {
+          assert.equal(name, 'lines');
+          return mockCollection(Array.from({length: 150}, (_, n) =>
+            id + '-line-' + String(n).padStart(3, '0')));
+        },
+      },
+    });
+    const journals = ['a', 'b', 'c', 'd']
+      .map((id) => makeJournal('j-' + id));
+    const result = await readJournalAuditLines(journals, {
+      maxDocuments: 100, pageSize: 40, concurrency: 4,
+    });
+    assert.equal(result.truncated, true);
+    assert.equal(result.size > 100, true);
+    assert.equal(result.size <= 104, true);
+  });
+
+  it('reports a complete journal scan at exactly the global limit', async () => {
+    const journal = (id, ids) => ({
+      id,
+      ref: {collection: () => mockCollection(ids)},
+    });
+    const result = await readJournalAuditLines([
+      journal('journal-a', ['a', 'b']),
+      journal('journal-b', ['c', 'd']),
+    ], {maxDocuments: 4, pageSize: 2, concurrency: 2});
+    assert.equal(result.truncated, false);
+    assert.equal(result.size, 4);
+  });
+
   it('limits each audited collection to an explicit finite bound', () => {
     assert.equal(Number.isSafeInteger(MAX_AUDIT_DOCS_PER_COLLECTION), true);
     assert.equal(MAX_AUDIT_DOCS_PER_COLLECTION > 0, true);
