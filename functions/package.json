@@ -7,7 +7,7 @@
   },
   "scripts": {
     "check": "node --check index.js",
-    "test": "node --test settle_cheque.test.js store_onboarding.test.js default_chart_of_accounts.test.js manual_journal_integrity.test.js account_transfer_integrity.test.js"
+    "test": "node --test settle_cheque.test.js store_onboarding.test.js default_chart_of_accounts.test.js manual_journal_integrity.test.js account_transfer_integrity.test.js expense_integrity.test.js"
   },
   "dependencies": {
     "firebase-admin": "^13.0.1",
