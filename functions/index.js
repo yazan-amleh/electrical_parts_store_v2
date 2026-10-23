@@ -6731,10 +6731,47 @@ async function runAccountingIntegrityAudit(userId, command) {
       });
       continue;
     }
-    const total = inventoryTotals.get(productId) || {
+    // A matching quantity/value total must never hide a currency conflict.
+    // Older movements may omit currency; in that case use the product's
+    // currency as a read-only comparison fallback, never an exchange rate.
+    const hasMovementCurrency = Object.prototype.hasOwnProperty.call(
+      data, 'currency',
+    );
+    const explicitCurrency = typeof data.currency === 'string' &&
+        data.currency.trim() !== '' ? data.currency : null;
+    if (hasMovementCurrency && !explicitCurrency) {
+      addIssue({
+        code: 'INVENTORY_MOVEMENT_CURRENCY_INVALID',
+        scope: 'inventoryMovement',
+        referenceId: document.id,
+        message: 'Stock movement currency is malformed or empty.',
+      });
+    }
+    const product = productMap.get(productId);
+    if (product && explicitCurrency && explicitCurrency !== product.currency) {
+      addIssue({
+        code: 'INVENTORY_MOVEMENT_PRODUCT_CURRENCY_MISMATCH',
+        scope: 'inventoryMovement',
+        referenceId: document.id,
+        message: 'Stock movement currency differs from product currency.',
+        currency: explicitCurrency,
+      });
+    }
+    const existingTotal = inventoryTotals.get(productId);
+    if (existingTotal && explicitCurrency &&
+        existingTotal.currency !== explicitCurrency) {
+      addIssue({
+        code: 'INVENTORY_MOVEMENT_MULTI_CURRENCY',
+        scope: 'inventoryMovement',
+        referenceId: document.id,
+        message: 'Stock movements of one product use multiple currencies.',
+        currency: explicitCurrency,
+      });
+    }
+    const total = existingTotal || {
       quantity: 0,
       value: 0,
-      currency: data.currency || 'ILS',
+      currency: explicitCurrency || (product && product.currency) || 'ILS',
     };
     const quantity = readMinor(
       data.quantityDeltaMilliUnits, 'inventoryMovement', document.id, true,
