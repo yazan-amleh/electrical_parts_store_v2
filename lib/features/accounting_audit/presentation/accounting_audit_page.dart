@@ -138,6 +138,16 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
                       'النتيجة ليست لقطة محاسبية ذرّية.',
                     ),
                   ],
+                  if (report.orphanDiscoveryCoverage ==
+                      'matching_embedded_store_id_only') ...[
+                    const SizedBox(height: 4),
+                    const Text(
+                      'اكتشاف سطور القيود اليتيمة يعتمد على وجود معرّف '
+                      'المتجر الصحيح داخل السطر. السطور التي تفتقده أو '
+                      'تحتوي معرّفًا خاطئًا قد لا تظهر؛ هذا الفحص ليس '
+                      'شهادة اكتمال لجميع السجلات التاريخية.',
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -157,6 +167,8 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
       'الحسابات': report.accountsChecked,
       'القيود': report.journalEntriesChecked,
       'سطور القيود': report.journalLinesChecked,
+      if (report.orphanDiscoveryCoverage.isNotEmpty)
+        'مستندات البحث المفهرس': report.indexedLineDiscoveryChecked,
       'الأطراف': report.partiesChecked,
       'حركات الأطراف': report.partyLedgerEntriesChecked,
       'الأصناف': report.productsChecked,
