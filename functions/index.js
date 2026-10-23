@@ -16,6 +16,13 @@ const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
 const { createStoreHandler, selectStoreHandler } = require('./store_onboarding');
+const {
+  checkedMinorAdd,
+  readBalanceForPosting,
+  fingerprintJournal,
+  isSameLegacyJournalHeader,
+  isSameLegacyJournalLine,
+} = require('./accounting/journal_integrity');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -830,8 +837,12 @@ function parseJournalEntryCommand(rawCommand) {
       invalid('Each journal line must contain exactly one side.');
     }
 
-    totalDebitMinorUnits += debitMinorUnits;
-    totalCreditMinorUnits += creditMinorUnits;
+    totalDebitMinorUnits = checkedMinorAdd(
+      totalDebitMinorUnits, debitMinorUnits, 'Journal total debit',
+    );
+    totalCreditMinorUnits = checkedMinorAdd(
+      totalCreditMinorUnits, creditMinorUnits, 'Journal total credit',
+    );
     lines.push({
       id: lineId,
       accountId: safeId(
@@ -898,16 +909,41 @@ async function postJournalEntryInTransaction(
     PAYMENT_POSTING_ROLES,
   );
 
+  const fingerprint = fingerprintJournal(command.entry);
   const idempotencySnapshot = await transaction.get(idempotencyRef);
   if (idempotencySnapshot.exists) {
-    const existingEntryId = idempotencySnapshot.data().entryId;
-    if (existingEntryId === command.entry.id) {
-      return {
-        status: 'already_posted',
-        entryId: command.entry.id,
-      };
+    const marker = idempotencySnapshot.data();
+    if (marker.entryId !== command.entry.id) {
+      conflict('The journal idempotency key is already assigned.');
     }
-    conflict('The journal idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('The journal idempotency key was reused with different data.');
+      }
+    } else {
+      // Pre-fingerprint V2 entries must also be verified before acknowledging
+      // a retry. Never claim a changed amount was already posted.
+      const oldJournal = await transaction.get(journalRef);
+      if (!oldJournal.exists ||
+          !isSameLegacyJournalHeader(oldJournal.data(), command.entry)) {
+        conflict('The historical journal cannot be verified for this retry.');
+      }
+      const oldLines = await transaction.get(journalRef.collection('lines'));
+      if (oldLines.size !== command.entry.lines.length) {
+        conflict('The historical journal lines differ from this retry.');
+      }
+      for (const line of command.entry.lines) {
+        const oldLine = oldLines.docs.find((doc) => doc.id === line.id);
+        if (!oldLine ||
+            !isSameLegacyJournalLine(oldLine.data(), line, command.entry)) {
+          conflict('The historical journal lines differ from this retry.');
+        }
+      }
+    }
+    return {
+      status: 'already_posted',
+      entryId: command.entry.id,
+    };
   }
 
   const existingJournalSnapshot = await transaction.get(journalRef);
@@ -952,8 +988,12 @@ async function postJournalEntryInTransaction(
       credit: 0,
     };
     deltas.set(line.accountId, {
-      debit: previous.debit + line.debitMinorUnits,
-      credit: previous.credit + line.creditMinorUnits,
+      debit: checkedMinorAdd(
+        previous.debit, line.debitMinorUnits, 'Account debit delta',
+      ),
+      credit: checkedMinorAdd(
+        previous.credit, line.creditMinorUnits, 'Account credit delta',
+      ),
     });
   }
 
@@ -964,6 +1004,7 @@ async function postJournalEntryInTransaction(
     description: command.entry.description,
     status: 'posted',
     currency: command.entry.currency,
+    requestFingerprint: fingerprint,
     totalDebitMinorUnits: command.entry.totalDebitMinorUnits,
     totalCreditMinorUnits: command.entry.totalCreditMinorUnits,
     postedAt: Timestamp.fromDate(command.entry.postedAt),
@@ -988,12 +1029,21 @@ async function postJournalEntryInTransaction(
 
   for (const accountId of accountIds) {
     const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const previousDebit = storedInt(balance.debitMinorUnits, 0);
-    const previousCredit = storedInt(balance.creditMinorUnits, 0);
+    const previous = readBalanceForPosting(balanceSnapshot, {
+      storeId: command.storeId,
+      accountId,
+      currency: command.entry.currency,
+    });
     const delta = deltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      previous.debit, delta.debit, 'Running account debit balance',
+    );
+    const nextCredit = checkedMinorAdd(
+      previous.credit, delta.credit, 'Running account credit balance',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Running account net balance',
+    );
 
     transaction.set(
       storeRef.collection('account_balances').doc(accountId),
@@ -1001,10 +1051,9 @@ async function postJournalEntryInTransaction(
         storeId: command.storeId,
         accountId,
         currency: command.entry.currency,
-        debitMinorUnits: previousDebit + delta.debit,
-        creditMinorUnits: previousCredit + delta.credit,
-        balanceMinorUnits:
-          previousDebit + delta.debit - previousCredit - delta.credit,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -1014,6 +1063,7 @@ async function postJournalEntryInTransaction(
     storeId: command.storeId,
     entryId: command.entry.id,
     idempotencyKey: command.entry.idempotencyKey,
+    requestFingerprint: fingerprint,
     createdAt: FieldValue.serverTimestamp(),
   });
 
