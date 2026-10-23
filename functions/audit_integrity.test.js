@@ -4,6 +4,9 @@ const assert = require('node:assert/strict');
 const { describe, it } = require('node:test');
 const {
   MAX_AUDIT_DOCS_PER_COLLECTION,
+  MAX_AUDIT_TOTAL_DOCS,
+  readAuditPages,
+  readJournalAuditLines,
   isJournalLinePath,
   auditInteger,
   auditSum,
@@ -54,9 +57,83 @@ describe('accounting audit safe parsing and data selection', () => {
       () => { throw Error('Should not fail'); }), 300);
   });
 
+  function mockCollection(ids) {
+    return {
+      orderBy(field) {
+        assert.equal(field, '__name__');
+        let size = 0;
+        let cursor = null;
+        return {
+          limit(next) {
+            size = next;
+            return this;
+          },
+          startAfter(lastDoc) {
+            cursor = lastDoc.id;
+            return this;
+          },
+          async get() {
+            const after = cursor == null ? 0 :
+              ids.findIndex((id) => id === cursor) + 1;
+            const docs = ids.slice(after, after + size)
+              .map((id) => ({id}));
+            return {docs, size: docs.length, empty: docs.length === 0};
+          },
+        };
+      },
+    };
+  }
+
+  it('reads every page including the final partial page', async () => {
+    const data = await readAuditPages(
+      mockCollection(['a', 'b', 'c', 'd', 'e', 'f', 'g']),
+      {maxDocuments: 9, pageSize: 3},
+    );
+    assert.equal(data.truncated, false);
+    assert.deepEqual(data.docs.map((d) => d.id),
+      ['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+  });
+
+  it('does not mistake a full last page for truncation', async () => {
+    const data = await readAuditPages(
+      mockCollection(['a', 'b', 'c', 'd']),
+      {maxDocuments: 4, pageSize: 2},
+    );
+    assert.equal(data.truncated, false);
+    assert.equal(data.size, 4);
+  });
+
+  it('flags a partial audit on the first extra row beyond a bound', async () => {
+    const data = await readAuditPages(
+      mockCollection(['a', 'b', 'c', 'd', 'e', 'f']),
+      {maxDocuments: 4, pageSize: 2},
+    );
+    assert.equal(data.truncated, true);
+    assert.equal(data.size, 5);
+  });
+
+  it('visits each journal direct subcollection and preserves malformed lines', async () => {
+    const makeJournal = (id, lines) => ({
+      id,
+      ref: {
+        collection(name) {
+          assert.equal(name, 'lines');
+          return mockCollection(lines);
+        },
+      },
+    });
+    const result = await readJournalAuditLines([
+      makeJournal('j-1', ['a', 'b']),
+      makeJournal('j-2', ['c', 'd', 'e']),
+    ], {maxDocuments: 6, pageSize: 2, concurrency: 1});
+    assert.equal(result.truncated, false);
+    assert.deepEqual(result.docs.map((d) => d.id), ['a', 'b', 'c', 'd', 'e']);
+  });
+
   it('limits each audited collection to an explicit finite bound', () => {
     assert.equal(Number.isSafeInteger(MAX_AUDIT_DOCS_PER_COLLECTION), true);
     assert.equal(MAX_AUDIT_DOCS_PER_COLLECTION > 0, true);
     assert.equal(MAX_AUDIT_DOCS_PER_COLLECTION <= 10000, true);
+    assert.equal(MAX_AUDIT_TOTAL_DOCS >= MAX_AUDIT_DOCS_PER_COLLECTION, true);
   });
 });
