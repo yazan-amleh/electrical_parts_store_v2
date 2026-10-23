@@ -29,9 +29,11 @@ void main() {
     expect(session.status, AuthSessionStatus.ready);
     expect(session.membership?.role, StoreRole.owner);
 
-    repo.emit('store-1', const FailureResult<StoreMembership>(
-      AuthorizationFailure('Membership was revoked.'),
-    ));
+    repo.emit(
+        'store-1',
+        const FailureResult<StoreMembership>(
+          AuthorizationFailure('Membership was revoked.'),
+        ));
     expect(session.membership, isNull);
     expect(session.status, AuthSessionStatus.storeSetupRequired);
     expect(session.errorMessage, contains('revoked'));
@@ -53,9 +55,12 @@ void main() {
     await session.signIn(email: 'owner@test.com', password: 'secret');
     var notifications = 0;
     session.addListener(() => notifications++);
-    repo.emit('store-1', const Success<StoreMembership>(
-      StoreMembership(storeId: 'store-1', userId: 'user-1', role: StoreRole.viewer),
-    ));
+    repo.emit(
+        'store-1',
+        const Success<StoreMembership>(
+          StoreMembership(
+              storeId: 'store-1', userId: 'user-1', role: StoreRole.viewer),
+        ));
     expect(session.status, AuthSessionStatus.ready);
     expect(session.membership?.role, StoreRole.viewer);
     expect(notifications, greaterThan(0));
@@ -83,17 +88,23 @@ void main() {
     expect(session.status, AuthSessionStatus.ready);
     expect(session.storeId, 'store-2');
 
-    repo.emit('store-1', const FailureResult<StoreMembership>(
-      AuthorizationFailure('Previous store revoked.'),
-    ));
+    repo.emit(
+        'store-1',
+        const FailureResult<StoreMembership>(
+          AuthorizationFailure('Previous store revoked.'),
+        ));
     expect(session.status, AuthSessionStatus.ready);
     expect(session.membership?.storeId, 'store-2');
 
-    repo.emit('store-2', const Success<StoreMembership>(
-      StoreMembership(
-        storeId: 'store-2', userId: 'user-1', role: StoreRole.accountant,
-      ),
-    ));
+    repo.emit(
+        'store-2',
+        const Success<StoreMembership>(
+          StoreMembership(
+            storeId: 'store-2',
+            userId: 'user-1',
+            role: StoreRole.accountant,
+          ),
+        ));
     expect(session.membership?.role, StoreRole.accountant);
 
     session.dispose();
@@ -112,9 +123,12 @@ void main() {
 
     await session.signIn(email: 'owner@test.com', password: 'secret');
     await session.signOut();
-    repo.emit('store-1', const Success<StoreMembership>(
-      StoreMembership(storeId: 'store-1', userId: 'user-1', role: StoreRole.owner),
-    ));
+    repo.emit(
+        'store-1',
+        const Success<StoreMembership>(
+          StoreMembership(
+              storeId: 'store-1', userId: 'user-1', role: StoreRole.owner),
+        ));
     expect(session.status, AuthSessionStatus.signedOut);
     expect(session.user, isNull);
     expect(session.membership, isNull);
@@ -135,15 +149,20 @@ void main() {
     )..start();
 
     await session.signIn(email: 'owner@test.com', password: 'secret');
-    repo.emit('store-1', const FailureResult<StoreMembership>(
-      InfrastructureFailure('Server not reachable.'),
-    ));
+    repo.emit(
+        'store-1',
+        const FailureResult<StoreMembership>(
+          InfrastructureFailure('Server not reachable.'),
+        ));
     expect(session.status, AuthSessionStatus.failure);
     expect(session.membership, isNull);
 
-    repo.emit('store-1', const Success<StoreMembership>(
-      StoreMembership(storeId: 'store-1', userId: 'user-1', role: StoreRole.owner),
-    ));
+    repo.emit(
+        'store-1',
+        const Success<StoreMembership>(
+          StoreMembership(
+              storeId: 'store-1', userId: 'user-1', role: StoreRole.owner),
+        ));
     expect(session.status, AuthSessionStatus.ready);
 
     session.dispose();
@@ -190,7 +209,6 @@ void main() {
     session.dispose();
     await auth.dispose();
   });
-
 }
 
 class _FakeAuth implements AuthRepository {
@@ -218,12 +236,14 @@ class _FakeAuth implements AuthRepository {
     required String email,
     required String password,
     String? displayName,
-  }) async => const Success<AuthenticatedUser>(user);
+  }) async =>
+      const Success<AuthenticatedUser>(user);
 
   @override
   Future<Result<void>> sendPasswordResetEmail({
     required String email,
-  }) async => const Success<void>(null);
+  }) async =>
+      const Success<void>(null);
 
   @override
   Future<Result<void>> signOut() async {
@@ -250,7 +270,8 @@ class _FakeMembership
   @override
   Future<Result<StoreMembership>> getMembership({
     required StoreContext context,
-  }) async => Success<StoreMembership>(
+  }) async =>
+      Success<StoreMembership>(
         StoreMembership(
           storeId: context.storeId,
           userId: context.userId,
@@ -261,7 +282,8 @@ class _FakeMembership
   @override
   Stream<Result<StoreMembership>> watchMembership({
     required StoreContext context,
-  }) => _watcher(context.storeId).stream;
+  }) =>
+      _watcher(context.storeId).stream;
 
   Future<void> dispose() async {
     for (final controller in _watchers.values) {
@@ -276,7 +298,8 @@ class _FakeOnboarding implements StoreOnboardingRepository {
   @override
   Future<Result<String?>> getSelectedStoreId({
     required String userId,
-  }) async => Success<String?>(_selected);
+  }) async =>
+      Success<String?>(_selected);
 
   @override
   Future<Result<String>> createStore({required String name}) async =>
@@ -296,7 +319,8 @@ class _DelayedAuth extends _FakeAuth {
   Future<Result<AuthenticatedUser>> signInWithEmailPassword({
     required String email,
     required String password,
-  }) => _result.future;
+  }) =>
+      _result.future;
 
   void completeSignIn() =>
       _result.complete(const Success<AuthenticatedUser>(_FakeAuth.user));
@@ -306,7 +330,8 @@ class _WrongMembership implements StoreMembershipRepository {
   @override
   Future<Result<StoreMembership>> getMembership({
     required StoreContext context,
-  }) async => const Success<StoreMembership>(
+  }) async =>
+      const Success<StoreMembership>(
         StoreMembership(
           storeId: 'foreign-tenant',
           userId: 'user-1',
