@@ -6758,8 +6758,10 @@ async function runAccountingIntegrityAudit(userId, command) {
       });
     }
     const existingTotal = inventoryTotals.get(productId);
+    // Missing legacy currency is unknown, NOT evidence of another currency.
     if (existingTotal && explicitCurrency &&
-        existingTotal.currency !== explicitCurrency) {
+        existingTotal.observedCurrency &&
+        existingTotal.observedCurrency !== explicitCurrency) {
       addIssue({
         code: 'INVENTORY_MOVEMENT_MULTI_CURRENCY',
         scope: 'inventoryMovement',
@@ -6772,7 +6774,11 @@ async function runAccountingIntegrityAudit(userId, command) {
       quantity: 0,
       value: 0,
       currency: explicitCurrency || (product && product.currency) || 'ILS',
+      observedCurrency: null,
     };
+    if (explicitCurrency && !total.observedCurrency) {
+      total.observedCurrency = explicitCurrency;
+    }
     const quantity = readMinor(
       data.quantityDeltaMilliUnits, 'inventoryMovement', document.id, true,
     );
