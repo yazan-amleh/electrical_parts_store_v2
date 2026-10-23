@@ -28,6 +28,21 @@ void main() {
     expect(report.inventoryMovementsChecked, 11);
   });
 
+  test('incomplete scan must never be marked healthy', () {
+    final report = AccountingAuditReport.fromMap({
+      'status': 'incomplete',
+      'complete': false,
+      'consistency': 'non_atomic',
+      'storeId': 'shop-1',
+      'checked': const <String, dynamic>{},
+      'issues': const <Map<String, dynamic>>[],
+    });
+
+    expect(report.isComplete, isFalse);
+    expect(report.isHealthy, isFalse);
+    expect(report.isPointInTimeConsistent, isFalse);
+  });
+
   test('keeps warnings visible without hiding accounting errors', () {
     final report = AccountingAuditReport.fromMap({
       'storeId': 'store-1',
