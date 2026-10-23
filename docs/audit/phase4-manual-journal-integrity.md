@@ -39,3 +39,7 @@ Flutter `manual_journal_page.dart` -> `FirestoreAccountingRepository.postJournal
 ## Exit gate
 
 Not complete until: full manual journal CI and emulator evidence, ledger vs balance reconciliation tests, reversed/voided entry strategy, all other financial callable commands characterized and audited, UI parity, and isolated real V2 Firebase end-to-end transactions.
+
+## Verified manual journal + balance mapper CI (2026-10-23)
+
+CI: https://github.com/yazan-amleh/electrical_parts_store_v2/actions/runs/39916810957 — source commit `cefc31b5e0e52ac464550d4b32cd373b37c62dd3`; 108 Flutter tests, 20 rules tests, 14 Functions tests, formatting/analyzer and Web release build **PASS**. Six new manual journal emulator tests and six Dart balance-mapper tests are included. Tests do not constitute a complete accounting audit or authorize production usage.
