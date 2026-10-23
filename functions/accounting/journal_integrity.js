@@ -29,6 +29,22 @@ function readBalanceForPosting(snapshot, { storeId, accountId, currency }) {
   return { debit: row.debitMinorUnits, credit: row.creditMinorUnits };
 }
 
+function readPartyBalanceForPosting(snapshot, { storeId, partyId, partyType, currency }) {
+  if (!snapshot.exists) return { debit: 0, credit: 0 };
+  const row = snapshot.data() || {};
+  if (row.storeId !== storeId || row.partyId !== partyId ||
+      row.partyType !== partyType || row.currency !== currency ||
+      !Number.isSafeInteger(row.debitMinorUnits) ||
+      !Number.isSafeInteger(row.creditMinorUnits) ||
+      row.debitMinorUnits < 0 || row.creditMinorUnits < 0 ||
+      !Number.isSafeInteger(row.balanceMinorUnits) ||
+      row.balanceMinorUnits !== row.debitMinorUnits - row.creditMinorUnits) {
+    throw new HttpsError('failed-precondition',
+      'Party balance projection is invalid. Reconcile the party ledger before posting.');
+  }
+  return { debit: row.debitMinorUnits, credit: row.creditMinorUnits };
+}
+
 // The order of normalized journal line items is part of its business identity.
 function fingerprintJournal(entry) {
   const canonical = {
@@ -81,6 +97,7 @@ function isSameLegacyJournalLine(row, line, entry) {
 module.exports = {
   checkedMinorAdd,
   readBalanceForPosting,
+  readPartyBalanceForPosting,
   fingerprintJournal,
   isSameLegacyJournalHeader,
   isSameLegacyJournalLine,
