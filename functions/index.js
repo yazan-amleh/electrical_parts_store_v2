@@ -19,6 +19,7 @@ const { createStoreHandler, selectStoreHandler } = require('./store_onboarding')
 const {
   checkedMinorAdd,
   readBalanceForPosting,
+  readPartyBalanceForPosting,
   fingerprintJournal,
   isSameLegacyJournalHeader,
   isSameLegacyJournalLine,
@@ -27,6 +28,11 @@ const {
   fingerprintAccountTransfer,
   sameLegacyTransfer,
 } = require('./accounting/transfer_integrity');
+const {
+  expenseFingerprint,
+  sameLegacyExpense,
+  sameLegacyExpenseLines,
+} = require('./accounting/expense_integrity');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -1450,6 +1456,7 @@ function parseExpenseCommand(rawCommand) {
     expense.taxMinorUnits,
     'expense.taxMinorUnits',
   );
+  checkedMinorAdd(amountMinorUnits, taxMinorUnits, 'Expense inclusive tax total');
   if (taxMinorUnits > 0 && !accounts.inputTaxAccountId) {
     invalid('An input tax account is required when tax is present.');
   }
@@ -1527,20 +1534,54 @@ async function postExpenseInTransaction(transaction, userId, command) {
     PAYMENT_POSTING_ROLES,
   );
 
+  const fingerprint = expenseFingerprint(command);
   const expenseIdempotencySnapshot = await transaction.get(
     expenseIdempotencyRef,
   );
   if (expenseIdempotencySnapshot.exists) {
-    const existingExpenseId =
-      expenseIdempotencySnapshot.data().expenseId;
-    if (existingExpenseId === command.expense.id) {
-      return {
-        status: 'already_posted',
-        expenseId: command.expense.id,
-        journalEntryId,
-      };
+    const marker = expenseIdempotencySnapshot.data();
+    if (marker.expenseId !== command.expense.id) {
+      conflict('The expense idempotency key is already assigned.');
     }
-    conflict('The expense idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('Expense idempotency key reused with different financial data.');
+      }
+    } else {
+      const oldExpense = await transaction.get(expenseRef);
+      const oldJournal = await transaction.get(journalRef);
+      const oldMarker = await transaction.get(journalIdempotencyRef);
+      const inclusiveTotal = checkedMinorAdd(
+        command.expense.amountMinorUnits, command.expense.taxMinorUnits,
+        'Expense total',
+      );
+      if (!oldExpense.exists ||
+          !sameLegacyExpense(
+            oldExpense.data(), command, journalEntryId, inclusiveTotal,
+          ) ||
+          !oldJournal.exists ||
+          oldJournal.data().storeId !== command.storeId ||
+          oldJournal.data().status !== 'posted' ||
+          oldJournal.data().sourceType !== 'expense' ||
+          oldJournal.data().currency !== command.expense.currency ||
+          oldJournal.data().totalDebitMinorUnits !== inclusiveTotal ||
+          oldJournal.data().totalCreditMinorUnits !== inclusiveTotal ||
+          !oldMarker.exists ||
+          oldMarker.data().entryId !== journalEntryId) {
+        conflict('Historical expense could not be verified for replay.');
+      }
+      const oldLines = await transaction.get(journalRef.collection('lines'));
+      if (!sameLegacyExpenseLines(
+        oldLines, command, journalEntryId, inclusiveTotal,
+      )) {
+        conflict('Historical expense journal lines differ from this replay.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      expenseId: command.expense.id,
+      journalEntryId,
+    };
   }
 
   const existingExpenseSnapshot = await transaction.get(expenseRef);
@@ -1650,8 +1691,10 @@ async function postExpenseInTransaction(transaction, userId, command) {
     );
   }
 
-  const totalMinorUnits =
-    command.expense.amountMinorUnits + command.expense.taxMinorUnits;
+  const totalMinorUnits = checkedMinorAdd(
+    command.expense.amountMinorUnits, command.expense.taxMinorUnits,
+    'Expense total',
+  );
   const accountDeltas = new Map();
   addDelta(
     accountDeltas,
@@ -1704,6 +1747,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
   const expenseData = {
     storeId: command.storeId,
     idempotencyKey: command.expense.idempotencyKey,
+    requestFingerprint: fingerprint,
     postedAt: Timestamp.fromDate(command.expense.postedAt),
     paymentMethod: command.expense.paymentMethod,
     expenseAccountId: command.expense.expenseAccountId,
@@ -1738,6 +1782,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
       journalRef.collection('lines').doc(line.id),
       {
         ...line,
+        currency: command.expense.currency,
         entryId: journalEntryId,
         postedAt: Timestamp.fromDate(command.expense.postedAt),
       },
@@ -1745,13 +1790,22 @@ async function postExpenseInTransaction(transaction, userId, command) {
   }
 
   if (isCreditExpense) {
-    const balance = supplierBalanceSnapshot.exists
-      ? supplierBalanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const nextDebit = currentDebit;
-    const nextCredit = currentCredit + totalMinorUnits;
+    const prior = readPartyBalanceForPosting(
+      supplierBalanceSnapshot,
+      {
+        storeId: command.storeId,
+        partyId: command.expense.supplierId,
+        partyType: 'supplier',
+        currency: command.expense.currency,
+      },
+    );
+    const nextDebit = prior.debit;
+    const nextCredit = checkedMinorAdd(
+      prior.credit, totalMinorUnits, 'Supplier payable balance',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Supplier payable net balance',
+    );
 
     transaction.set(
       supplierLedgerRef,
@@ -1777,26 +1831,31 @@ async function postExpenseInTransaction(transaction, userId, command) {
         currency: command.expense.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-    const nextDebit = currentDebit + delta.debit;
-    const nextCredit = currentCredit + delta.credit;
-
+    const prior = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.expense.currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      prior.debit, delta.debit, 'Expense account debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      prior.credit, delta.credit, 'Expense account credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Expense account net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
@@ -1805,7 +1864,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
         currency: command.expense.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -1817,6 +1876,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
       storeId: command.storeId,
       expenseId: command.expense.id,
       idempotencyKey: command.expense.idempotencyKey,
+      requestFingerprint: fingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
