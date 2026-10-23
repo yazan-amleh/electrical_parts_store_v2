@@ -1519,6 +1519,9 @@ async function postExpenseInTransaction(transaction, userId, command) {
   const supplierLedgerRef = isCreditExpense
     ? storeRef.collection('party_ledger_entries').doc(supplierLedgerId)
     : null;
+  const supplierRef = isCreditExpense
+    ? storeRef.collection('parties').doc(command.expense.supplierId)
+    : null;
   const supplierBalanceId = isCreditExpense
     ? 'supplier-' + command.expense.supplierId
     : null;
@@ -1604,6 +1607,11 @@ async function postExpenseInTransaction(transaction, userId, command) {
   let supplierLedgerSnapshot = null;
   let supplierBalanceSnapshot = null;
   if (isCreditExpense) {
+    const supplierSnapshot = await transaction.get(supplierRef);
+    assertParty(
+      supplierSnapshot, command.storeId, command.expense.supplierId,
+      'supplier',
+    );
     supplierLedgerSnapshot = await transaction.get(supplierLedgerRef);
     if (supplierLedgerSnapshot.exists) {
       conflict('A supplier ledger entry for this expense already exists.');
