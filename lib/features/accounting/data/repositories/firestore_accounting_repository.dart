@@ -122,10 +122,8 @@ class FirestoreAccountingRepository implements AccountingRepository {
               expectedStoreId: context.storeId,
             )
           : null;
-      final debitCreditBalance =
-          projection?.debitCreditBalance.minorUnits ?? 0;
-      if (projection != null &&
-          projection.debit.currency != account.currency) {
+      final debitCreditBalance = projection?.debitCreditBalance.minorUnits ?? 0;
+      if (projection != null && projection.debit.currency != account.currency) {
         return const FailureResult<Money>(
           ValidationFailure('Account balance currency does not match account.'),
         );
@@ -165,5 +163,4 @@ class FirestoreAccountingRepository implements AccountingRepository {
         return InfrastructureFailure(error.message ?? error.code);
     }
   }
-
 }
