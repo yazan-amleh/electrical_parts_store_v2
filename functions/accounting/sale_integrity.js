@@ -96,7 +96,8 @@ function matchesLegacySaleJournal(header, snapshot, command, journalId, saleRow)
       row.entryId === journalId &&
       row.accountId === accountId &&
       (row.currency == null || row.currency === s.currency) &&
-      row.lineNumber === lineNumber &&
+      (row.lineNumber === lineNumber ||
+        (id === s.id + '-inventory' && row.lineNumber === lineNumber + 1)) &&
       row.debitMinorUnits === debit &&
       row.creditMinorUnits === credit &&
       posted instanceof Date && posted.getTime() === s.postedAt.getTime();
