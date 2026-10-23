@@ -49,6 +49,7 @@ class AuthGate extends StatelessWidget {
               user: user,
               membership: membership,
               onSignOut: controller.signOut,
+              onChooseStore: controller.openStoreSetup,
             );
           case AuthSessionStatus.storeSetupRequired:
             return StoreSetupPage(controller: controller);
