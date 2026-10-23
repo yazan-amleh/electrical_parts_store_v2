@@ -4437,13 +4437,21 @@ async function postSaleInTransaction(
   }
 
   if (isCreditSale) {
-    const balance = customerBalanceSnapshot.exists
-      ? customerBalanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const nextDebit = currentDebit + grandTotalMinorUnits;
-    const nextCredit = currentCredit;
+    const prior = readPartyBalanceForPosting(
+      customerBalanceSnapshot, {
+        storeId: command.storeId,
+        partyId: command.sale.customerId,
+        partyType: 'customer',
+        currency: command.sale.currency,
+      },
+    );
+    const nextDebit = checkedMinorAdd(
+      prior.debit, grandTotalMinorUnits, 'Sale customer receivable',
+    );
+    const nextCredit = prior.credit;
+    const nextPartyNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Sale customer net receivable',
+    );
 
     transaction.set(
       customerLedgerRef,
@@ -4469,26 +4477,30 @@ async function postSaleInTransaction(
         currency: command.sale.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextPartyNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-    const nextDebit = currentDebit + delta.debit;
-    const nextCredit = currentCredit + delta.credit;
-
+    const prior = readBalanceForPosting(
+      balanceSnapshots.get(accountId), {
+        storeId: command.storeId,
+        accountId,
+        currency: command.sale.currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      prior.debit, delta.debit, 'Sale GL account debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      prior.credit, delta.credit, 'Sale GL account credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Sale GL account net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
@@ -4497,7 +4509,7 @@ async function postSaleInTransaction(
         currency: command.sale.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
