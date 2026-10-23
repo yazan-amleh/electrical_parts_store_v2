@@ -3082,13 +3082,21 @@ async function postPurchaseInTransaction(
   }
 
   if (isCreditPurchase) {
-    const balance = supplierBalanceSnapshot.exists
-      ? supplierBalanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const nextDebit = currentDebit;
-    const nextCredit = currentCredit + grandTotalMinorUnits;
+    const prior = readPartyBalanceForPosting(
+      supplierBalanceSnapshot, {
+        storeId: command.storeId,
+        partyId: command.purchase.supplierId,
+        partyType: 'supplier',
+        currency: command.purchase.currency,
+      },
+    );
+    const nextDebit = prior.debit;
+    const nextCredit = checkedMinorAdd(
+      prior.credit, grandTotalMinorUnits, 'Purchase supplier payable',
+    );
+    const nextPartyNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Purchase supplier net balance',
+    );
 
     transaction.set(
       supplierLedgerRef,
@@ -3114,26 +3122,30 @@ async function postPurchaseInTransaction(
         currency: command.purchase.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextPartyNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-    const nextDebit = currentDebit + delta.debit;
-    const nextCredit = currentCredit + delta.credit;
-
+    const prior = readBalanceForPosting(
+      balanceSnapshots.get(accountId), {
+        storeId: command.storeId,
+        accountId,
+        currency: command.purchase.currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      prior.debit, delta.debit, 'Purchase GL account debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      prior.credit, delta.credit, 'Purchase GL account credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Purchase GL account net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
@@ -3142,7 +3154,7 @@ async function postPurchaseInTransaction(
         currency: command.purchase.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
