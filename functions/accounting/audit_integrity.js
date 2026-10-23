@@ -20,6 +20,36 @@ function isJournalLinePath(ref, storeId) {
     parts[5].length > 0;
 }
 
+/**
+ * Inspect store-ID-indexed collection-group results for journal line paths
+ * whose journal header is absent. Parent traversal cannot see these orphans
+ * because Firestore permits subcollections below nonexistent documents.
+ *
+ * The discovery query is bounded and tenant-filtered by the caller. This
+ * function never infers ownership from an embedded entryId alone: the actual
+ * document reference path must belong to the requested store.
+ * Lines with missing/wrong embedded storeId are NOT discoverable by that
+ * indexed query; read-only audit results must disclose that coverage limit.
+ */
+function findIndexedOrphanJournalLines(documents, journalEntryIds, storeId) {
+  if (!(journalEntryIds instanceof Set)) {
+    throw new Error('Audit journalEntryIds must be a Set');
+  }
+  const orphans = [];
+  for (const document of documents) {
+    if (!isJournalLinePath(document.ref, storeId)) continue;
+    const entryId = document.ref.parent.parent.id;
+    if (!journalEntryIds.has(entryId)) {
+      orphans.push({
+        entryId,
+        lineId: document.id,
+        path: document.ref.path,
+      });
+    }
+  }
+  return orphans;
+}
+
 function auditInteger(value, issue, addIssue, {allowNegative = false} = {}) {
   if (!Number.isSafeInteger(value) || (!allowNegative && value < 0)) {
     addIssue({
@@ -147,6 +177,7 @@ module.exports = {
   readAuditPages,
   readJournalAuditLines,
   isJournalLinePath,
+  findIndexedOrphanJournalLines,
   auditInteger,
   auditSum,
 };
