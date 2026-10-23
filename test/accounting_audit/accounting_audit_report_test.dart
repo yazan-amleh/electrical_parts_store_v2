@@ -43,6 +43,25 @@ void main() {
     expect(report.isPointInTimeConsistent, isFalse);
   });
 
+  test('server-wide issue count blocks false healthy when details are capped', () {
+    final report = AccountingAuditReport.fromMap({
+      'status': 'issues_found',
+      'complete': true,
+      'consistency': 'non_atomic',
+      'storeId': 'shop-1',
+      'checked': const <String, dynamic>{},
+      'issueCount': 340,
+      'errorCount': 10,
+      'issuesTruncated': true,
+      'issues': const <Map<String, dynamic>>[],
+    });
+
+    expect(report.isHealthy, isFalse);
+    expect(report.errorCount, 10);
+    expect(report.warningCount, 330);
+    expect(report.issuesTruncated, isTrue);
+  });
+
   test('keeps warnings visible without hiding accounting errors', () {
     final report = AccountingAuditReport.fromMap({
       'storeId': 'store-1',
