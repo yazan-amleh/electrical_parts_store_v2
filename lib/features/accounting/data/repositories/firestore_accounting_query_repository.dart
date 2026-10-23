@@ -11,6 +11,7 @@ import '../../domain/entities/account_ledger_line.dart';
 import '../../domain/entities/trial_balance.dart';
 import '../../domain/repositories/accounting_query_repository.dart';
 import '../mappers/account_firestore_mapper.dart';
+import '../mappers/account_balance_firestore_mapper.dart';
 
 class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
   FirestoreAccountingQueryRepository({required FirebaseFirestore firestore})
@@ -63,23 +64,11 @@ class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
 
       final balances = <AccountBalanceSnapshot>[];
       for (final document in snapshot.docs) {
-        final data = document.data();
-        if (_string(data['storeId']) != context.storeId) {
-          continue;
-        }
-
-        final currency = _string(data['currency'], fallback: 'ILS')!;
         balances.add(
-          AccountBalanceSnapshot(
-            accountId: _string(data['accountId'], fallback: document.id)!,
-            debit: Money(
-              minorUnits: _int(data['debitMinorUnits']),
-              currency: currency,
-            ),
-            credit: Money(
-              minorUnits: _int(data['creditMinorUnits']),
-              currency: currency,
-            ),
+          AccountBalanceFirestoreMapper.fromMap(
+            data: document.data(),
+            documentAccountId: document.id,
+            expectedStoreId: context.storeId,
           ),
         );
       }
@@ -118,6 +107,17 @@ class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
         .value
         .asMap()
         .map((_, value) => MapEntry(value.accountId, value));
+
+    final accountIds = accounts.map((account) => account.id).toSet();
+    for (final balanceId in balances.keys) {
+      if (!accountIds.contains(balanceId)) {
+        return FailureResult<TrialBalance>(
+          ValidationFailure(
+            'Account balance exists without a chart account: $balanceId.',
+          ),
+        );
+      }
+    }
 
     final lines = <TrialBalanceLine>[];
     for (final account in accounts.where((account) => !account.isHeader)) {
@@ -254,14 +254,6 @@ class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
       return value.toUtc();
     }
     return null;
-  }
-
-  static int _int(Object? value) {
-    return value is int
-        ? value
-        : value is num
-            ? value.toInt()
-            : 0;
   }
 
   static String? _string(Object? value, {String? fallback}) {
