@@ -33,11 +33,11 @@ function request(storeId, id, key, options = {}) {
           quantityMilliUnits: 1000,
           unitFactorToBaseMilliUnits: 1000,
           unitPriceMinorUnits: options.price ?? 900,
-          unitCostMinorUnits: 400,
+          unitCostMinorUnits: options.service ? 0 : 400,
           discountMinorUnits: 0,
           unitId: null,
           unitName: null,
-          isService: false,
+          isService: options.service === true,
         }],
       },
       postingAccounts: {
@@ -46,7 +46,7 @@ function request(storeId, id, key, options = {}) {
         salesAccountId: '4110',
         inventoryAccountId: '1150',
         costOfSalesAccountId: '5110',
-        taxAccountId: tax ? '2120' : null,
+        taxAccountId: tax || options.keepOptionalTax ? '2120' : null,
       },
     },
   };
@@ -155,6 +155,30 @@ describe('sales inventory, journal and receivable integrity', () => {
     const tax = (await store.collection('account_balances')
       .doc('2120').get()).data();
     assert.equal(tax.creditMinorUnits, 153);
+    await db.recursiveDelete(store);
+  });
+
+  it('service-only sale safely posts without COGS or inventory movements', async () => {
+    const store = await seed('sale-service-zero-deltas', {
+      isService: true,
+      quantityOnHandMilliUnits: 0,
+      purchasePriceMinorUnits: 0,
+      inventoryValueMinorUnits: 0,
+    });
+    const response = await invoke(request(
+      store.id, 'sale-service', 'sale-service-key',
+      { service: true, keepOptionalTax: true },
+    ));
+    assert.equal(response.status, 'posted');
+    assert.equal((await store.collection('inventory_movements').get()).empty, true);
+    const journal = (await store.collection('journal_entries')
+      .doc('sale-service-journal').get()).data();
+    assert.equal(journal.totalDebitMinorUnits, 900);
+    assert.equal(journal.totalCreditMinorUnits, 900);
+    assert.equal((await store.collection('journal_entries')
+      .doc('sale-service-journal').collection('lines').get()).size, 2);
+    assert.equal((await store.collection('account_balances').doc('5110').get())
+      .data().balanceMinorUnits, 0);
     await db.recursiveDelete(store);
   });
 
