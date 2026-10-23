@@ -77,6 +77,21 @@ describe('accounting integrity audit reads ledger without mutation', () => {
     await db.recursiveDelete(store);
   });
 
+  it('detects wrong or missing storeId on nested journal lines', async () => {
+    const store = await seed('audit-wrong-journal-tenant');
+    await store.collection('journal_entries').doc('journal-a')
+      .collection('lines').doc('debit')
+      .update({storeId: 'another-shop'});
+    const report = await audit(store.id);
+    assert.equal(report.complete, true);
+    assert.equal(report.status, 'issues_found');
+    assert.equal(report.checked.journalLines, 2);
+    assert.equal(report.issues.some(
+      (issue) => issue.code === 'JOURNAL_LINE_STORE_MISMATCH',
+    ), true);
+    await db.recursiveDelete(store);
+  });
+
   it('reports malformed existing journal money instead of masking as zero', async () => {
     const store = await seed('audit-malformed-journal');
     await store.collection('journal_entries').doc('journal-a')
