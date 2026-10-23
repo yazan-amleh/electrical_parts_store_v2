@@ -3418,7 +3418,9 @@ async function createPurchaseOrderInTransaction(
       line.unitCostMinorUnits,
       baseQuantityMilliUnits,
     );
-    totalMinorUnits += lineTotalMinorUnits;
+    totalMinorUnits = checkedMinorAdd(
+      totalMinorUnits, lineTotalMinorUnits, 'Purchase order total',
+    );
     storedLines.push({
       id: line.id,
       productId: line.productId,
