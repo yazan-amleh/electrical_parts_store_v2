@@ -28,7 +28,9 @@ void main() {
     final data = good()..['storeId'] = 'v2-store-b';
     expect(
       () => AccountBalanceFirestoreMapper.fromMap(
-        data: data, documentAccountId: '1110', expectedStoreId: 'v2-store-a',
+        data: data,
+        documentAccountId: '1110',
+        expectedStoreId: 'v2-store-a',
       ),
       throwsFormatException,
     );
@@ -38,7 +40,9 @@ void main() {
     final data = good()..['accountId'] = '1121';
     expect(
       () => AccountBalanceFirestoreMapper.fromMap(
-        data: data, documentAccountId: '1110', expectedStoreId: 'v2-store-a',
+        data: data,
+        documentAccountId: '1110',
+        expectedStoreId: 'v2-store-a',
       ),
       throwsFormatException,
     );
@@ -49,7 +53,9 @@ void main() {
       final data = good()..['debitMinorUnits'] = amount;
       expect(
         () => AccountBalanceFirestoreMapper.fromMap(
-          data: data, documentAccountId: '1110', expectedStoreId: 'v2-store-a',
+          data: data,
+          documentAccountId: '1110',
+          expectedStoreId: 'v2-store-a',
         ),
         throwsFormatException,
       );
@@ -79,7 +85,9 @@ void main() {
           AccountBalanceFirestoreMapper.maxSafeMinorUnits + 1;
     expect(
       () => AccountBalanceFirestoreMapper.fromMap(
-        data: data, documentAccountId: '1110', expectedStoreId: 'v2-store-a',
+        data: data,
+        documentAccountId: '1110',
+        expectedStoreId: 'v2-store-a',
       ),
       throwsFormatException,
     );
