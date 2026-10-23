@@ -114,6 +114,89 @@ describe('accounting integrity audit reads ledger without mutation', () => {
     await db.recursiveDelete(store);
   });
 
+  async function seedInventory(store, {withMovement = true} = {}) {
+    const batch = db.batch();
+    for (const [id, type, controlType] of [
+      ['1150', 'asset', 'inventory'],
+      ['2110', 'liability', 'supplierPayable'],
+    ]) {
+      batch.set(store.collection('accounts').doc(id), {
+        storeId: store.id, id, currency: 'ILS', type, controlType,
+        isActive: true, isHeader: false,
+      });
+    }
+    batch.set(store.collection('account_balances').doc('1150'), {
+      storeId: store.id, accountId: '1150', currency: 'ILS',
+      debitMinorUnits: 700, creditMinorUnits: 0, balanceMinorUnits: 700,
+    });
+    batch.set(store.collection('account_balances').doc('2110'), {
+      storeId: store.id, accountId: '2110', currency: 'ILS',
+      debitMinorUnits: 0, creditMinorUnits: 700, balanceMinorUnits: -700,
+    });
+    batch.set(store.collection('journal_entries').doc('stock-receipt'), {
+      storeId: store.id, status: 'posted', sourceType: 'purchase',
+      currency: 'ILS', totalDebitMinorUnits: 700, totalCreditMinorUnits: 700,
+    });
+    batch.set(store.collection('journal_entries').doc('stock-receipt')
+      .collection('lines').doc('inventory'), {
+      storeId: store.id, entryId: 'stock-receipt',
+      accountId: '1150', currency: 'ILS',
+      debitMinorUnits: 700, creditMinorUnits: 0,
+    });
+    batch.set(store.collection('journal_entries').doc('stock-receipt')
+      .collection('lines').doc('supplier'), {
+      storeId: store.id, entryId: 'stock-receipt',
+      accountId: '2110', currency: 'ILS',
+      debitMinorUnits: 0, creditMinorUnits: 700,
+    });
+    batch.set(store.collection('products').doc('component-1'), {
+      storeId: store.id, isService: false, currency: 'ILS',
+      quantityOnHandMilliUnits: 1000, inventoryValueMinorUnits: 700,
+    });
+    if (withMovement) {
+      batch.set(store.collection('inventory_movements').doc('stock-in'), {
+        storeId: store.id, productId: 'component-1', currency: 'ILS',
+        quantityDeltaMilliUnits: 1000, totalCostMinorUnits: 700,
+      });
+    }
+    await batch.commit();
+  }
+
+  it('reconciles product value, inventory movement, and GL inventory net', async () => {
+    const store = await seed('audit-inventory-reconciles');
+    await seedInventory(store);
+    const report = await audit(store.id);
+    assert.equal(report.status, 'healthy');
+    assert.equal(report.complete, true);
+    assert.equal(report.issues.length, 0);
+    await db.recursiveDelete(store);
+  });
+
+  it('reports a product valuation change against movement and GL', async () => {
+    const store = await seed('audit-inventory-gl-difference');
+    await seedInventory(store);
+    await store.collection('products').doc('component-1').update({
+      inventoryValueMinorUnits: 699,
+    });
+    const report = await audit(store.id);
+    assert.equal(report.status, 'issues_found');
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'INVENTORY_VALUE_MISMATCH'), true);
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'INVENTORY_GL_VALUATION_MISMATCH'), true);
+    await db.recursiveDelete(store);
+  });
+
+  it('does not certify product stock without original movement/opening evidence', async () => {
+    const store = await seed('audit-inventory-unverified-opening');
+    await seedInventory(store, {withMovement: false});
+    const report = await audit(store.id);
+    assert.equal(report.status, 'issues_found');
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'INVENTORY_OPENING_SOURCE_UNVERIFIED'), true);
+    await db.recursiveDelete(store);
+  });
+
   it('identifies tampered party net balance even when debit/credit ledger totals agree', async () => {
     const store = await seed('audit-party-net');
     const batch = db.batch();
