@@ -92,6 +92,33 @@ describe('accounting integrity audit reads ledger without mutation', () => {
     await db.recursiveDelete(store);
   });
 
+  it('detects a journal line booked against a differently denominated account', async () => {
+    const store = await seed('audit-account-line-currency');
+    await store.collection('accounts').doc('1110').update({
+      currency: 'USD',
+    });
+    const report = await audit(store.id);
+    assert.equal(report.complete, true);
+    assert.equal(report.status, 'issues_found');
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'JOURNAL_LINE_ACCOUNT_CURRENCY_MISMATCH'), true);
+    await db.recursiveDelete(store);
+  });
+
+  it('reports a credit-only header mismatch without inventing a debit mismatch', async () => {
+    const store = await seed('audit-header-credit-only');
+    await store.collection('journal_entries').doc('journal-a').update({
+      totalCreditMinorUnits: 400,
+    });
+    const report = await audit(store.id);
+    assert.equal(report.status, 'issues_found');
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'JOURNAL_HEADER_CREDIT_MISMATCH'), true);
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'JOURNAL_HEADER_TOTAL_MISMATCH'), false);
+    await db.recursiveDelete(store);
+  });
+
   it('reports malformed existing journal money instead of masking as zero', async () => {
     const store = await seed('audit-malformed-journal');
     await store.collection('journal_entries').doc('journal-a')
