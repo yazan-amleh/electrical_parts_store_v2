@@ -62,6 +62,9 @@ const {
 } = require('./accounting/purchase_order_receipt_integrity');
 const {
   MAX_AUDIT_DOCS_PER_COLLECTION,
+  MAX_AUDIT_TOTAL_DOCS,
+  readAuditPages,
+  readJournalAuditLines,
   isJournalLinePath,
   auditInteger,
   auditSum,
@@ -6035,30 +6038,55 @@ async function runAccountingIntegrityAudit(userId, command) {
     new Set(['owner', 'admin', 'accountant']),
   );
 
-  const [
-    accountsSnapshot,
-    accountBalancesSnapshot,
-    journalEntriesSnapshot,
-    journalLinesSnapshot,
-    partiesSnapshot,
-    partyBalancesSnapshot,
-    partyLedgerSnapshot,
-    productsSnapshot,
-    inventoryMovementsSnapshot,
-  ] = await Promise.all([
-    storeRef.collection('accounts').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
-    storeRef.collection('account_balances').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
-    storeRef.collection('journal_entries').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
-    db.collectionGroup('lines')
-      .where('storeId', '==', command.storeId)
-      .limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1)
-      .get(),
-    storeRef.collection('parties').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
-    storeRef.collection('party_balances').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
-    storeRef.collection('party_ledger_entries').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
-    storeRef.collection('products').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
-    storeRef.collection('inventory_movements').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
-  ]);
+  // Read all pages from direct store-scoped collections. A read-only audit
+  // must not silently skip later documents or confuse invoice lines with GL.
+  const collectionNames = [
+    'accounts',
+    'account_balances',
+    'journal_entries',
+    'parties',
+    'party_balances',
+    'party_ledger_entries',
+    'products',
+    'inventory_movements',
+  ];
+  const scans = new Map();
+  let scannedDocuments = 0;
+  let scanIncomplete = false;
+  for (const name of collectionNames) {
+    if (scanIncomplete) {
+      scans.set(name, {docs: [], size: 0, truncated: true});
+      continue;
+    }
+    const remaining = MAX_AUDIT_TOTAL_DOCS - scannedDocuments;
+    const snapshot = await readAuditPages(
+      storeRef.collection(name), {
+        maxDocuments: Math.min(MAX_AUDIT_DOCS_PER_COLLECTION, remaining),
+      },
+    );
+    scans.set(name, snapshot);
+    scannedDocuments += snapshot.size;
+    scanIncomplete = snapshot.truncated;
+  }
+
+  const accountsSnapshot = scans.get('accounts');
+  const accountBalancesSnapshot = scans.get('account_balances');
+  const journalEntriesSnapshot = scans.get('journal_entries');
+  const partiesSnapshot = scans.get('parties');
+  const partyBalancesSnapshot = scans.get('party_balances');
+  const partyLedgerSnapshot = scans.get('party_ledger_entries');
+  const productsSnapshot = scans.get('products');
+  const inventoryMovementsSnapshot = scans.get('inventory_movements');
+  // Directly scan every journal's own lines. Unlike collectionGroup where
+  // storeId is indexed, this detects malformed/missing line.storeId as well.
+  const journalLinesSnapshot = scanIncomplete
+    ? {docs: [], size: 0, truncated: true}
+    : await readJournalAuditLines(journalEntriesSnapshot.docs, {
+      maxDocuments: Math.min(
+        MAX_AUDIT_DOCS_PER_COLLECTION,
+        MAX_AUDIT_TOTAL_DOCS - scannedDocuments,
+      ),
+    });
 
   const issues = [];
   const addIssue = ({
@@ -6100,7 +6128,7 @@ async function runAccountingIntegrityAudit(userId, command) {
     stockMovements: inventoryMovementsSnapshot,
   };
   const truncated = Object.entries(sources)
-    .filter(([, snapshot]) => snapshot.size > MAX_AUDIT_DOCS_PER_COLLECTION)
+    .filter(([, snapshot]) => snapshot.truncated)
     .map(([name]) => name);
   if (truncated.length > 0) {
     return {
