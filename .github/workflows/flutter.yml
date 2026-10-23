@@ -55,6 +55,14 @@ jobs:
       - name: Test
         run: flutter test
 
+      # Compile the deployable Web target; compilation does not publish or
+      # connect to production Firebase. Runtime Firebase E2E is a separate gate.
+      - name: Build V2 Web release (no deploy)
+        run: |
+          flutter build web --release \
+            --dart-define=USE_FIREBASE=true \
+            --dart-define=FIREBASE_PROJECT_ID=electrical-store-v2-prod
+
       - name: Install Firestore rules test dependencies
         working-directory: firestore_rules_test
         run: npm install --no-audit --no-fund
