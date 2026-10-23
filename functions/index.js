@@ -4491,7 +4491,9 @@ async function postSaleInTransaction(
         currency: command.sale.currency,
       },
     );
-    const delta = accountDeltas.get(accountId);
+    // Optional tax and service-only COGS accounts can legitimately have
+    // no posting delta, but existing balances must still validate.
+    const delta = accountDeltas.get(accountId) || { debit: 0, credit: 0 };
     const nextDebit = checkedMinorAdd(
       prior.debit, delta.debit, 'Sale GL account debit',
     );
