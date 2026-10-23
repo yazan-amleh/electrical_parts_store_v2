@@ -92,8 +92,10 @@ class FirestoreStoreMembershipRepository
     }
 
     final data = snapshot.data() ?? const <String, dynamic>{};
-    if (data['storeId'] != context.storeId ||
-        data['userId'] != context.userId ||
+    // Older V2 membership documents may omit the redundant IDs; the
+    // authenticated document path remains authoritative for those records.
+    if ((data['storeId'] != null && data['storeId'] != context.storeId) ||
+        (data['userId'] != null && data['userId'] != context.userId) ||
         data['isActive'] != true) {
       return const FailureResult<StoreMembership>(
         AuthorizationFailure('عضوية المتجر غير نشطة أو بياناتها غير صالحة.'),
