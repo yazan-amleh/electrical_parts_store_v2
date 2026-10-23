@@ -276,6 +276,27 @@ describe('accounting integrity audit reads ledger without mutation', () => {
     await db.recursiveDelete(store);
   });
 
+  it('does not infer mixed currencies from an unknown legacy currency', async () => {
+    const store = await seed('audit-stock-legacy-mixed-unknown');
+    await seedInventory(store);
+    await store.collection('inventory_movements').doc('stock-in').update({
+      currency: admin.firestore.FieldValue.delete(),
+      quantityDeltaMilliUnits: 500,
+      totalCostMinorUnits: 350,
+    });
+    await store.collection('inventory_movements').doc('stock-in-2').set({
+      storeId: store.id, productId: 'component-1', currency: 'USD',
+      quantityDeltaMilliUnits: 500, totalCostMinorUnits: 350,
+    });
+    const report = await audit(store.id);
+    assert.equal(report.status, 'issues_found');
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'INVENTORY_MOVEMENT_PRODUCT_CURRENCY_MISMATCH'), true);
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'INVENTORY_MOVEMENT_MULTI_CURRENCY'), false);
+    await db.recursiveDelete(store);
+  });
+
   it('flags an explicitly malformed stock movement currency', async () => {
     const store = await seed('audit-stock-invalid-currency');
     await seedInventory(store);
