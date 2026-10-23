@@ -907,4 +907,29 @@ describe('Firestore security rules', function () {
     );
   });
 
+  it('does not allow owners to forge or remove seeded chart metadata', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(doc(context.firestore(), 'stores', STORE_ID), {
+        initialChartVersion: 1,
+        initialChartAccountCount: 25,
+      });
+    });
+    await assertFails(
+      updateDoc(doc(ownerDb, 'stores', STORE_ID), {
+        initialChartVersion: 2,
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(ownerDb, 'stores', STORE_ID), {
+        initialChartAccountCount: 0,
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(ownerDb, 'stores', STORE_ID), {
+        name: 'New Store Name',
+      }),
+    );
+  });
+
+
 });
