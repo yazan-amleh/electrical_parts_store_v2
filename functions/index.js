@@ -6090,6 +6090,7 @@ async function runAccountingIntegrityAudit(userId, command) {
 
   const issues = [];
   let totalIssueCount = 0;
+  let totalErrorCount = 0;
   const addIssue = ({
     code,
     scope,
@@ -6102,6 +6103,7 @@ async function runAccountingIntegrityAudit(userId, command) {
     actual,
   }) => {
     totalIssueCount += 1;
+    if (severity === 'error') totalErrorCount += 1;
     if (issues.length >= 200) {
       return;
     }
@@ -6868,9 +6870,7 @@ async function runAccountingIntegrityAudit(userId, command) {
   }
 
   return {
-    status: issues.some((issue) => issue.severity === 'error')
-      ? 'issues_found'
-      : 'healthy',
+    status: totalErrorCount > 0 ? 'issues_found' : 'healthy',
     complete: true,
     consistency: 'non_atomic',
     storeId: command.storeId,
@@ -6887,6 +6887,7 @@ async function runAccountingIntegrityAudit(userId, command) {
       inventoryMovements: inventoryMovementsSnapshot.size,
     },
     issueCount: totalIssueCount,
+    errorCount: totalErrorCount,
     issuesTruncated: totalIssueCount > issues.length,
     issues,
   };
