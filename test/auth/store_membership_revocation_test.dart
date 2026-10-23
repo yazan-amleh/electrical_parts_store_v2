@@ -150,6 +150,47 @@ void main() {
     await repo.dispose();
     await auth.dispose();
   });
+
+  test('late sign-in completion never resurrects a logged-out session',
+      () async {
+    final auth = _DelayedAuth();
+    final repo = _FakeMembership();
+    final session = AuthSessionController(
+      authRepository: auth,
+      membershipRepository: repo,
+      storeId: 'store-1',
+    )..start();
+
+    final pending = session.signIn(email: 'owner@test.com', password: 'secret');
+    expect(session.status, AuthSessionStatus.signingIn);
+    await session.signOut();
+    auth.completeSignIn();
+    await pending;
+
+    expect(session.status, AuthSessionStatus.signedOut);
+    expect(session.user, isNull);
+    expect(session.membership, isNull);
+    session.dispose();
+    await repo.dispose();
+    await auth.dispose();
+  });
+
+  test('rejects a repository membership belonging to a different tenant',
+      () async {
+    final auth = _FakeAuth();
+    final repo = _WrongMembership();
+    final session = AuthSessionController(
+      authRepository: auth,
+      membershipRepository: repo,
+      storeId: 'store-1',
+    )..start();
+    await session.signIn(email: 'owner@test.com', password: 'secret');
+    expect(session.status, AuthSessionStatus.failure);
+    expect(session.membership, isNull);
+    session.dispose();
+    await auth.dispose();
+  });
+
 }
 
 class _FakeAuth implements AuthRepository {
@@ -246,4 +287,30 @@ class _FakeOnboarding implements StoreOnboardingRepository {
     _selected = storeId;
     return Success<String>(storeId);
   }
+}
+
+class _DelayedAuth extends _FakeAuth {
+  final _result = Completer<Result<AuthenticatedUser>>();
+
+  @override
+  Future<Result<AuthenticatedUser>> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) => _result.future;
+
+  void completeSignIn() =>
+      _result.complete(const Success<AuthenticatedUser>(_FakeAuth.user));
+}
+
+class _WrongMembership implements StoreMembershipRepository {
+  @override
+  Future<Result<StoreMembership>> getMembership({
+    required StoreContext context,
+  }) async => const Success<StoreMembership>(
+        StoreMembership(
+          storeId: 'foreign-tenant',
+          userId: 'user-1',
+          role: StoreRole.owner,
+        ),
+      );
 }
