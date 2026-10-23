@@ -143,6 +143,42 @@ describe('customer and supplier party payment accounting', () => {
     await db.recursiveDelete(store);
   });
 
+  it('legacy cheque payment replay remains safe after cheque bounces', async () => {
+    const store = await seed('party-cheque-bounced-legacy');
+    const req = payload(store.id, 'pay-bounced', 'pay-bounced-key',
+      500, { cheque: true });
+    await post(req);
+    await store.collection('party_payment_idempotency').doc('pay-bounced-key')
+      .update({ requestFingerprint: admin.firestore.FieldValue.delete() });
+    const bounce = await functions.settleCheque.run({
+      auth: req.auth,
+      data: {
+        storeId: store.id,
+        chequeId: 'pay-bounced',
+        action: 'bounce',
+        idempotencyKey: 'pay-bounced-settlement',
+        postedAt: '2026-10-12T08:00:00.000Z',
+        accounts: {
+          checksAccountId: '1130',
+          issuedChecksAccountId: '2210',
+          customerReceivableAccountId: '1140',
+          supplierPayableAccountId: '2110',
+          bankAccountId: null,
+        },
+      },
+    });
+    assert.equal(bounce.status, 'bounced');
+    assert.equal((await post(req)).status, 'already_posted');
+    await assert.rejects(
+      post(payload(store.id, 'pay-bounced', 'pay-bounced-key',
+        501, { cheque: true })),
+      (error) => error.code === 'already-exists',
+    );
+    assert.equal((await store.collection('party_payments').get()).size, 1);
+    assert.equal((await store.collection('journal_entries').get()).size, 2);
+    await db.recursiveDelete(store);
+  });
+
   it('rejects corrupt party projection and preserves all ledger documents', async () => {
     const store = await seed('party-corrupt-projection');
     await store.collection('party_balances').doc('customer-customer-1').set({
