@@ -66,6 +66,7 @@ const {
   readAuditPages,
   readJournalAuditLines,
   isJournalLinePath,
+  findIndexedOrphanJournalLines,
   auditInteger,
   auditSum,
 } = require('./accounting/audit_integrity');
@@ -6087,6 +6088,21 @@ async function runAccountingIntegrityAudit(userId, command) {
         MAX_AUDIT_TOTAL_DOCS - scannedDocuments,
       ),
     });
+  // Direct parent traversal cannot see subcollections whose parent journal
+  // document was deleted. Independently discover store-ID-indexed lines,
+  // including invoice lines, then restrict findings to actual journal paths.
+  // Count all queried documents (including invoices) toward the shared cap.
+  scannedDocuments += journalLinesSnapshot.size;
+  const indexedLinesSnapshot = scanIncomplete || journalLinesSnapshot.truncated
+    ? {docs: [], size: 0, truncated: true}
+    : await readAuditPages(
+      db.collectionGroup('lines').where('storeId', '==', command.storeId), {
+        maxDocuments: Math.min(
+          MAX_AUDIT_DOCS_PER_COLLECTION,
+          Math.max(0, MAX_AUDIT_TOTAL_DOCS - scannedDocuments),
+        ),
+      },
+    );
 
   const issues = [];
   let totalIssueCount = 0;
@@ -6125,6 +6141,7 @@ async function runAccountingIntegrityAudit(userId, command) {
     balances: accountBalancesSnapshot,
     journals: journalEntriesSnapshot,
     ledgerLines: journalLinesSnapshot,
+    indexedLineDiscovery: indexedLinesSnapshot,
     parties: partiesSnapshot,
     partyBalances: partyBalancesSnapshot,
     partyMovements: partyLedgerSnapshot,
@@ -6139,12 +6156,14 @@ async function runAccountingIntegrityAudit(userId, command) {
       status: 'incomplete',
       complete: false,
       consistency: 'non_atomic',
+      orphanDiscoveryCoverage: 'matching_embedded_store_id_only',
       storeId: command.storeId,
       generatedAt: new Date().toISOString(),
       checked: {
         accounts: accountsSnapshot.size,
         journalEntries: journalEntriesSnapshot.size,
         journalLines: journalLinesSnapshot.size,
+        indexedLineDiscovery: indexedLinesSnapshot.size,
         parties: partiesSnapshot.size,
         partyLedgerEntries: partyLedgerSnapshot.size,
         products: productsSnapshot.size,
@@ -6391,6 +6410,20 @@ async function runAccountingIntegrityAudit(userId, command) {
   const journalEntryIds = new Set(
     journalEntriesSnapshot.docs.map((document) => document.id),
   );
+  // Orphans beneath deleted journal headers have no direct parent to scan.
+  // A matching embedded storeId is required by this indexed discovery, but
+  // actual ownership is verified from the document path before reporting.
+  const orphanJournalLines = findIndexedOrphanJournalLines(
+    indexedLinesSnapshot.docs, journalEntryIds, command.storeId,
+  );
+  for (const orphan of orphanJournalLines) {
+    addIssue({
+      code: 'ORPHAN_JOURNAL_LINE',
+      scope: 'journalLine',
+      referenceId: orphan.path,
+      message: 'A journal line exists below a missing journal header.',
+    });
+  }
   for (const [entryId] of linesByEntry) {
     if (!journalEntryIds.has(entryId)) {
       addIssue({
@@ -6924,12 +6957,14 @@ async function runAccountingIntegrityAudit(userId, command) {
     status: totalErrorCount > 0 ? 'issues_found' : 'healthy',
     complete: true,
     consistency: 'non_atomic',
+    orphanDiscoveryCoverage: 'matching_embedded_store_id_only',
     storeId: command.storeId,
     generatedAt: new Date().toISOString(),
     checked: {
       accounts: accountMap.size,
       journalEntries: journalEntriesSnapshot.size,
       journalLines: journalLinesSnapshot.size,
+      indexedLineDiscovery: indexedLinesSnapshot.size,
       parties: partyMap.size,
       partyLedgerEntries: partyLedgerSnapshot.size,
       products: productMap.size,
