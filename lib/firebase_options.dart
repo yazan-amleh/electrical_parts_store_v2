@@ -83,6 +83,13 @@ abstract final class FirebaseNativeConfiguration {
         'Supply the native Firebase configuration before running.',
       );
     }
+    if ((platform == 'Android' && !appId.contains(':android:')) ||
+        (platform == 'iOS' && !appId.contains(':ios:')) ||
+        !appId.startsWith('1:${senderId.trim()}:')) {
+      throw ArgumentError(
+        '$platform configuration must use a matching native Firebase app ID.',
+      );
+    }
     return FirebaseOptions(
       apiKey: apiKey.trim(),
       appId: appId.trim(),
