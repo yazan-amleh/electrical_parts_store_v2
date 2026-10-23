@@ -4337,7 +4337,7 @@ async function postSaleInTransaction(
         storeId: command.storeId,
         accountId: command.accounts.inventoryAccountId,
         description: 'Inventory issue',
-        lineNumber: journalLines.length + 1,
+        lineNumber: journalLines.length + 2,
         debitMinorUnits: zero,
         creditMinorUnits: costTotalMinorUnits,
       },
