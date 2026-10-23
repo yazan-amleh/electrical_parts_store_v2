@@ -137,6 +137,16 @@ service cloud.firestore {
         (
           !('currency' in resource.data) ||
           request.resource.data.currency == resource.data.currency
+        ) &&
+        (
+          !('initialChartVersion' in resource.data) ||
+          request.resource.data.initialChartVersion ==
+            resource.data.initialChartVersion
+        ) &&
+        (
+          !('initialChartAccountCount' in resource.data) ||
+          request.resource.data.initialChartAccountCount ==
+            resource.data.initialChartAccountCount
         );
       allow delete: if false;
 
