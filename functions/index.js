@@ -55,6 +55,11 @@ const {
   matchesLegacySaleLines,
   matchesLegacySaleJournal,
 } = require('./accounting/sale_integrity');
+const {
+  fingerprintPurchaseOrderReceipt,
+  matchesLegacyPurchaseOrderReceipt,
+  matchesLegacyPurchaseOrderJournalLines,
+} = require('./accounting/purchase_order_receipt_integrity');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -3523,18 +3528,64 @@ async function receivePurchaseOrderInTransaction(
     PURCHASE_ORDER_ROLES,
   );
 
+  const fingerprint = fingerprintPurchaseOrderReceipt(command);
   const idempotencySnapshot = await transaction.get(receiptIdempotencyRef);
   if (idempotencySnapshot.exists) {
     const previous = idempotencySnapshot.data();
-    if (previous.orderId === command.orderId) {
-      return {
-        status: 'already_received',
-        orderId: command.orderId,
-        purchaseId: previous.purchaseId,
-        journalEntryId: previous.journalEntryId,
-      };
+    if (previous.storeId !== command.storeId ||
+        previous.orderId !== command.orderId ||
+        previous.receiptId !== command.receiptId ||
+        previous.purchaseId !== command.receiptId ||
+        previous.journalEntryId !== command.receiptId + '-journal') {
+      conflict('The purchase order receipt key is already assigned.');
     }
-    conflict('The purchase order receipt key is already assigned.');
+    if (previous.requestFingerprint != null) {
+      if (previous.requestFingerprint !== fingerprint) {
+        conflict('Receipt retry differs from the original financial request.');
+      }
+    } else {
+      const historicalOrderRef = storeRef.collection('purchase_orders')
+        .doc(command.orderId);
+      const historicalPurchaseRef = storeRef.collection('purchases')
+        .doc(command.receiptId);
+      const historicalJournalRef = storeRef.collection('journal_entries')
+        .doc(command.receiptId + '-journal');
+      const historicalOrder = await transaction.get(historicalOrderRef);
+      const historicalPurchase = await transaction.get(historicalPurchaseRef);
+      const historicalJournal = await transaction.get(historicalJournalRef);
+      if (!historicalOrder.exists ||
+          !historicalPurchase.exists ||
+          !historicalJournal.exists ||
+          !matchesLegacyPurchaseOrderReceipt(
+            previous, historicalOrder.data(), historicalPurchase.data(),
+            historicalJournal.data(), command,
+          )) {
+        conflict('Historical purchase order receipt cannot be verified.');
+      }
+      const lineNames = [
+        command.receiptId + '-inventory',
+        ...(command.taxMinorUnits > 0
+          ? [command.receiptId + '-input-tax'] : []),
+        command.receiptId + '-settlement',
+      ];
+      const historicLines = [];
+      for (const name of lineNames) {
+        historicLines.push(await transaction.get(
+          historicalJournalRef.collection('lines').doc(name),
+        ));
+      }
+      if (!matchesLegacyPurchaseOrderJournalLines(
+        historicLines, historicalPurchase.data(), command,
+      )) {
+        conflict('Historical receipt journal accounts do not match replay.');
+      }
+    }
+    return {
+      status: 'already_received',
+      orderId: command.orderId,
+      purchaseId: command.receiptId,
+      journalEntryId: command.receiptId + '-journal',
+    };
   }
 
   const orderSnapshot = await transaction.get(orderRef);
@@ -3545,14 +3596,8 @@ async function receivePurchaseOrderInTransaction(
   if (order.storeId !== command.storeId) {
     deny('Purchase order belongs to another store.');
   }
-  if (order.status === 'completed' && order.receiptId === command.receiptId) {
-    return {
-      status: 'already_received',
-      orderId: command.orderId,
-      purchaseId: command.receiptId,
-      journalEntryId: order.journalEntryId || '',
-    };
-  }
+  // Without the receipt marker there is no safe way to distinguish an
+  // identical retry from a conflicting request: never acknowledge it.
   if (order.status !== 'pending') {
     conflict('Only pending purchase orders can be received.');
   }
@@ -3566,10 +3611,12 @@ async function receivePurchaseOrderInTransaction(
   }
   const purchaseLines = rawLines.map((rawLine, index) => {
     const line = asObject(rawLine, 'stored order line ' + index);
-    const receivedQuantity = storedInt(
-      line.receivedQuantityMilliUnits,
-      0,
-    );
+    const receivedQuantity = line.receivedQuantityMilliUnits ?? 0;
+    if (!Number.isSafeInteger(receivedQuantity) || receivedQuantity < 0) {
+      throw new HttpsError(
+        'failed-precondition', 'Purchase order received quantity is corrupt.',
+      );
+    }
     if (receivedQuantity !== 0) {
       invalid('Partial purchase order receipts are not supported yet.');
     }
@@ -3636,6 +3683,7 @@ async function receivePurchaseOrderInTransaction(
     orderId: command.orderId,
     receiptId: command.receiptId,
     idempotencyKey: command.idempotencyKey,
+    requestFingerprint: fingerprint,
     purchaseId: result.purchaseId,
     journalEntryId: result.journalEntryId,
     createdAt: FieldValue.serverTimestamp(),
