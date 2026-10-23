@@ -97,18 +97,42 @@ async function readJournalAuditLines(journalSnapshots, {
   pageSize = AUDIT_PAGE_SIZE,
   concurrency = AUDIT_JOURNAL_READ_CONCURRENCY,
 } = {}) {
+  if (!Number.isSafeInteger(maxDocuments) || maxDocuments < 0 ||
+      !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 500 ||
+      !Number.isSafeInteger(concurrency) || concurrency < 1 ||
+      concurrency > 16) {
+    throw new Error('Invalid journal audit scan bounds');
+  }
   const docs = [];
-  for (let start = 0; start < journalSnapshots.length; start += concurrency) {
-    const batch = journalSnapshots.slice(start, start + concurrency);
-    const pages = await Promise.all(batch.map((journal) =>
-      readAuditPages(journal.ref.collection('lines'), {
-        maxDocuments: Math.min(maxDocuments, Math.max(0, maxDocuments - docs.length)),
-        pageSize,
-      }),
-    ));
-    for (const part of pages) {
-      docs.push(...part.docs);
-      if (part.truncated || docs.length > maxDocuments) {
+  // Traverse at most 'concurrency' journal subcollections at a time.
+  // Read only a page from each active journal per round; do NOT launch
+  // concurrent full-journal scans each permitted to read 10,000 rows.
+  for (let start = 0; start < journalSnapshots.length;
+    start += concurrency) {
+    const states = journalSnapshots.slice(start, start + concurrency)
+      .map((journal) => ({ref: journal.ref.collection('lines'),
+        cursor: null, finished: false}));
+    while (states.some((state) => !state.finished)) {
+      const active = states.filter((state) => !state.finished);
+      const remaining = maxDocuments - docs.length;
+      // +1 probe distinguishes a complete scan of exactly maxDocuments
+      // from another unexamined journal line. Sharing probe capacity
+      // among active journals bounds concurrent over-read.
+      const perJournalLimit = Math.min(pageSize,
+        Math.max(1, Math.floor((remaining + 1) / active.length)));
+      const pages = await Promise.all(active.map(async (state) => {
+        let query = state.ref.orderBy('__name__').limit(perJournalLimit);
+        if (state.cursor) query = query.startAfter(state.cursor);
+        const page = await query.get();
+        if (page.size < perJournalLimit) {
+          state.finished = true;
+        } else {
+          state.cursor = page.docs[page.docs.length - 1];
+        }
+        return page;
+      }));
+      for (const page of pages) docs.push(...page.docs);
+      if (docs.length > maxDocuments) {
         return {docs, size: docs.length, truncated: true};
       }
     }
