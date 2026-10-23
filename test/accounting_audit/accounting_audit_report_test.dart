@@ -55,8 +55,7 @@ void main() {
     expect(report.isHealthy, isFalse);
     expect(report.indexedLineDiscoveryChecked, 22);
     expect(report.journalLinesChecked, 8);
-    expect(report.orphanDiscoveryCoverage,
-        'matching_embedded_store_id_only');
+    expect(report.orphanDiscoveryCoverage, 'matching_embedded_store_id_only');
   });
 
   test('incomplete scan must never be marked healthy', () {
