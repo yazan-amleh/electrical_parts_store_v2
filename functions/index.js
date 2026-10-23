@@ -23,6 +23,10 @@ const {
   isSameLegacyJournalHeader,
   isSameLegacyJournalLine,
 } = require('./accounting/journal_integrity');
+const {
+  fingerprintAccountTransfer,
+  sameLegacyTransfer,
+} = require('./accounting/transfer_integrity');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -1143,20 +1147,46 @@ async function postAccountTransferInTransaction(
     PAYMENT_POSTING_ROLES,
   );
 
+  const transferFingerprint = fingerprintAccountTransfer(command.transfer);
   const transferIdempotencySnapshot = await transaction.get(
     transferIdempotencyRef,
   );
   if (transferIdempotencySnapshot.exists) {
-    const existingTransferId =
-      transferIdempotencySnapshot.data().transferId;
-    if (existingTransferId === command.transfer.id) {
-      return {
-        status: 'already_posted',
-        transferId: command.transfer.id,
-        journalEntryId,
-      };
+    const marker = transferIdempotencySnapshot.data();
+    if (marker.transferId !== command.transfer.id) {
+      conflict('The transfer idempotency key is already assigned.');
     }
-    conflict('The transfer idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== transferFingerprint) {
+        conflict('The transfer key was replayed with changed financial details.');
+      }
+    } else {
+      // Preserve existing V2 transfer retries, but never trust a matching ID
+      // alone when an old marker predates request fingerprints.
+      const oldTransfer = await transaction.get(transferRef);
+      const oldJournal = await transaction.get(journalRef);
+      const oldJournalMarker = await transaction.get(journalIdempotencyRef);
+      if (!oldTransfer.exists ||
+          !sameLegacyTransfer(
+            oldTransfer.data(), command.transfer, journalEntryId,
+          ) ||
+          !oldJournal.exists ||
+          oldJournal.data().status !== 'posted' ||
+          oldJournal.data().sourceType !== 'accountTransfer' ||
+          oldJournal.data().totalDebitMinorUnits !==
+            command.transfer.amountMinorUnits ||
+          oldJournal.data().totalCreditMinorUnits !==
+            command.transfer.amountMinorUnits ||
+          !oldJournalMarker.exists ||
+          oldJournalMarker.data().entryId !== journalEntryId) {
+        conflict('The historical transfer cannot be verified for this retry.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      transferId: command.transfer.id,
+      journalEntryId,
+    };
   }
 
   const existingTransferSnapshot = await transaction.get(transferRef);
@@ -1262,6 +1292,7 @@ async function postAccountTransferInTransaction(
     {
       storeId: command.storeId,
       idempotencyKey: command.transfer.idempotencyKey,
+      requestFingerprint: transferFingerprint,
       postedAt: Timestamp.fromDate(command.transfer.postedAt),
       fromAccountId: command.transfer.fromAccountId,
       toAccountId: command.transfer.toAccountId,
@@ -1300,27 +1331,33 @@ async function postAccountTransferInTransaction(
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-
+    const previous = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.transfer.currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      previous.debit, delta.debit, 'Transfer account debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      previous.credit, delta.credit, 'Transfer account credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Transfer account net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
         storeId: command.storeId,
         accountId,
         currency: command.transfer.currency,
-        debitMinorUnits: currentDebit + delta.debit,
-        creditMinorUnits: currentCredit + delta.credit,
-        balanceMinorUnits:
-          currentDebit + delta.debit - currentCredit - delta.credit,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -1332,6 +1369,7 @@ async function postAccountTransferInTransaction(
       storeId: command.storeId,
       transferId: command.transfer.id,
       idempotencyKey: command.transfer.idempotencyKey,
+      requestFingerprint: transferFingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
