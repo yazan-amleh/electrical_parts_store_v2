@@ -94,6 +94,17 @@ describe('accounting audit safe parsing and data selection', () => {
       ['a', 'b', 'c', 'd', 'e', 'f', 'g']);
   });
 
+  it('scans beyond the previous 4000-row audit limit without truncation', async () => {
+    const ids = Array.from({length: 4101}, (_, n) =>
+      'record-' + String(n).padStart(6, '0'));
+    const result = await readAuditPages(
+      mockCollection(ids), {maxDocuments: 10000, pageSize: 200},
+    );
+    assert.equal(result.truncated, false);
+    assert.equal(result.size, 4101);
+    assert.equal(result.docs[4100].id, 'record-004100');
+  });
+
   it('does not mistake a full last page for truncation', async () => {
     const data = await readAuditPages(
       mockCollection(['a', 'b', 'c', 'd']),
