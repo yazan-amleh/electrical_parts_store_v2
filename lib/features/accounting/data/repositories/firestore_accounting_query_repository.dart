@@ -216,6 +216,7 @@ class FirestoreAccountingQueryRepository implements AccountingQueryRepository {
         final postedAt = _date(data['postedAt']);
         final entryId = _string(data['entryId']);
         if (postedAt == null ||
+            entryId == null ||
             entryId != journalRef!.id ||
             data['storeId'] != context.storeId ||
             data['accountId'] != accountId) {
