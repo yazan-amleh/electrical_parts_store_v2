@@ -79,6 +79,8 @@ class AccountingAuditReport {
     required this.productsChecked,
     required this.inventoryMovementsChecked,
     required this.issues,
+    this.isComplete = true,
+    this.isPointInTimeConsistent = false,
   });
 
   final String storeId;
@@ -91,8 +93,13 @@ class AccountingAuditReport {
   final int productsChecked;
   final int inventoryMovementsChecked;
   final List<AccountingAuditIssue> issues;
+  /// Whether the server examined the entire requested data scope.
+  final bool isComplete;
+  /// Whether all sources were read in one transactionally consistent snapshot.
+  final bool isPointInTimeConsistent;
 
-  bool get isHealthy => issues.every((issue) => !issue.isError);
+  bool get isHealthy =>
+      isComplete && issues.every((issue) => !issue.isError);
   int get errorCount => issues.where((issue) => issue.isError).length;
   int get warningCount => issues.length - errorCount;
 
@@ -123,6 +130,9 @@ class AccountingAuditReport {
       productsChecked: _int(checked['products']),
       inventoryMovementsChecked: _int(checked['inventoryMovements']),
       issues: List.unmodifiable(issues),
+      isComplete:
+          map['complete'] != false && map['status'] != 'incomplete',
+      isPointInTimeConsistent: map['consistency'] == 'atomic',
     );
   }
 
