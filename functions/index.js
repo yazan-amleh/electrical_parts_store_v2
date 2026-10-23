@@ -2839,15 +2839,21 @@ async function postPurchaseInTransaction(
       invalid('Purchase line discount exceeds its gross total.');
     }
     const totalMinorUnits = grossMinorUnits - line.discountMinorUnits;
-    subtotalMinorUnits += totalMinorUnits;
+    subtotalMinorUnits = checkedMinorAdd(
+      subtotalMinorUnits, totalMinorUnits, 'Purchase subtotal',
+    );
 
     const previous = receivedByProduct.get(line.productId) || {
       quantity: 0,
       cost: 0,
     };
     receivedByProduct.set(line.productId, {
-      quantity: previous.quantity + baseQuantityMilliUnits,
-      cost: previous.cost + totalMinorUnits,
+      quantity: checkedMinorAdd(
+        previous.quantity, baseQuantityMilliUnits, 'Purchased product quantity',
+      ),
+      cost: checkedMinorAdd(
+        previous.cost, totalMinorUnits, 'Purchased product cost',
+      ),
     });
 
     storedLines.push({
@@ -2871,8 +2877,9 @@ async function postPurchaseInTransaction(
     invalid('A purchase total must be greater than zero.');
   }
 
-  const grandTotalMinorUnits =
-    subtotalMinorUnits + command.purchase.taxMinorUnits;
+  const grandTotalMinorUnits = checkedMinorAdd(
+    subtotalMinorUnits, command.purchase.taxMinorUnits, 'Purchase grand total',
+  );
   if (grandTotalMinorUnits <= 0) {
     invalid('A purchase total must be greater than zero.');
   }
@@ -2880,19 +2887,32 @@ async function postPurchaseInTransaction(
   const nextProducts = new Map();
   for (const [productId, receipt] of receivedByProduct) {
     const product = productSnapshots.get(productId).data();
-    const currentQuantity = storedInt(
-      product.quantityOnHandMilliUnits,
-      0,
+    const currentQuantity = product.quantityOnHandMilliUnits ?? 0;
+    const currentUnitCost = product.purchasePriceMinorUnits ?? 0;
+    if (!Number.isSafeInteger(currentQuantity) || currentQuantity < 0 ||
+        !Number.isSafeInteger(currentUnitCost) || currentUnitCost < 0) {
+      throw new HttpsError(
+        'failed-precondition', 'Product quantity or cost is corrupt.',
+      );
+    }
+    // The stored inventory value is authoritative. Multiplying a rounded
+    // average unit cost may silently change historical stock value.
+    const currentTotalCost = product.inventoryValueMinorUnits ??
+      (currentQuantity > 0
+        ? multiplyAndRound(currentUnitCost, currentQuantity) : 0);
+    if (!Number.isSafeInteger(currentTotalCost) ||
+        currentTotalCost < 0 ||
+        (currentQuantity === 0 && currentTotalCost !== 0)) {
+      throw new HttpsError(
+        'failed-precondition', 'Product inventory value is corrupt.',
+      );
+    }
+    const nextQuantity = checkedMinorAdd(
+      currentQuantity, receipt.quantity, 'Purchase stock quantity',
     );
-    const currentUnitCost = storedInt(
-      product.purchasePriceMinorUnits,
-      0,
+    const nextTotalCost = checkedMinorAdd(
+      currentTotalCost, receipt.cost, 'Purchase stock value',
     );
-    const currentTotalCost = currentQuantity > 0
-      ? multiplyAndRound(currentUnitCost, currentQuantity)
-      : 0;
-    const nextQuantity = currentQuantity + receipt.quantity;
-    const nextTotalCost = currentTotalCost + receipt.cost;
     const nextUnitCost = divideAndRound(
       nextTotalCost,
       nextQuantity,
@@ -2926,8 +2946,9 @@ async function postPurchaseInTransaction(
     grandTotalMinorUnits,
   );
 
-  const totalDebitMinorUnits = subtotalMinorUnits +
-    command.purchase.taxMinorUnits;
+  const totalDebitMinorUnits = checkedMinorAdd(
+    subtotalMinorUnits, command.purchase.taxMinorUnits, 'Purchase GL debit',
+  );
   const totalCreditMinorUnits = grandTotalMinorUnits;
   if (totalDebitMinorUnits !== totalCreditMinorUnits) {
     throw new HttpsError(
