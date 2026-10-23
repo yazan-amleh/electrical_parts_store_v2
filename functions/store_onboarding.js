@@ -1,5 +1,7 @@
 'use strict';
 
+const { buildDefaultChartDocuments, getDefaultChart } = require('./default_chart_of_accounts');
+
 // Server-owned first-store provisioning. Firebase credentials and store ownership
 // are never accepted from client payloads.
 function requireUser(request, HttpsError) {
@@ -35,6 +37,9 @@ async function createStoreHandler({ db, FieldValue, HttpsError, request }) {
   // Random server-generated ID; never use a shared default store ID for provisioning.
   const storeRef = db.collection('stores').doc();
   const memberRef = storeRef.collection('members').doc(uid);
+  // Validate the pinned template before any transaction writes.
+  const initialAccounts = buildDefaultChartDocuments(storeRef.id);
+  const chartVersion = getDefaultChart().version;
   return db.runTransaction(async (tx) => {
     const existing = await tx.get(preferencesRef);
     if (existing.exists && existing.data()?.createdStoreId) {
@@ -46,9 +51,16 @@ async function createStoreHandler({ db, FieldValue, HttpsError, request }) {
       ownerId: uid,
       name,
       currency: 'ILS',
+      initialChartVersion: chartVersion,
+      initialChartAccountCount: initialAccounts.length,
       createdAt: timestamp,
       updatedAt: timestamp,
     });
+    // Atomic seed: a store cannot become visible without its complete chart.
+    // This does not create journals, balance deltas, or opening entries.
+    for (const account of initialAccounts) {
+      tx.create(storeRef.collection('accounts').doc(account.id), account);
+    }
     tx.create(memberRef, {
       storeId: storeRef.id,
       userId: uid,
