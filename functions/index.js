@@ -49,6 +49,12 @@ const {
   matchesLegacyPurchaseLines,
   matchesLegacyPurchaseJournal,
 } = require('./accounting/purchase_integrity');
+const {
+  fingerprintSale,
+  matchesLegacySaleInvoice,
+  matchesLegacySaleLines,
+  matchesLegacySaleJournal,
+} = require('./accounting/sale_integrity');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -3841,19 +3847,45 @@ async function postSaleInTransaction(
     allowedRoles,
   );
 
-  const saleIdempotencySnapshot = await transaction.get(
-    saleIdempotencyRef,
-  );
+  const fingerprint = fingerprintSale(command);
+  const saleIdempotencySnapshot = await transaction.get(saleIdempotencyRef);
   if (saleIdempotencySnapshot.exists) {
-    const existingSaleId = saleIdempotencySnapshot.data().saleId;
-    if (existingSaleId === command.sale.id) {
-      return {
-        status: 'already_posted',
-        saleId: command.sale.id,
-        journalEntryId,
-      };
+    const marker = saleIdempotencySnapshot.data();
+    if (marker.saleId !== command.sale.id) {
+      conflict('The sale idempotency key is already assigned.');
     }
-    conflict('The sale idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('Sale key was reused with changed invoice details.');
+      }
+    } else {
+      const oldInvoice = await transaction.get(saleRef);
+      const oldJournal = await transaction.get(journalRef);
+      const oldMarker = await transaction.get(journalIdempotencyRef);
+      if (!oldInvoice.exists ||
+          !oldJournal.exists ||
+          !oldMarker.exists ||
+          oldMarker.data().entryId !== journalEntryId ||
+          !matchesLegacySaleInvoice(
+            oldInvoice.data(), command, journalEntryId,
+          )) {
+        conflict('Historical sale cannot be verified for retry.');
+      }
+      const invoiceLines = await transaction.get(saleRef.collection('lines'));
+      const journalLines = await transaction.get(journalRef.collection('lines'));
+      if (!matchesLegacySaleLines(invoiceLines, command) ||
+          !matchesLegacySaleJournal(
+            oldJournal.data(), journalLines, command,
+            journalEntryId, oldInvoice.data(),
+          )) {
+        conflict('Historical sale lines/journal differ from retry.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      saleId: command.sale.id,
+      journalEntryId,
+    };
   }
 
   const existingSaleSnapshot = await transaction.get(saleRef);
@@ -4290,6 +4322,7 @@ async function postSaleInTransaction(
   const saleData = {
     storeId: command.storeId,
     idempotencyKey: command.sale.idempotencyKey,
+    requestFingerprint: fingerprint,
     postedAt: Timestamp.fromDate(command.sale.postedAt),
     paymentMethod: command.sale.paymentMethod,
     customerId: command.sale.customerId,
@@ -4371,6 +4404,7 @@ async function postSaleInTransaction(
       journalRef.collection('lines').doc(line.id),
       {
         ...line,
+        currency: command.sale.currency,
         entryId: journalEntryId,
         postedAt: Timestamp.fromDate(command.sale.postedAt),
       },
@@ -4450,6 +4484,7 @@ async function postSaleInTransaction(
       storeId: command.storeId,
       saleId: command.sale.id,
       idempotencyKey: command.sale.idempotencyKey,
+      requestFingerprint: fingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
