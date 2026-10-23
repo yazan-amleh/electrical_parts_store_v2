@@ -31,7 +31,9 @@ function sameLegacyPartyPayment(row, command, journalEntryId) {
   return row.storeId === command.storeId &&
     row.idempotencyKey === p.idempotencyKey &&
     row.journalEntryId === journalEntryId &&
-    row.status === (p.paymentMethod === 'cheque' ? 'pending' : 'posted') &&
+    (p.paymentMethod === 'cheque'
+      ? ['pending', 'cleared', 'bounced'].includes(row.status)
+      : row.status === 'posted') &&
     row.partyType === p.partyType &&
     row.partyId === p.partyId &&
     row.paymentMethod === p.paymentMethod &&
