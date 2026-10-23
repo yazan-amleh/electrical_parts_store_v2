@@ -60,6 +60,12 @@ const {
   matchesLegacyPurchaseOrderReceipt,
   matchesLegacyPurchaseOrderJournalLines,
 } = require('./accounting/purchase_order_receipt_integrity');
+const {
+  MAX_AUDIT_DOCS_PER_COLLECTION,
+  isJournalLinePath,
+  auditInteger,
+  auditSum,
+} = require('./accounting/audit_integrity');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -6040,17 +6046,18 @@ async function runAccountingIntegrityAudit(userId, command) {
     productsSnapshot,
     inventoryMovementsSnapshot,
   ] = await Promise.all([
-    storeRef.collection('accounts').get(),
-    storeRef.collection('account_balances').get(),
-    storeRef.collection('journal_entries').get(),
+    storeRef.collection('accounts').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
+    storeRef.collection('account_balances').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
+    storeRef.collection('journal_entries').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
     db.collectionGroup('lines')
       .where('storeId', '==', command.storeId)
+      .limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1)
       .get(),
-    storeRef.collection('parties').get(),
-    storeRef.collection('party_balances').get(),
-    storeRef.collection('party_ledger_entries').get(),
-    storeRef.collection('products').get(),
-    storeRef.collection('inventory_movements').get(),
+    storeRef.collection('parties').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
+    storeRef.collection('party_balances').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
+    storeRef.collection('party_ledger_entries').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
+    storeRef.collection('products').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
+    storeRef.collection('inventory_movements').limit(MAX_AUDIT_DOCS_PER_COLLECTION + 1).get(),
   ]);
 
   const issues = [];
@@ -6080,6 +6087,55 @@ async function runAccountingIntegrityAudit(userId, command) {
       actual: Number.isSafeInteger(actual) ? actual : null,
     });
   };
+
+  const sources = {
+    accounts: accountsSnapshot,
+    balances: accountBalancesSnapshot,
+    journals: journalEntriesSnapshot,
+    ledgerLines: journalLinesSnapshot,
+    parties: partiesSnapshot,
+    partyBalances: partyBalancesSnapshot,
+    partyMovements: partyLedgerSnapshot,
+    products: productsSnapshot,
+    stockMovements: inventoryMovementsSnapshot,
+  };
+  const truncated = Object.entries(sources)
+    .filter(([, snapshot]) => snapshot.size > MAX_AUDIT_DOCS_PER_COLLECTION)
+    .map(([name]) => name);
+  if (truncated.length > 0) {
+    return {
+      status: 'incomplete',
+      complete: false,
+      consistency: 'non_atomic',
+      storeId: command.storeId,
+      generatedAt: new Date().toISOString(),
+      checked: {
+        accounts: accountsSnapshot.size,
+        journalEntries: journalEntriesSnapshot.size,
+        journalLines: journalLinesSnapshot.size,
+        parties: partiesSnapshot.size,
+        partyLedgerEntries: partyLedgerSnapshot.size,
+        products: productsSnapshot.size,
+        inventoryMovements: inventoryMovementsSnapshot.size,
+      },
+      issueCount: 1,
+      issues: [{
+        code: 'AUDIT_INCOMPLETE_DATASET',
+        scope: 'audit',
+        referenceId: truncated.join(','),
+        message: 'Data exceeds audit safety limit: no conclusion can be drawn.',
+        severity: 'error',
+        valueKind: null,
+        currency: null,
+        expected: null,
+        actual: null,
+      }],
+    };
+  }
+  const readMinor = (value, scope, referenceId, allowNegative = false) =>
+    auditInteger(value, {scope, referenceId}, addIssue, {allowNegative});
+  const addMinor = (x, y, scope, referenceId, valueKind) =>
+    auditSum(x, y, {scope, referenceId, valueKind}, addIssue);
 
   const accountMap = new Map();
   for (const document of accountsSnapshot.docs) {
@@ -6122,6 +6178,10 @@ async function runAccountingIntegrityAudit(userId, command) {
 
   const linesByEntry = new Map();
   for (const document of journalLinesSnapshot.docs) {
+    if (!isJournalLinePath(document.ref, command.storeId)) {
+      // Collection-group also contains sale and purchase invoice lines.
+      continue;
+    }
     const data = document.data();
     if (data.storeId !== command.storeId) {
       addIssue({
@@ -6133,9 +6193,8 @@ async function runAccountingIntegrityAudit(userId, command) {
       continue;
     }
 
-    const parentEntryId = data.entryId ||
-      (document.ref.parent.parent && document.ref.parent.parent.id);
-    if (!parentEntryId) {
+    const parentEntryId = document.ref.parent.parent.id;
+    if (data.entryId !== parentEntryId) {
       addIssue({
         code: 'ORPHAN_JOURNAL_LINE',
         scope: 'journalLine',
@@ -6171,10 +6230,10 @@ async function runAccountingIntegrityAudit(userId, command) {
 
     for (const line of lines) {
       const data = line.data;
-      const debit = storedInt(data.debitMinorUnits, 0);
-      const credit = storedInt(data.creditMinorUnits, 0);
-      totalDebit += debit;
-      totalCredit += credit;
+      const debit = readMinor(data.debitMinorUnits, 'journalLine', line.id);
+      const credit = readMinor(data.creditMinorUnits, 'journalLine', line.id);
+      totalDebit = addMinor(totalDebit, debit, 'journal', entryId);
+      totalCredit = addMinor(totalCredit, credit, 'journal', entryId);
 
       if ((debit === 0) === (credit === 0)) {
         addIssue({
@@ -6232,12 +6291,16 @@ async function runAccountingIntegrityAudit(userId, command) {
         accountId,
         data.currency || currency,
       );
-      total.debit += debit;
-      total.credit += credit;
+      total.debit = addMinor(total.debit, debit, 'accountBalance', accountId);
+      total.credit = addMinor(total.credit, credit, 'accountBalance', accountId);
     }
 
-    const headerDebit = storedInt(entry.totalDebitMinorUnits, 0);
-    const headerCredit = storedInt(entry.totalCreditMinorUnits, 0);
+    const headerDebit = readMinor(
+      entry.totalDebitMinorUnits, 'journal', entryId,
+    );
+    const headerCredit = readMinor(
+      entry.totalCreditMinorUnits, 'journal', entryId,
+    );
     if (totalDebit !== headerDebit || totalCredit !== headerCredit) {
       addIssue({
         code: 'JOURNAL_HEADER_TOTAL_MISMATCH',
@@ -6603,12 +6666,16 @@ async function runAccountingIntegrityAudit(userId, command) {
     status: issues.some((issue) => issue.severity === 'error')
       ? 'issues_found'
       : 'healthy',
+    complete: true,
+    consistency: 'non_atomic',
     storeId: command.storeId,
     generatedAt: new Date().toISOString(),
     checked: {
       accounts: accountMap.size,
       journalEntries: journalEntriesSnapshot.size,
-      journalLines: journalLinesSnapshot.size,
+      journalLines: [...linesByEntry.values()].reduce(
+        (count, lines) => count + lines.length, 0,
+      ),
       parties: partyMap.size,
       partyLedgerEntries: partyLedgerSnapshot.size,
       products: productMap.size,
