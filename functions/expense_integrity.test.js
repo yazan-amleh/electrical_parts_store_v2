@@ -39,6 +39,9 @@ async function seed(storeId) {
   batch.set(ref, { ownerId: UID, currency: 'ILS' });
   batch.set(ref.collection('members').doc(UID),
     { userId: UID, storeId, role: 'accountant', isActive: true });
+  batch.set(ref.collection('parties').doc('supplier-1'), {
+    storeId, partyType: 'supplier', name: 'Test supplier', isActive: true,
+  });
   const accounts = [
     ['6110', 'expense', 'none'],
     ['1110', 'asset', 'cashBox'],
@@ -123,6 +126,21 @@ describe('expense accounting integrity', () => {
     assert.equal(supplier.creditMinorUnits, 1170);
     assert.equal(supplier.balanceMinorUnits, -1170);
     assert.equal((await store.collection('party_ledger_entries').get()).size, 1);
+    await db.recursiveDelete(store);
+  });
+
+  it('rejects credit expense for missing or foreign supplier without posting', async () => {
+    const store = await seed('expense-no-supplier');
+    await store.collection('parties').doc('supplier-1').delete();
+    const req = command(store.id, 'expense-no-party', 'expense-no-party-key',
+      100, { credit: true });
+    await assert.rejects(post(req), (e) => e.code === 'invalid-argument');
+    await store.collection('parties').doc('supplier-1').set({
+      storeId: 'other-tenant', partyType: 'supplier', isActive: true,
+    });
+    await assert.rejects(post(req), (e) => e.code === 'permission-denied');
+    assert.equal((await store.collection('expenses').get()).empty, true);
+    assert.equal((await store.collection('party_balances').get()).empty, true);
     await db.recursiveDelete(store);
   });
 
