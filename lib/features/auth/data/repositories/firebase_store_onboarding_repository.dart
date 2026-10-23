@@ -27,7 +27,7 @@ class FirebaseStoreOnboardingRepository implements StoreOnboardingRepository {
       final snapshot = await _firestore
           .collection('user_store_preferences')
           .doc(userId)
-          .get();
+          .get(const GetOptions(source: Source.server));
       if (!snapshot.exists) {
         return const Success<String?>(null);
       }
