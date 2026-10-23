@@ -6089,6 +6089,7 @@ async function runAccountingIntegrityAudit(userId, command) {
     });
 
   const issues = [];
+  let totalIssueCount = 0;
   const addIssue = ({
     code,
     scope,
@@ -6100,6 +6101,7 @@ async function runAccountingIntegrityAudit(userId, command) {
     expected,
     actual,
   }) => {
+    totalIssueCount += 1;
     if (issues.length >= 200) {
       return;
     }
@@ -6240,6 +6242,14 @@ async function runAccountingIntegrityAudit(userId, command) {
   for (const document of journalEntriesSnapshot.docs) {
     const entry = document.data();
     const entryId = document.id;
+    if (entry.storeId !== command.storeId) {
+      addIssue({
+        code: 'JOURNAL_STORE_MISMATCH',
+        scope: 'journal',
+        referenceId: entryId,
+        message: 'Journal header is assigned to a different store.',
+      });
+    }
     const currency = typeof entry.currency === 'string'
       ? entry.currency
       : 'ILS';
@@ -6523,6 +6533,14 @@ async function runAccountingIntegrityAudit(userId, command) {
     const key = partyType + ':' + partyId;
     const existing = partyTotals.get(key);
     if (existing) {
+      if (existing.currency !== currency) {
+        addIssue({
+          code: 'PARTY_MULTI_CURRENCY',
+          scope: 'partyLedger',
+          referenceId: key,
+          message: 'Party movements have conflicting currency codes.',
+        });
+      }
       return existing;
     }
     const created = {
@@ -6541,6 +6559,14 @@ async function runAccountingIntegrityAudit(userId, command) {
     const partyType = data.partyType;
     const partyId = data.partyId;
     const currency = data.currency || 'ILS';
+    if (data.storeId !== command.storeId) {
+      addIssue({
+        code: 'PARTY_LEDGER_STORE_MISMATCH',
+        scope: 'partyLedger',
+        referenceId: document.id,
+        message: 'Party ledger entry belongs to another store.',
+      });
+    }
     if (!partyType || !partyId) {
       addIssue({
         code: 'PARTY_LEDGER_ID_MISSING',
@@ -6625,6 +6651,14 @@ async function runAccountingIntegrityAudit(userId, command) {
       continue;
     }
 
+    if (stored.currency !== expected.currency) {
+      addIssue({
+        code: 'PARTY_BALANCE_CURRENCY_MISMATCH',
+        scope: 'partyBalance',
+        referenceId: key,
+        message: 'Party projection currency does not match movement currency.',
+      });
+    }
     const storedDebit = readMinor(
       stored.debitMinorUnits, 'partyBalance', key,
     );
@@ -6654,15 +6688,30 @@ async function runAccountingIntegrityAudit(userId, command) {
   const productMap = new Map();
   for (const document of productsSnapshot.docs) {
     const data = document.data();
-    if (data.storeId === command.storeId) {
-      productMap.set(document.id, data);
+    if (data.storeId !== command.storeId) {
+      addIssue({
+        code: 'PRODUCT_STORE_MISMATCH',
+        scope: 'inventory',
+        referenceId: document.id,
+        message: 'Product is attached to a different store.',
+      });
+      continue;
     }
+    productMap.set(document.id, data);
   }
 
   const inventoryTotals = new Map();
   for (const document of inventoryMovementsSnapshot.docs) {
     const data = document.data();
     const productId = data.productId;
+    if (data.storeId !== command.storeId) {
+      addIssue({
+        code: 'INVENTORY_MOVEMENT_STORE_MISMATCH',
+        scope: 'inventoryMovement',
+        referenceId: document.id,
+        message: 'Stock movement is attached to a different store.',
+      });
+    }
     if (!productId) {
       addIssue({
         code: 'INVENTORY_MOVEMENT_PRODUCT_MISSING',
@@ -6736,6 +6785,88 @@ async function runAccountingIntegrityAudit(userId, command) {
     }
   }
 
+  // Detect stock that lacks documented movement/opening provenance, and
+  // independently compare the product valuation projection with inventory GL.
+  const productValues = new Map();
+  for (const [productId, product] of productMap) {
+    if (product.isService === true) continue;
+    const currency = product.currency;
+    if (typeof currency !== 'string' || !currency.trim()) {
+      addIssue({
+        code: 'PRODUCT_CURRENCY_INVALID',
+        scope: 'inventory',
+        referenceId: productId,
+        message: 'Stock product currency is missing or invalid.',
+      });
+      continue;
+    }
+    const value = readMinor(
+      product.inventoryValueMinorUnits, 'inventory', productId,
+    );
+    const quantity = readMinor(
+      product.quantityOnHandMilliUnits, 'inventory', productId,
+    );
+    if (!inventoryTotals.has(productId) && (value !== 0 || quantity !== 0)) {
+      addIssue({
+        code: 'INVENTORY_OPENING_SOURCE_UNVERIFIED',
+        scope: 'inventory',
+        referenceId: productId,
+        message: 'Stock has value or quantity without movement/opening evidence.',
+        currency,
+        valueKind: 'minorUnits',
+        actual: value,
+      });
+    }
+    productValues.set(currency, addMinor(
+      productValues.get(currency) || 0, value, 'inventory', productId,
+    ));
+  }
+  const glInventoryValues = new Map();
+  for (const [accountId, account] of accountMap) {
+    if (account.controlType !== 'inventory' || account.isHeader === true) {
+      continue;
+    }
+    const currency = account.currency;
+    if (typeof currency !== 'string' || !currency.trim()) {
+      addIssue({
+        code: 'INVENTORY_GL_CURRENCY_INVALID',
+        scope: 'accountBalance',
+        referenceId: accountId,
+        message: 'Inventory GL account currency is invalid.',
+      });
+      continue;
+    }
+    const projection = storedAccountBalances.get(accountId);
+    const debit = projection
+      ? readMinor(projection.debitMinorUnits, 'accountBalance', accountId) : 0;
+    const credit = projection
+      ? readMinor(projection.creditMinorUnits, 'accountBalance', accountId) : 0;
+    const net = addMinor(debit, -credit, 'accountBalance', accountId);
+    glInventoryValues.set(currency, addMinor(
+      glInventoryValues.get(currency) || 0, net,
+      'accountBalance', accountId,
+    ));
+  }
+  const inventoryCurrencies = new Set([
+    ...productValues.keys(), ...glInventoryValues.keys(),
+  ]);
+  for (const currency of inventoryCurrencies) {
+    const productValue = productValues.get(currency) || 0;
+    const ledgerValue = glInventoryValues.get(currency) || 0;
+    if (productValue !== ledgerValue) {
+      addIssue({
+        code: 'INVENTORY_GL_VALUATION_MISMATCH',
+        scope: 'inventory',
+        referenceId: currency,
+        message: 'Stock product valuations do not equal inventory GL net.',
+        currency,
+        valueKind: 'minorUnits',
+        expected: ledgerValue,
+        actual: productValue,
+      });
+    }
+  }
+
   return {
     status: issues.some((issue) => issue.severity === 'error')
       ? 'issues_found'
@@ -6755,7 +6886,8 @@ async function runAccountingIntegrityAudit(userId, command) {
       products: productMap.size,
       inventoryMovements: inventoryMovementsSnapshot.size,
     },
-    issueCount: issues.length,
+    issueCount: totalIssueCount,
+    issuesTruncated: totalIssueCount > issues.length,
     issues,
   };
 }
