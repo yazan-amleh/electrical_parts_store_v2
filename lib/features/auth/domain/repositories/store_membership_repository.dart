@@ -7,3 +7,11 @@ abstract interface class StoreMembershipRepository {
     required StoreContext context,
   });
 }
+
+/// Optional real-time membership contract used to revoke sessions immediately.
+/// Implementations must return failure for missing, inactive or invalid members.
+abstract interface class StoreMembershipWatcher {
+  Stream<Result<StoreMembership>> watchMembership({
+    required StoreContext context,
+  });
+}
