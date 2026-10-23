@@ -6878,9 +6878,7 @@ async function runAccountingIntegrityAudit(userId, command) {
     checked: {
       accounts: accountMap.size,
       journalEntries: journalEntriesSnapshot.size,
-      journalLines: [...linesByEntry.values()].reduce(
-        (count, lines) => count + lines.length, 0,
-      ),
+      journalLines: journalLinesSnapshot.size,
       parties: partyMap.size,
       partyLedgerEntries: partyLedgerSnapshot.size,
       products: productMap.size,
