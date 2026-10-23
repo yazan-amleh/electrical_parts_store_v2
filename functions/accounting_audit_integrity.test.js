@@ -77,6 +77,53 @@ describe('accounting integrity audit reads ledger without mutation', () => {
     await db.recursiveDelete(store);
   });
 
+  it('detects a line beneath a deleted journal parent without altering data', async () => {
+    const store = await seed('audit-deleted-journal-parent');
+    const lineRef = store.collection('journal_entries').doc('deleted-header')
+      .collection('lines').doc('stranded-debit');
+    await lineRef.set({
+      storeId: store.id, entryId: 'deleted-header', currency: 'ILS',
+      accountId: '1110', debitMinorUnits: 125, creditMinorUnits: 0,
+    });
+    const missingHeaderRef = store.collection('journal_entries')
+      .doc('deleted-header');
+    assert.equal((await missingHeaderRef.get()).exists, false);
+
+    const report = await audit(store.id);
+    assert.equal(report.status, 'issues_found');
+    assert.equal(report.complete, true);
+    assert.equal(report.consistency, 'non_atomic');
+    assert.equal(report.orphanDiscoveryCoverage,
+      'matching_embedded_store_id_only');
+    assert.equal(report.checked.journalLines, 2);
+    assert.equal(report.checked.indexedLineDiscovery, 3);
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'ORPHAN_JOURNAL_LINE' &&
+      issue.referenceId === lineRef.path), true);
+    assert.equal((await missingHeaderRef.get()).exists, false);
+    assert.equal((await lineRef.get()).exists, true);
+    await db.recursiveDelete(store);
+  });
+
+  it('does not treat foreign-store indexed journal lines as this store orphans', async () => {
+    const store = await seed('audit-indexed-tenant-isolation');
+    const foreignRef = db.collection('stores').doc('audit-foreign-tenant')
+      .collection('journal_entries').doc('deleted-header')
+      .collection('lines').doc('foreign-line');
+    await foreignRef.set({
+      storeId: store.id, entryId: 'deleted-header', currency: 'ILS',
+      debitMinorUnits: 125, creditMinorUnits: 0,
+    });
+    const report = await audit(store.id);
+    assert.equal(report.status, 'healthy');
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'ORPHAN_JOURNAL_LINE'), false);
+    assert.equal(report.checked.journalLines, 2);
+    assert.equal(report.checked.indexedLineDiscovery, 3);
+    await db.recursiveDelete(store);
+    await db.recursiveDelete(db.collection('stores').doc('audit-foreign-tenant'));
+  });
+
   it('detects wrong or missing storeId on nested journal lines', async () => {
     const store = await seed('audit-wrong-journal-tenant');
     await store.collection('journal_entries').doc('journal-a')
