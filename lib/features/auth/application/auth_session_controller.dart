@@ -41,6 +41,7 @@ class AuthSessionController extends ChangeNotifier {
   String _storeId;
 
   StreamSubscription<AuthenticatedUser?>? _authSubscription;
+  StreamSubscription<Result<StoreMembership>>? _membershipSubscription;
   AuthSessionStatus _status = AuthSessionStatus.signedOut;
   AuthenticatedUser? _user;
   StoreMembership? _membership;
@@ -66,6 +67,9 @@ class AuthSessionController extends ChangeNotifier {
     _authSubscription = _authRepository.authStateChanges().listen(
       _handleUser,
       onError: (Object error, _) {
+        ++_sessionRequestId;
+        _stopMembershipWatch();
+        _membership = null;
         _setFailure(error.toString());
       },
     );
@@ -124,6 +128,8 @@ class AuthSessionController extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    _stopMembershipWatch();
+    _membership = null;
     _sessionRequestId += 1;
     _setState(status: AuthSessionStatus.signingIn, errorMessage: null);
     final result = await _authRepository.signOut();
@@ -141,6 +147,7 @@ class AuthSessionController extends ChangeNotifier {
   Future<void> reloadMembership() async {
     final user = _user;
     if (user == null) {
+      _storeId = _configuredStoreId;
       _setState(status: AuthSessionStatus.signedOut);
       return;
     }
@@ -149,8 +156,13 @@ class AuthSessionController extends ChangeNotifier {
 
   void openStoreSetup() {
     if (_user != null && _onboardingRepository != null && !isBusy) {
+      ++_sessionRequestId;
+      _stopMembershipWatch();
+      _membership = null;
       _setState(
-          status: AuthSessionStatus.storeSetupRequired, errorMessage: null);
+        status: AuthSessionStatus.storeSetupRequired,
+        errorMessage: null,
+      );
     }
   }
 
@@ -162,6 +174,8 @@ class AuthSessionController extends ChangeNotifier {
       _setFailure('يرجى تسجيل الدخول قبل إنشاء متجر.');
       return;
     }
+    _stopMembershipWatch();
+    _membership = null;
     final requestId = ++_sessionRequestId;
     _setState(status: AuthSessionStatus.creatingStore, errorMessage: null);
     final result = await onboarding.createStore(name: name);
@@ -187,6 +201,8 @@ class AuthSessionController extends ChangeNotifier {
       _setFailure('يرجى تسجيل الدخول قبل اختيار متجر.');
       return;
     }
+    _stopMembershipWatch();
+    _membership = null;
     final requestId = ++_sessionRequestId;
     _setState(status: AuthSessionStatus.loadingMembership, errorMessage: null);
     final result = await onboarding.selectStore(storeId: storeId);
@@ -206,6 +222,7 @@ class AuthSessionController extends ChangeNotifier {
 
   Future<void> _handleUser(AuthenticatedUser? user) async {
     final requestId = ++_sessionRequestId;
+    _stopMembershipWatch();
     _user = user;
     _membership = null;
     _errorMessage = null;
@@ -260,8 +277,98 @@ class AuthSessionController extends ChangeNotifier {
     }
 
     if (result is Success<StoreMembership>) {
+      if (!_matchesSession(result.value, user, _storeId)) {
+        _setFailure('تم استلام عضوية لا تطابق حساب المستخدم أو المتجر.');
+        return;
+      }
       _membership = result.value;
       _setState(status: AuthSessionStatus.ready);
+      _startMembershipWatch(
+        requestId: requestId,
+        user: user,
+        storeId: _storeId,
+      );
+    }
+  }
+
+  bool _matchesSession(
+    StoreMembership membership,
+    AuthenticatedUser user,
+    String storeId,
+  ) =>
+      membership.storeId == storeId &&
+      membership.userId == user.id &&
+      membership.canAccessStore;
+
+  void _startMembershipWatch({
+    required int requestId,
+    required AuthenticatedUser user,
+    required String storeId,
+  }) {
+    final repo = _membershipRepository;
+    if (repo is! StoreMembershipWatcher) return;
+
+    _membershipSubscription = repo
+        .watchMembership(
+          context: StoreContext(storeId: storeId, userId: user.id),
+        )
+        .listen(
+      (result) {
+        if (requestId != _sessionRequestId ||
+            _user?.id != user.id ||
+            _storeId != storeId) {
+          return;
+        }
+        if (result is FailureResult<StoreMembership>) {
+          _membership = null;
+          if (result.failure is StoreMembershipNotFoundFailure ||
+              result.failure is AuthorizationFailure) {
+            _stopMembershipWatch();
+            _setState(
+              status: AuthSessionStatus.storeSetupRequired,
+              errorMessage: result.failure.message,
+            );
+          } else {
+            _setFailure(result.failure.message);
+          }
+          return;
+        }
+
+        if (result is Success<StoreMembership>) {
+          if (!_matchesSession(result.value, user, storeId)) {
+            _membership = null;
+            _stopMembershipWatch();
+            _setState(
+              status: AuthSessionStatus.storeSetupRequired,
+              errorMessage: 'تم إلغاء صلاحية الوصول إلى المتجر.',
+            );
+            return;
+          }
+          final previous = _membership;
+          _membership = result.value;
+          if (_status != AuthSessionStatus.ready ||
+              previous?.role != result.value.role) {
+            _setState(status: AuthSessionStatus.ready);
+          }
+        }
+      },
+      onError: (Object error, StackTrace stack) {
+        if (requestId != _sessionRequestId ||
+            _user?.id != user.id ||
+            _storeId != storeId) {
+          return;
+        }
+        _membership = null;
+        _setFailure('تعذر متابعة صلاحيات المتجر. تحقق من الاتصال وأعد المحاولة.');
+      },
+    );
+  }
+
+  void _stopMembershipWatch() {
+    final subscription = _membershipSubscription;
+    _membershipSubscription = null;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
     }
   }
 
@@ -281,6 +388,8 @@ class AuthSessionController extends ChangeNotifier {
 
   @override
   void dispose() {
+    ++_sessionRequestId;
+    _stopMembershipWatch();
     unawaited(_authSubscription?.cancel());
     super.dispose();
   }
