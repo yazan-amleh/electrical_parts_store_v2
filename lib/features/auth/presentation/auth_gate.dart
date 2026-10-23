@@ -42,7 +42,9 @@ class AuthGate extends StatelessWidget {
                 onChooseStore: controller.openStoreSetup,
               );
             }
+            // Reset all stateful feature screens when tenant or role changes.
             return AppShellPage(
+              key: ValueKey('tenant:${user.id}:${membership.storeId}:${membership.role.name}'),
               dependencies: dependencies,
               user: user,
               membership: membership,
@@ -61,6 +63,9 @@ class AuthGate extends StatelessWidget {
               user: controller.user,
               onRetry: controller.reloadMembership,
               onSignOut: controller.signOut,
+              onChooseStore: controller.user == null
+                  ? null
+                  : controller.openStoreSetup,
             );
         }
       },
