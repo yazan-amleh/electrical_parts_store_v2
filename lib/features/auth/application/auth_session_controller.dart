@@ -81,12 +81,17 @@ class AuthSessionController extends ChangeNotifier {
   }
 
   Future<void> signIn({required String email, required String password}) async {
+    final operationId = ++_sessionRequestId;
+    _stopMembershipWatch();
+    _membership = null;
     _setState(status: AuthSessionStatus.signingIn, errorMessage: null);
 
     final result = await _authRepository.signInWithEmailPassword(
       email: email,
       password: password,
     );
+
+    if (operationId != _sessionRequestId) return;
 
     if (result is FailureResult<AuthenticatedUser>) {
       _setAuthFailure(result.failure.message);
@@ -103,6 +108,9 @@ class AuthSessionController extends ChangeNotifier {
     required String password,
     String? displayName,
   }) async {
+    final operationId = ++_sessionRequestId;
+    _stopMembershipWatch();
+    _membership = null;
     _setState(status: AuthSessionStatus.signingIn, errorMessage: null);
 
     final result = await _authRepository.createUserWithEmailPassword(
@@ -110,6 +118,8 @@ class AuthSessionController extends ChangeNotifier {
       password: password,
       displayName: displayName,
     );
+
+    if (operationId != _sessionRequestId) return;
 
     if (result is FailureResult<AuthenticatedUser>) {
       _setAuthFailure(result.failure.message);
