@@ -197,6 +197,30 @@ describe('accounting integrity audit reads ledger without mutation', () => {
     await db.recursiveDelete(store);
   });
 
+  it('counts errors beyond the first 200 displayed issues', async () => {
+    const store = await seed('audit-many-errors');
+    const batch = db.batch();
+    for (let index = 0; index < 205; index++) {
+      batch.set(store.collection('party_ledger_entries')
+        .doc('invalid-' + index), {
+        storeId: store.id,
+        partyType: 'customer',
+        partyId: 'unknown-' + index,
+        currency: 'ILS',
+        debitMinorUnits: 'not-an-integer',
+        creditMinorUnits: 0,
+      });
+    }
+    await batch.commit();
+    const report = await audit(store.id);
+    assert.equal(report.status, 'issues_found');
+    assert.equal(report.issues.length, 200);
+    assert.equal(report.issuesTruncated, true);
+    assert.equal(report.issueCount > 200, true);
+    assert.equal(report.errorCount > 200, true);
+    await db.recursiveDelete(store);
+  });
+
   it('identifies tampered party net balance even when debit/credit ledger totals agree', async () => {
     const store = await seed('audit-party-net');
     const batch = db.batch();
