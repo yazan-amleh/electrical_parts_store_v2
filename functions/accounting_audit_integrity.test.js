@@ -224,6 +224,70 @@ describe('accounting integrity audit reads ledger without mutation', () => {
     await db.recursiveDelete(store);
   });
 
+  it('finds a currency conflict even when stock quantity, value and GL match', async () => {
+    const store = await seed('audit-stock-wrong-currency');
+    await seedInventory(store);
+    await store.collection('inventory_movements').doc('stock-in')
+      .update({currency: 'USD'});
+    const report = await audit(store.id);
+    assert.equal(report.complete, true);
+    assert.equal(report.status, 'issues_found');
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'INVENTORY_MOVEMENT_PRODUCT_CURRENCY_MISMATCH'), true);
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'INVENTORY_QUANTITY_MISMATCH' ||
+      issue.code === 'INVENTORY_VALUE_MISMATCH' ||
+      issue.code === 'INVENTORY_GL_VALUATION_MISMATCH'), false);
+    await db.recursiveDelete(store);
+  });
+
+  it('rejects mixed-currency movements whose totals still reconcile', async () => {
+    const store = await seed('audit-stock-mixed-currency');
+    await seedInventory(store);
+    await store.collection('inventory_movements').doc('stock-in').update({
+      quantityDeltaMilliUnits: 500, totalCostMinorUnits: 350,
+    });
+    await store.collection('inventory_movements').doc('stock-in-2').set({
+      storeId: store.id, productId: 'component-1', currency: 'USD',
+      quantityDeltaMilliUnits: 500, totalCostMinorUnits: 350,
+    });
+    const report = await audit(store.id);
+    assert.equal(report.status, 'issues_found');
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'INVENTORY_MOVEMENT_MULTI_CURRENCY'), true);
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'INVENTORY_MOVEMENT_PRODUCT_CURRENCY_MISMATCH'), true);
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'INVENTORY_VALUE_MISMATCH' ||
+      issue.code === 'INVENTORY_GL_VALUATION_MISMATCH'), false);
+    await db.recursiveDelete(store);
+  });
+
+  it('supports legacy movements with an omitted currency', async () => {
+    const store = await seed('audit-stock-legacy-currency');
+    await seedInventory(store);
+    await store.collection('inventory_movements').doc('stock-in').update({
+      currency: admin.firestore.FieldValue.delete(),
+    });
+    const report = await audit(store.id);
+    assert.equal(report.status, 'healthy');
+    assert.equal(report.complete, true);
+    assert.equal(report.issueCount, 0);
+    await db.recursiveDelete(store);
+  });
+
+  it('flags an explicitly malformed stock movement currency', async () => {
+    const store = await seed('audit-stock-invalid-currency');
+    await seedInventory(store);
+    await store.collection('inventory_movements').doc('stock-in')
+      .update({currency: ' '});
+    const report = await audit(store.id);
+    assert.equal(report.status, 'issues_found');
+    assert.equal(report.issues.some((issue) =>
+      issue.code === 'INVENTORY_MOVEMENT_CURRENCY_INVALID'), true);
+    await db.recursiveDelete(store);
+  });
+
   it('counts errors beyond the first 200 displayed issues', async () => {
     const store = await seed('audit-many-errors');
     const batch = db.batch();
