@@ -45,3 +45,16 @@ Source commit: `860c99dc5114330a99c2864d9cda7a260037565a`.
 3. Add end-to-end tests of auth restoration, actual Firestore membership streams, owner/member role transitions and device token handling.
 4. Confirm store invite/discovery/selection UX and permission matrix.
 5. Continue into full accounting-foundation contract and postings/ledger audits after session lifecycle gates.
+
+## Web release build acceptance (non-deploy)
+
+Additional commit `04a8d18cafe82bb603149dd4e01d45d4dbe904d1` added a mandatory Web Release CI compilation step.
+
+Run https://github.com/yazan-amleh/electrical_parts_store_v2/actions/runs/39914641471 verified **PASS** for:
+- Dart formatting and Flutter analyzer
+- Flutter tests: **102 passed**
+- `flutter build web --release`: **PASS**, generated `build/web`
+- Firestore / Storage rules: **20 passed**
+- Cloud Functions emulator: **8 passed, 0 failed**
+
+This is a compile-only check: no Hosting deploy, no remote Firebase writes, no browser login or device E2E. Android/iOS app registration/scaffolding and final V1 parity remain blocked/unverified.
