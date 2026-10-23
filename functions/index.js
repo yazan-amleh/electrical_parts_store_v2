@@ -6325,6 +6325,14 @@ async function runAccountingIntegrityAudit(userId, command) {
           referenceId: line.id,
           message: 'سطر القيد يشير إلى حساب غير موجود.',
         });
+      } else if (account.currency !== currency) {
+        addIssue({
+          code: 'JOURNAL_LINE_ACCOUNT_CURRENCY_MISMATCH',
+          scope: 'journalLine',
+          referenceId: line.id,
+          message: 'عملة حساب الأستاذ لا تطابق عملة القيد.',
+          currency,
+        });
       }
 
       const total = ensureAccountTotal(
@@ -6341,29 +6349,29 @@ async function runAccountingIntegrityAudit(userId, command) {
     const headerCredit = readMinor(
       entry.totalCreditMinorUnits, 'journal', entryId,
     );
-    if (totalDebit !== headerDebit || totalCredit !== headerCredit) {
+    if (totalDebit !== headerDebit) {
       addIssue({
         code: 'JOURNAL_HEADER_TOTAL_MISMATCH',
         scope: 'journal',
         referenceId: entryId,
-        message: 'إجمالي القيد لا يطابق مجموع سطوره.',
+        message: 'إجمالي المدين في القيد لا يطابق مجموع سطوره.',
         valueKind: 'minorUnits',
         currency,
         expected: totalDebit,
         actual: headerDebit,
       });
-      if (totalCredit !== headerCredit) {
-        addIssue({
-          code: 'JOURNAL_HEADER_CREDIT_MISMATCH',
-          scope: 'journal',
-          referenceId: entryId,
-          message: 'إجمالي الدائن في القيد لا يطابق مجموع سطوره.',
-          valueKind: 'minorUnits',
-          currency,
-          expected: totalCredit,
-          actual: headerCredit,
-        });
-      }
+    }
+    if (totalCredit !== headerCredit) {
+      addIssue({
+        code: 'JOURNAL_HEADER_CREDIT_MISMATCH',
+        scope: 'journal',
+        referenceId: entryId,
+        message: 'إجمالي الدائن في القيد لا يطابق مجموع سطوره.',
+        valueKind: 'minorUnits',
+        currency,
+        expected: totalCredit,
+        actual: headerCredit,
+      });
     }
 
     if (totalDebit <= 0 || totalDebit !== totalCredit) {
