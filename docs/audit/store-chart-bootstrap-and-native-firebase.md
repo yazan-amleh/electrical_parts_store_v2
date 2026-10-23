@@ -43,10 +43,17 @@ Use native Firebase app identifiers and runtime values appropriate to the same r
 
 | Check | State |
 |---|---|
-| Server-side atomic chart + owner bootstrap | Implemented in source; CI emulator verification pending final run |
-| Dart/backend chart manifest drift gate | Implemented in source; CI pending |
-| Native configuration fail-closed validation | Implemented in source; unit test CI pending |
+| Server-side atomic chart + owner bootstrap | Verified PASS in GitHub Actions run 39912061538 |
+| Dart/backend chart manifest drift gate | Verified PASS in GitHub Actions run 39912061538 |
+| Native configuration fail-closed validation | Verified PASS (including 5 native config tests) in run 39912061538 |
 | Native Flutter Android/iOS project scaffolding | BLOCKED — no platform registrations/package IDs |
 | Real Firebase V2 application end-to-end sign-in | NOT RUN |
 | Production deployment/financial writes | NOT AUTHORIZED; NOT RUN |
 | V1 data / source modifications | NONE |
+
+### CI evidence (source commit `106e8490abcb6549e7cc9c4ad8c50f6ebb57fea7`)
+
+- https://github.com/yazan-amleh/electrical_parts_store_v2/actions/runs/39912061538 — SUCCESS
+- Flutter: 95 passed; Firestore and Storage rules: 20 passed; Functions/node emulator: 8 passed, 0 failed.
+- Formatting and Flutter analyzer: passed.
+- Real device and deployed non-production Firebase testing: **not performed**; still mandatory.
