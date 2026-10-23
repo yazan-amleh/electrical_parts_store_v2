@@ -81,14 +81,23 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
   }
 
   Widget _buildSummary(BuildContext context, AccountingAuditReport report) {
-    final color = report.isHealthy ? Colors.green : Colors.red;
-    final icon =
-        report.isHealthy ? Icons.check_circle_outline : Icons.error_outline;
-    final title = report.isHealthy
-        ? report.warningCount == 0
-            ? 'المحاسبة متطابقة'
-            : 'المحاسبة متطابقة مع تنبيهات'
-        : 'يوجد فرق محاسبي يحتاج إلى معالجة';
+    final color = !report.isComplete
+        ? Colors.orange
+        : report.isHealthy
+            ? Colors.green
+            : Colors.red;
+    final icon = !report.isComplete
+        ? Icons.warning_amber_outlined
+        : report.isHealthy
+            ? Icons.check_circle_outline
+            : Icons.error_outline;
+    final title = !report.isComplete
+        ? 'فحص المحاسبة غير مكتمل — لا يمكن اعتماد المطابقة'
+        : report.isHealthy
+            ? report.warningCount == 0
+                ? 'لم تُكتشف فروقات ضمن نطاق الفحص'
+                : 'لم تُكتشف فروقات، مع وجود تنبيهات'
+            : 'يوجد فرق محاسبي يحتاج إلى معالجة';
 
     return Card(
       child: Padding(
@@ -115,6 +124,13 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
                   Text(
                     'الأخطاء: ${report.errorCount} — التنبيهات: ${report.warningCount}',
                   ),
+                  if (!report.isPointInTimeConsistent) ...[
+                    const SizedBox(height: 4),
+                    const Text(
+                      'ملاحظة: البيانات قُرئت على مراحل، وقد تتغير أثناء الفحص. '
+                      'النتيجة ليست لقطة محاسبية ذرّية.',
+                    ),
+                  ],
                 ],
               ),
             ),
