@@ -81,6 +81,10 @@ class AccountingAuditReport {
     required this.issues,
     this.isComplete = true,
     this.isPointInTimeConsistent = false,
+    this.serverStatus = '',
+    this.reportedIssueCount,
+    this.reportedErrorCount,
+    this.issuesTruncated = false,
   });
 
   final String storeId;
@@ -99,10 +103,20 @@ class AccountingAuditReport {
 
   /// Whether all sources were read in one transactionally consistent snapshot.
   final bool isPointInTimeConsistent;
+  final String serverStatus;
+  final int? reportedIssueCount;
+  final int? reportedErrorCount;
+  final bool issuesTruncated;
 
-  bool get isHealthy => isComplete && issues.every((issue) => !issue.isError);
-  int get errorCount => issues.where((issue) => issue.isError).length;
-  int get warningCount => issues.length - errorCount;
+  bool get isHealthy =>
+      isComplete &&
+      serverStatus != 'issues_found' &&
+      errorCount == 0 &&
+      issues.every((issue) => !issue.isError);
+  int get errorCount =>
+      reportedErrorCount ?? issues.where((issue) => issue.isError).length;
+  int get warningCount =>
+      (reportedIssueCount ?? issues.length) - errorCount;
 
   factory AccountingAuditReport.fromMap(Map<String, dynamic> map) {
     final checked = _map(map['checked']);
@@ -133,6 +147,14 @@ class AccountingAuditReport {
       issues: List.unmodifiable(issues),
       isComplete: map['complete'] != false && map['status'] != 'incomplete',
       isPointInTimeConsistent: map['consistency'] == 'atomic',
+      serverStatus: map['status'] as String? ?? '',
+      reportedIssueCount: map['issueCount'] is int
+          ? map['issueCount'] as int
+          : null,
+      reportedErrorCount: map['errorCount'] is int
+          ? map['errorCount'] as int
+          : null,
+      issuesTruncated: map['issuesTruncated'] == true,
     );
   }
 
