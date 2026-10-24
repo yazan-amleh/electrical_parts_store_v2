@@ -93,7 +93,7 @@ function buildUnifiedAuditReport({
     balance.status === 'source_changed' || postingEpochChanged;
   // Compare ONLY after both independent scans have completed. A partial
   // count can coincidentally equal another partial or complete count.
-  const directPathLinesAgree = finish
+  const directPathLinesAgree = finish && !sourceChanged
     ? knownParentPathLines === directHeaderLines : null;
 
   const findings = [];
@@ -198,7 +198,7 @@ function buildUnifiedAuditReport({
     storeId,
     runIds: {ledgerRunId, journalRunId, orphanRunId, balanceRunId},
     verdict,
-    complete: finish,
+    complete: finish && !sourceChanged,
     certified: false,
     accountingCutoffApplied: false,
     consistency: 'non_atomic',
