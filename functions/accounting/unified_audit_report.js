@@ -11,6 +11,9 @@ const {
 const {trialBalanceSummary} = require('./trial_balance');
 const {validatePathRun} = require('./orphan_path_scan');
 const {validateBalanceProjectionRun} = require('./balance_projection_scan');
+const {
+  compareLedgerAndStoredBalances,
+} = require('./balance_currency_coverage');
 
 function fail(HttpsError, message) {
   throw new HttpsError('failed-precondition', message);
@@ -53,6 +56,8 @@ function buildUnifiedAuditReport({
   // This function is exported for deterministic unit-test scenarios only.
   const trialBalance = trialBalanceSummary(ledger);
   const crossRun = comparison(ledger, journal);
+  const storedBalanceAgreement = compareLedgerAndStoredBalances(
+    ledger, balance);
   const directHeaderLines = journal.linesChecked;
   const knownParentPathLines =
     orphan.journalLinesScanned - orphan.orphanLines;
@@ -142,6 +147,9 @@ function buildUnifiedAuditReport({
   if (directPathLinesAgree === false) {
     addFinding('DIRECT_JOURNAL_PATH_COUNT_DIFFERENCE');
   }
+  if (storedBalanceAgreement.allAgree === false) {
+    addFinding('STORED_BALANCE_TOTALS_DIFFER_FROM_LEDGER');
+  }
   if (trialBalance.verdict === 'out_of_balance') {
     addFinding('TRIAL_BALANCE_OUT_OF_BALANCE');
   }
@@ -210,6 +218,7 @@ function buildUnifiedAuditReport({
         orphanSamples: [...orphan.orphanSamples],
       },
       crossRun,
+      storedBalanceAgreement,
       directPathCoverage: {
         complete: finish,
         directHeaderLines,
