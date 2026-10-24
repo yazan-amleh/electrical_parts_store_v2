@@ -21,6 +21,12 @@ function fail(HttpsError, message) {
   throw new HttpsError('failed-precondition', message);
 }
 
+function documentRevision(snapshot) {
+  const time = snapshot.exists ? snapshot.updateTime : null;
+  return time ? String(time.seconds) + ':' +
+    String(time.nanoseconds) : null;
+}
+
 function checkedAdd(a, b, HttpsError) {
   if (!Number.isSafeInteger(a) || !Number.isSafeInteger(b) ||
       !Number.isSafeInteger(a + b)) {
@@ -32,7 +38,8 @@ function checkedAdd(a, b, HttpsError) {
 function validateState(state, storeId, uid, HttpsError) {
   if (!state || state.schemaVersion !== SCHEMA_VERSION ||
       state.storeId !== storeId || state.createdBy !== uid ||
-      !['running', 'reconciliation_complete'].includes(state.status) ||
+      !['running', 'reconciliation_complete', 'source_changed']
+        .includes(state.status) ||
       (state.lastAccountId !== null &&
        (typeof state.lastAccountId !== 'string' || !state.lastAccountId)) ||
       (state.activeAccountId !== null &&
@@ -43,9 +50,17 @@ function validateState(state, storeId, uid, HttpsError) {
         state.lineCursorPath.split('/').length < 2 ||
         state.lineCursorPath.split('/').at(-2) !== 'lines' ||
         state.lineCursorPath.split('/').some((segment) => !segment))) ||
-      (state.activeAccountId === null && state.lineCursorPath !== null) ||
+      (state.activeAccountId === null &&
+       (state.lineCursorPath !== null ||
+        state.activeAccountRevision !== null ||
+        state.activeBalanceRevision !== null)) ||
       (state.activeAccountId !== null &&
-       state.lastAccountId === state.activeAccountId) ||
+       (state.lastAccountId === state.activeAccountId ||
+        typeof state.activeAccountRevision !== 'string' ||
+        !/^\\d+:\\d+$/.test(state.activeAccountRevision))) ||
+      (state.activeBalanceRevision !== null &&
+       (typeof state.activeBalanceRevision !== 'string' ||
+        !/^\\d+:\\d+$/.test(state.activeBalanceRevision))) ||
       !Number.isSafeInteger(state.accountsCompared) ||
       state.accountsCompared < 0 ||
       !Number.isSafeInteger(state.linesScanned) || state.linesScanned < 0 ||
@@ -106,6 +121,8 @@ async function startLedgerReconciliation({
     lastAccountId: null,
     activeAccountId: null,
     lineCursorPath: null,
+    activeAccountRevision: null,
+    activeBalanceRevision: null,
     runningDebit: 0,
     runningCredit: 0,
     activeLines: 0,
@@ -148,7 +165,7 @@ async function advanceLedgerReconciliation({
         'Ledger reconciliation run is owned by another user or store.');
     }
     validateState(state, storeId, uid, HttpsError);
-    if (state.status === 'reconciliation_complete') {
+    if (state.status !== 'running') {
       return status(runId, state);
     }
 
@@ -178,6 +195,23 @@ async function advanceLedgerReconciliation({
     ]);
     if (!accountSnapshot.exists) {
       fail(HttpsError, 'An account disappeared during reconciliation.');
+    }
+    const currentAccountRevision = documentRevision(accountSnapshot);
+    const currentBalanceRevision = documentRevision(balanceSnapshot);
+    if (!currentAccountRevision) {
+      fail(HttpsError, 'Account source revision is unavailable.');
+    }
+    if (state.activeAccountId !== null &&
+        (currentAccountRevision !== state.activeAccountRevision ||
+         currentBalanceRevision !== state.activeBalanceRevision)) {
+      // Previously counted pages cannot be reliably reconciled against a
+      // revised account or stored balance. Fail closed, never certify.
+      const changed = {
+        ...state, status: 'source_changed',
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      tx.update(runRef, changed);
+      return status(runId, changed);
     }
     const account = accountSnapshot.data();
     let query = db.collectionGroup('lines')
@@ -263,6 +297,8 @@ async function advanceLedgerReconciliation({
         ...state,
         activeAccountId: accountId,
         lineCursorPath: batch[batch.length - 1].ref.path,
+        activeAccountRevision: currentAccountRevision,
+        activeBalanceRevision: currentBalanceRevision,
         runningDebit: debit,
         runningCredit: credit,
         activeLines: acceptedLines,
@@ -337,6 +373,8 @@ async function advanceLedgerReconciliation({
       activeAccountId: null,
       lastAccountId: accountId,
       lineCursorPath: null,
+      activeAccountRevision: null,
+      activeBalanceRevision: null,
       runningDebit: 0,
       runningCredit: 0,
       activeLines: 0,
