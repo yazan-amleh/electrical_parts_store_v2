@@ -995,11 +995,12 @@ describe('Firestore security rules', function () {
 
   it('denies client forgery or disabling of accounting close controls', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
-      await setDoc(storeDoc(context.firestore(),
+      const adminDb = context.firestore();
+      await setDoc(storeDoc(adminDb,
         'accounting_period_control', 'current'), {
         storeId: STORE_ID, status: 'locked', closeId: 'audit-lock',
       });
-      await setDoc(storeDoc(context.firestore(),
+      await setDoc(storeDoc(adminDb,
         'accounting_close_events', 'audit-lock'), {
         storeId: STORE_ID, kind: 'began',
       });
