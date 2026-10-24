@@ -176,8 +176,10 @@ service cloud.firestore {
 
       match /accounts/{accountId} {
         allow read: if canReadStore(storeId);
-        allow create, update: if canManageStore(storeId);
-        allow delete: if false;
+        // All chart writes now go through mutateChartAccount. This callable
+        // changes the audit mutation revision in the same transaction.
+        // Direct owner writes would otherwise bypass the revision guard.
+        allow create, update, delete: if false;
       }
 
       match /products/{productId} {
