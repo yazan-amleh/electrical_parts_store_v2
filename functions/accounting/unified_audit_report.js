@@ -251,7 +251,7 @@ function buildUnifiedAuditReport({
       crossRun,
       storedBalanceAgreement,
       directPathCoverage: {
-        complete: finish,
+        complete: finish && !sourceChanged,
         directHeaderLines,
         knownParentPathLines,
         agrees: directPathLinesAgree,
