@@ -71,6 +71,14 @@ describe('manual journal posting: accounting integrity', () => {
     assert.equal(credit.creditMinorUnits, 12500);
     assert.equal(credit.balanceMinorUnits, -12500);
     assert.equal(debit.balanceMinorUnits + credit.balanceMinorUnits, 0);
+    const shards = await store.collection('accounting_posting_epochs').get();
+    assert.equal(shards.size, 1);
+    assert.equal(shards.docs[0].data().version, 1);
+    assert.equal(shards.docs[0].data().sequence, 1);
+    // Replays must not advance the posting fence or duplicate any amounts.
+    await invoke(payload);
+    const sameShard = await shards.docs[0].ref.get();
+    assert.equal(sameShard.data().sequence, 1);
     await db.recursiveDelete(store);
   });
 
@@ -117,6 +125,8 @@ describe('manual journal posting: accounting integrity', () => {
     );
     assert.equal((await store.collection('journal_entries').get()).empty, true);
     assert.equal((await store.collection('account_balances').get()).empty, true);
+    assert.equal((await store.collection('accounting_posting_epochs').get())
+      .empty, true);
     await db.recursiveDelete(store);
   });
 
