@@ -932,6 +932,33 @@ describe('Firestore security rules', function () {
   });
 
 
+  it('keeps journal header reconciliation checkpoints and results server-only', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(storeDoc(adminDb, 'accounting_journal_runs', 'run-1'), {
+        storeId: STORE_ID, createdBy: 'owner-1', certified: false,
+      });
+      await setDoc(storeDoc(adminDb, 'accounting_journal_runs', 'run-1',
+        'entry_results', 'journal-1'), {
+        storeId: STORE_ID, entryId: 'journal-1', matched: false,
+      });
+    });
+    const run = storeDoc(ownerDb, 'accounting_journal_runs', 'run-1');
+    const result = storeDoc(accountantDb, 'accounting_journal_runs', 'run-1',
+      'entry_results', 'journal-1');
+    await assertFails(getDoc(run));
+    await assertFails(getDoc(result));
+    await assertFails(setDoc(storeDoc(ownerDb,
+      'accounting_journal_runs', 'fake'), {
+      storeId: STORE_ID, certified: true,
+    }));
+    await assertFails(updateDoc(run, {certified: true}));
+    await assertFails(setDoc(storeDoc(accountantDb,
+      'accounting_journal_runs', 'run-1', 'entry_results', 'forgery'), {
+      entryId: 'journal-1', matched: true,
+    }));
+  });
+
   it('blocks client forgery of GL reconciliation runs and results', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const adminDb = context.firestore();
