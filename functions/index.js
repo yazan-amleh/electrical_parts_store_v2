@@ -93,6 +93,13 @@ const {getUnifiedAuditReport} = require('./accounting/unified_audit_report');
 const {markJournalPosting} = require('./accounting/posting_epoch');
 const {mutateChartAccount} = require('./accounting/chart_mutation');
 const {
+  assertAccountingWritesOpen,
+  parseIds,
+  beginAccountingClose,
+  finalizeAccountingClose,
+  reopenAccountingClose,
+} = require('./accounting/period_close');
+const {
   startBalanceProjectionScan, advanceBalanceProjectionScan,
 } = require('./accounting/balance_projection_scan');
 
@@ -107,6 +114,53 @@ exports.mutateChartAccount = onCall(async (request) => {
     data: request.data,
     assertAccess: (member, storeId) => assertMembership(
       member, storeId, 'modify chart of accounts', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+// A two-phase operational freeze: block all instrumented writes first,
+// then run and verify the four non-certifying historical source audits.
+exports.beginAccountingClose = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  return beginAccountingClose({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, id) => assertMembership(
+      member, id, 'begin accounting close', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.finalizeAccountingClose = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  const data = request.data;
+  return finalizeAccountingClose({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    ledgerRunId: data.ledgerRunId,
+    journalRunId: data.journalRunId,
+    orphanRunId: data.orphanRunId,
+    balanceRunId: data.balanceRunId,
+    assertAccess: (member, id) => assertMembership(
+      member, id, 'finalize accounting close', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.reopenAccountingClose = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  return reopenAccountingClose({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    reason: request.data.reason,
+    assertAccess: (member, id) => assertMembership(
+      member, id, 'reopen accounting close', new Set(['owner', 'admin']),
     ),
   });
 });
@@ -779,6 +833,7 @@ async function postInventoryMovementInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const memberRef = storeRef.collection('members').doc(userId);
   const productRef = storeRef
     .collection('products')
@@ -1000,6 +1055,7 @@ async function postJournalEntryInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const memberRef = storeRef.collection('members').doc(userId);
   const journalRef = storeRef
     .collection('journal_entries')
@@ -1229,6 +1285,7 @@ async function postAccountTransferInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const memberRef = storeRef.collection('members').doc(userId);
   const transferRef = storeRef
     .collection('account_transfers')
@@ -1599,6 +1656,7 @@ function parseExpenseCommand(rawCommand) {
 
 async function postExpenseInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const memberRef = storeRef.collection('members').doc(userId);
   const expenseRef = storeRef
     .collection('expenses')
@@ -2099,6 +2157,7 @@ async function postPartyPaymentInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const memberRef = storeRef.collection('members').doc(userId);
   const paymentRef = storeRef
     .collection('party_payments')
@@ -2638,6 +2697,7 @@ async function postPurchaseInTransaction(
   allowedRoles = POSTING_ROLES,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const memberRef = storeRef.collection('members').doc(userId);
   const purchaseRef = storeRef
     .collection('purchases')
@@ -3596,6 +3656,7 @@ async function receivePurchaseOrderInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const memberRef = storeRef.collection('members').doc(userId);
   const orderRef = storeRef
     .collection('purchase_orders')
@@ -3940,6 +4001,7 @@ async function postSaleInTransaction(
   allowedRoles = POSTING_ROLES,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const memberRef = storeRef.collection('members').doc(userId);
   const saleRef = storeRef.collection('sales').doc(command.sale.id);
   const saleIdempotencyRef = storeRef
@@ -5738,6 +5800,7 @@ exports.settleCheque = onCall(async (request) => {
 
 async function settleChequeInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const memberRef = storeRef.collection('members').doc(userId);
   const chequeRef = storeRef.collection('party_payments').doc(command.chequeId);
   const settlementIdempotencyRef = storeRef
@@ -7667,6 +7730,7 @@ function parseRepairPayload(rawRepair) {
 
 async function createRepairInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const repairRef = storeRef.collection('repairs').doc(command.repair.id);
   const idempotencyRef = storeRef
     .collection('repair_idempotency')
@@ -7731,6 +7795,7 @@ async function createRepairInTransaction(transaction, userId, command) {
 
 async function updateRepairInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const repairRef = storeRef.collection('repairs').doc(command.repairId);
   const memberSnapshot = await transaction.get(
     storeRef.collection('members').doc(userId),
@@ -7910,6 +7975,7 @@ function assertRepairTransition(currentStatus, nextStatus) {
 
 async function deliverRepairInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const repairRef = storeRef.collection('repairs').doc(command.repairId);
   const deliveryIdempotencyRef = storeRef
     .collection('repair_delivery_idempotency')
@@ -8464,6 +8530,7 @@ async function postRepairAdvanceInTransaction(
     invalid('Cheque advances need a posted repair invoice.');
   }
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const memberSnapshot = await transaction.get(
     storeRef.collection('members').doc(userId),
   );
@@ -8706,6 +8773,7 @@ async function postRepairPaymentInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const memberSnapshot = await transaction.get(
     storeRef.collection('members').doc(userId),
   );
