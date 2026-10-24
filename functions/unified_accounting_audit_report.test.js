@@ -466,7 +466,7 @@ describe('read-only consolidated accounting audit evidence', () => {
     assert.equal(result.checks.postingEpoch.acrossRunsMatch, false);
     assert.equal(result.checks.postingEpoch.currentMatchesRuns, false);
     assert.equal(result.verdict, 'source_changed');
-    assert.equal(result.complete, true); // individual scans finished, but stale
+    assert.equal(result.complete, false); // scans finished at incompatible eras
     assert.equal(result.certified, false);
     await db.recursiveDelete(store);
   });
