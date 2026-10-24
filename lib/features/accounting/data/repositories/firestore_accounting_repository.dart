@@ -12,6 +12,7 @@ import '../../domain/entities/journal_entry.dart';
 import '../../domain/enums/accounting_enums.dart';
 import '../../domain/repositories/accounting_repository.dart';
 import '../mappers/account_firestore_mapper.dart';
+import '../mappers/account_balance_firestore_mapper.dart';
 import '../mappers/journal_entry_command_mapper.dart';
 
 class FirestoreAccountingRepository implements AccountingRepository {
@@ -112,10 +113,21 @@ class FirestoreAccountingRepository implements AccountingRepository {
         _firestore,
         context.storeId,
       ).doc(accountId).get();
-      final balanceData = balanceSnapshot.data() ?? const <String, dynamic>{};
-      final debit = _minorUnits(balanceData['debitMinorUnits']);
-      final credit = _minorUnits(balanceData['creditMinorUnits']);
-      final debitCreditBalance = debit - credit;
+      // A missing projection is zero for a new account; an existing malformed
+      // projection must never masquerade as zero in a financial UI.
+      final projection = balanceSnapshot.exists
+          ? AccountBalanceFirestoreMapper.fromMap(
+              data: balanceSnapshot.data()!,
+              documentAccountId: accountId,
+              expectedStoreId: context.storeId,
+            )
+          : null;
+      final debitCreditBalance = projection?.debitCreditBalance.minorUnits ?? 0;
+      if (projection != null && projection.debit.currency != account.currency) {
+        return const FailureResult<Money>(
+          ValidationFailure('Account balance currency does not match account.'),
+        );
+      }
       final normalizedBalance = account.normalSide == NormalSide.debit
           ? debitCreditBalance
           : -debitCreditBalance;
@@ -150,13 +162,5 @@ class FirestoreAccountingRepository implements AccountingRepository {
       default:
         return InfrastructureFailure(error.message ?? error.code);
     }
-  }
-
-  static int _minorUnits(Object? value) {
-    return value is int
-        ? value
-        : value is num
-            ? value.toInt()
-            : 0;
   }
 }

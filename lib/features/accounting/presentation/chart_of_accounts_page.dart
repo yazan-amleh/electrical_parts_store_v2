@@ -5,17 +5,22 @@ import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../domain/entities/account.dart';
+import '../domain/enums/accounting_enums.dart';
+import '../../auth/domain/enums/store_role.dart';
+import '../data/repositories/firestore_chart_mutation_repository.dart';
 import '../domain/repositories/accounting_query_repository.dart';
 
 class ChartOfAccountsPage extends StatefulWidget {
   const ChartOfAccountsPage({
     required this.repository,
+    this.mutationRepository,
     required this.user,
     required this.membership,
     super.key,
   });
 
   final AccountingQueryRepository? repository;
+  final FirestoreChartMutationRepository? mutationRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -29,6 +34,12 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
   List<Account> _accounts = const <Account>[];
   bool _isLoading = true;
   String? _errorMessage;
+  bool _isSaving = false;
+
+  bool get _mayChangeChart =>
+      widget.mutationRepository != null &&
+      widget.membership.isActive &&
+      widget.membership.role.canManageStore;
 
   @override
   void initState() {
@@ -114,6 +125,7 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
               ),
             ),
             const SizedBox(width: 8),
+            if (_isSaving) const CircularProgressIndicator(),
             IconButton(
               tooltip: 'تحديث',
               onPressed: _loadAccounts,
@@ -146,11 +158,159 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
           ],
         ),
         subtitle: Text(account.isHeader ? 'حساب رئيسي' : 'حساب ترحيل'),
-        trailing: account.canPost
-            ? const Chip(label: Text('ترحيل'))
-            : const Chip(label: Text('تجميعي')),
+        trailing: _mayChangeChart
+            ? Wrap(
+                spacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (account.isHeader)
+                    IconButton(
+                      tooltip: 'إضافة حساب فرعي',
+                      onPressed:
+                          _isSaving ? null : () => _addChildAccount(account),
+                      icon: const Icon(Icons.add_circle_outline),
+                    ),
+                  IconButton(
+                    tooltip: 'تعديل اسم الحساب',
+                    onPressed: _isSaving ? null : () => _renameAccount(account),
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                ],
+              )
+            : account.canPost
+                ? const Chip(label: Text('ترحيل'))
+                : const Chip(label: Text('تجميعي')),
       ),
     );
+  }
+
+  StoreContext get _storeContext => StoreContext(
+        storeId: widget.membership.storeId,
+        userId: widget.user.id,
+      );
+
+  Future<void> _renameAccount(Account account) async {
+    final controller = TextEditingController(text: account.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تعديل اسم الحساب'),
+        content: TextField(
+          controller: controller,
+          maxLength: 160,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'اسم الحساب'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted ||
+        name == null ||
+        name.trim().isEmpty ||
+        name.trim() == account.name ||
+        !_mayChangeChart) {
+      return;
+    }
+    setState(() => _isSaving = true);
+    final result = await widget.mutationRepository!.updateAccountMetadata(
+      context: _storeContext,
+      accountId: account.id,
+      changes: {'name': name.trim()},
+    );
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    if (result is FailureResult<String>) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.failure.message)),
+      );
+      return;
+    }
+    await _loadAccounts();
+  }
+
+  Future<void> _addChildAccount(Account parent) async {
+    if (!_mayChangeChart || !parent.isHeader) return;
+    final idController = TextEditingController();
+    final nameController = TextEditingController();
+    final input = await showDialog<List<String>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('إضافة حساب فرعي إلى ${parent.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: idController,
+              maxLength: 128,
+              decoration: const InputDecoration(labelText: 'رقم الحساب'),
+            ),
+            TextField(
+              controller: nameController,
+              maxLength: 160,
+              decoration: const InputDecoration(labelText: 'اسم الحساب'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+                dialogContext, [idController.text, nameController.text]),
+            child: const Text('إضافة'),
+          ),
+        ],
+      ),
+    );
+    idController.dispose();
+    nameController.dispose();
+    if (!mounted || input == null || !_mayChangeChart) return;
+    final id = input[0].trim();
+    final name = input[1].trim();
+    if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) || name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('رقم الحساب أو اسمه غير صالح')),
+      );
+      return;
+    }
+    setState(() => _isSaving = true);
+    final result = await widget.mutationRepository!.createAccount(
+      context: _storeContext,
+      account: Account(
+        id: id,
+        storeId: widget.membership.storeId,
+        code: id,
+        name: name,
+        type: parent.type,
+        normalSide: parent.normalSide,
+        controlType: ControlType.none,
+        statementSection: parent.statementSection,
+        parentId: parent.id,
+        currency: parent.currency,
+        sortOrder: parent.sortOrder + 1,
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    if (result is FailureResult<Account>) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.failure.message)),
+      );
+      return;
+    }
+    await _loadAccounts();
   }
 
   List<Account> _orderedAccounts(List<Account> accounts) {

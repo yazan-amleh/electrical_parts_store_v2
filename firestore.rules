@@ -122,26 +122,43 @@ service cloud.firestore {
       return hasRole(storeId, ['owner', 'admin', 'accountant', 'sales']);
     }
 
+    // Only the authenticated user can read their selection.
+    // All mutations are handled by callable Functions after membership checks.
+    match /user_store_preferences/{userId} {
+      allow get: if signedIn() && request.auth.uid == userId;
+      allow list, create, update, delete: if false;
+    }
+
     match /stores/{storeId} {
       allow read: if canReadStore(storeId);
-      allow create: if signedIn() &&
-        request.resource.data.ownerId == request.auth.uid;
+      allow create: if false;
       allow update: if canManageStore(storeId) &&
         request.resource.data.ownerId == resource.data.ownerId &&
         (
           !('currency' in resource.data) ||
           request.resource.data.currency == resource.data.currency
+        ) &&
+        (
+          !('initialChartVersion' in resource.data) ||
+          request.resource.data.initialChartVersion ==
+            resource.data.initialChartVersion
+        ) &&
+        (
+          !('initialChartAccountCount' in resource.data) ||
+          request.resource.data.initialChartAccountCount ==
+            resource.data.initialChartAccountCount
         );
       allow delete: if false;
 
       match /members/{userId} {
         // A member must be able to read their own active membership to establish
         // the session. Owners and admins can read the complete member list.
-        allow read: if (
-          signedIn() &&
-          userId == request.auth.uid &&
-          resource.data.isActive == true
+        // Own membership GET must also work for missing/inactive docs so
+        // onboarding can distinguish no membership from network/permission errors.
+        allow get: if (
+          signedIn() && userId == request.auth.uid
         ) || canManageStore(storeId);
+        allow list: if canManageStore(storeId);
         allow create, update, delete: if canManageStore(storeId);
       }
 
@@ -159,8 +176,10 @@ service cloud.firestore {
 
       match /accounts/{accountId} {
         allow read: if canReadStore(storeId);
-        allow create, update: if canManageStore(storeId);
-        allow delete: if false;
+        // All chart writes now go through mutateChartAccount. This callable
+        // changes the audit mutation revision in the same transaction.
+        // Direct owner writes would otherwise bypass the revision guard.
+        allow create, update, delete: if false;
       }
 
       match /products/{productId} {
@@ -371,6 +390,54 @@ service cloud.firestore {
       match /account_balances/{accountId} {
         allow read: if canReadStore(storeId);
         allow create, update, delete: if false;
+      }
+
+      // Checkpoint state is Cloud Functions-owned, not client-editable.
+      // A forged cursor/phase could otherwise falsely claim complete history.
+      match /accounting_audit_runs/{runId} {
+        allow read, write: if false;
+      }
+
+      // Audit checkpoints/results cannot be forged by any client.
+      match /accounting_ledger_runs/{runId} {
+        allow read, write: if false;
+        match /account_results/{accountId} {
+          allow read, write: if false;
+        }
+      }
+
+      // Journal header/line reconciliation evidence is server-owned only.
+      match /accounting_journal_runs/{runId} {
+        allow read, write: if false;
+        match /entry_results/{entryId} {
+          allow read, write: if false;
+        }
+      }
+
+      // Path-based census state is trusted audit evidence, server-owned.
+      match /accounting_orphan_path_runs/{runId} {
+        allow read, write: if false;
+      }
+
+      // Reverse balance census checkpoints are exclusively server-owned.
+      match /accounting_balance_path_runs/{runId} {
+        allow read, write: if false;
+      }
+
+      // Sharded financial posting revision fence, only Cloud Functions may
+      // change these counters as part of the posted journal transaction.
+      match /accounting_posting_epochs/{shardId} {
+        allow read, write: if false;
+      }
+
+      // Only server-side owner/admin callables can freeze/reopen accounting.
+      // No client may forge the current financial close or its evidence.
+      match /accounting_period_control/{controlId} {
+        allow read, write: if false;
+      }
+
+      match /accounting_close_events/{eventId} {
+        allow read, write: if false;
       }
 
       match /idempotency_keys/{key} {

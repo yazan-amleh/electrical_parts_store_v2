@@ -7,6 +7,7 @@ import '../../categories/domain/repositories/category_repository.dart';
 import '../../categories/domain/services/category_inventory_document_builder.dart';
 import '../../categories/presentation/categories_page.dart';
 import '../../accounting/domain/repositories/accounting_query_repository.dart';
+import '../../accounting/data/repositories/firestore_chart_mutation_repository.dart';
 import '../../accounting/domain/repositories/accounting_repository.dart';
 import '../../accounting/presentation/financial_statements_page.dart';
 import '../../accounting_audit/domain/repositories/accounting_audit_repository.dart';
@@ -66,6 +67,7 @@ class AppShellPage extends StatefulWidget {
     required this.user,
     required this.membership,
     required this.onSignOut,
+    required this.onChooseStore,
     super.key,
   });
 
@@ -73,6 +75,7 @@ class AppShellPage extends StatefulWidget {
   final AuthenticatedUser user;
   final StoreMembership membership;
   final Future<void> Function() onSignOut;
+  final VoidCallback onChooseStore;
 
   @override
   State<AppShellPage> createState() => _AppShellPageState();
@@ -389,7 +392,7 @@ class _AppShellPageState extends State<AppShellPage> {
     );
   }
 
-  Future<void> _signOut() async {
+  Future<void> _unregisterNotifications() async {
     final repository = widget.dependencies.notificationRepository;
     if (repository != null) {
       await repository.unregisterCurrentDevice(
@@ -399,7 +402,16 @@ class _AppShellPageState extends State<AppShellPage> {
         ),
       );
     }
+  }
+
+  Future<void> _signOut() async {
+    await _unregisterNotifications();
     await widget.onSignOut();
+  }
+
+  Future<void> _chooseStore() async {
+    await _unregisterNotifications();
+    widget.onChooseStore();
   }
 
   @override
@@ -445,6 +457,7 @@ class _AppShellPageState extends State<AppShellPage> {
               widget.dependencies.accountTransferRepository,
           accountingQueryRepository:
               widget.dependencies.accountingQueryRepository,
+          chartMutationRepository: widget.dependencies.chartMutationRepository,
           repairRepository: widget.dependencies.repairRepository,
           repairDocumentBuilder: widget.dependencies.repairDocumentBuilder,
           reportsRepository: widget.dependencies.reportsRepository,
@@ -532,6 +545,14 @@ class _AppShellPageState extends State<AppShellPage> {
             ),
             const Divider(height: 1),
             ListTile(
+              leading: const Icon(Icons.storefront_outlined),
+              title: const Text('تغيير المتجر'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _chooseStore();
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.logout),
               title: const Text('تسجيل الخروج'),
               onTap: () {
@@ -567,6 +588,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.partyLedgerRepository,
     required this.accountTransferRepository,
     required this.accountingQueryRepository,
+    this.chartMutationRepository,
     required this.repairRepository,
     required this.repairDocumentBuilder,
     required this.reportsRepository,
@@ -598,6 +620,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final PartyLedgerRepository? partyLedgerRepository;
   final AccountTransferRepository? accountTransferRepository;
   final AccountingQueryRepository? accountingQueryRepository;
+  final FirestoreChartMutationRepository? chartMutationRepository;
   final RepairRepository? repairRepository;
   final RepairDocumentBuilder? repairDocumentBuilder;
   final ReportsRepository? reportsRepository;
@@ -741,6 +764,7 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'chart-of-accounts') {
       return ChartOfAccountsPage(
         repository: accountingQueryRepository,
+        mutationRepository: chartMutationRepository,
         user: user,
         membership: membership,
       );

@@ -5,8 +5,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import '../core/config/app_runtime_config.dart';
+import '../core/config/firebase_project_guard.dart';
 import '../firebase_options.dart';
 import '../features/accounting/data/repositories/firestore_accounting_query_repository.dart';
+import '../features/accounting/data/repositories/firestore_chart_mutation_repository.dart';
 import '../features/accounting/data/repositories/firestore_accounting_repository.dart';
 import '../features/accounting_audit/data/repositories/firestore_accounting_audit_repository.dart';
 import '../features/activity_log/data/repositories/firestore_activity_log_repository.dart';
@@ -16,6 +18,7 @@ import '../features/cheques/data/repositories/firestore_cheque_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
 import '../features/auth/data/repositories/firebase_auth_repository.dart';
 import '../features/auth/data/repositories/firestore_store_membership_repository.dart';
+import '../features/auth/data/repositories/firebase_store_onboarding_repository.dart';
 import '../features/inventory/data/repositories/firestore_inventory_repository.dart';
 import '../features/inventory/data/repositories/firestore_product_repository.dart';
 import '../features/sales/data/repositories/firestore_sale_repository.dart';
@@ -57,6 +60,11 @@ abstract final class AppBootstrap {
       );
     }
 
+    FirebaseProjectGuard.requireMatchingProject(
+      expectedProjectId: runtime.firebaseProjectId,
+      actualProjectId: Firebase.app().options.projectId,
+    );
+
     final firestore = FirebaseFirestore.instance;
     final functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
     final commandQueue = FirestoreCommandQueueRepository(firestore: firestore);
@@ -66,6 +74,10 @@ abstract final class AppBootstrap {
         firestore: firestore,
       ),
       storeId: runtime.storeId,
+      onboardingRepository: FirebaseStoreOnboardingRepository(
+        firestore: firestore,
+        functions: functions,
+      ),
     );
 
     session.start();
@@ -86,6 +98,9 @@ abstract final class AppBootstrap {
         firestore: firestore,
         functions: functions,
         commandQueue: commandQueue,
+      ),
+      chartMutationRepository: FirestoreChartMutationRepository(
+        functions: functions,
       ),
       accountingQueryRepository: FirestoreAccountingQueryRepository(
         firestore: firestore,

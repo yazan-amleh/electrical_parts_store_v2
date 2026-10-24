@@ -15,6 +15,165 @@ setGlobalOptions({
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
+const { createStoreHandler, selectStoreHandler } = require('./store_onboarding');
+const {
+  checkedMinorAdd,
+  readBalanceForPosting,
+  readPartyBalanceForPosting,
+  fingerprintJournal,
+  isSameLegacyJournalHeader,
+  isSameLegacyJournalLine,
+} = require('./accounting/journal_integrity');
+const {
+  fingerprintAccountTransfer,
+  sameLegacyTransfer,
+} = require('./accounting/transfer_integrity');
+const {
+  expenseFingerprint,
+  sameLegacyExpense,
+  sameLegacyExpenseLines,
+} = require('./accounting/expense_integrity');
+const {
+  fingerprintPartyPayment,
+  sameLegacyPartyPayment,
+  sameLegacyPartyPaymentLines,
+} = require('./accounting/party_payment_integrity');
+const {
+  fingerprintChequeSettlement,
+  sameLegacyChequeSettlement,
+  sameLegacyChequeLines,
+} = require('./accounting/cheque_settlement_integrity');
+const {
+  fingerprintPurchase,
+  matchesLegacyPurchaseHeader,
+  matchesLegacyPurchaseLines,
+  matchesLegacyPurchaseJournal,
+} = require('./accounting/purchase_integrity');
+const {
+  fingerprintSale,
+  matchesLegacySaleInvoice,
+  matchesLegacySaleLines,
+  matchesLegacySaleJournal,
+} = require('./accounting/sale_integrity');
+const {
+  fingerprintPurchaseOrderReceipt,
+  matchesLegacyPurchaseOrderReceipt,
+  matchesLegacyPurchaseOrderJournalLines,
+} = require('./accounting/purchase_order_receipt_integrity');
+const {
+  MAX_AUDIT_DOCS_PER_COLLECTION,
+  MAX_AUDIT_TOTAL_DOCS,
+  readAuditPages,
+  readJournalAuditLines,
+  isJournalLinePath,
+  findIndexedOrphanJournalLines,
+  auditInteger,
+  auditSum,
+} = require('./accounting/audit_integrity');
+const {
+  createHistoryScan,
+  advanceHistoryScan,
+} = require('./accounting/history_scan');
+const {
+  startLedgerReconciliation,
+  advanceLedgerReconciliation,
+} = require('./accounting/ledger_reconciliation');
+const {
+  startJournalHeaderReconciliation,
+  advanceJournalHeaderReconciliation,
+} = require('./accounting/journal_header_reconciliation');
+const {
+  compareAuditRunCoverage,
+} = require('./accounting/audit_coverage');
+const {
+  startPathOrphanScan,
+  advancePathOrphanScan,
+} = require('./accounting/orphan_path_scan');
+const {getUnifiedAuditReport} = require('./accounting/unified_audit_report');
+const {markJournalPosting} = require('./accounting/posting_epoch');
+const {mutateChartAccount} = require('./accounting/chart_mutation');
+const {
+  assertAccountingWritesOpen,
+  parseIds,
+  beginAccountingClose,
+  finalizeAccountingClose,
+  reopenAccountingClose,
+} = require('./accounting/period_close');
+const {
+  startBalanceProjectionScan, advanceBalanceProjectionScan,
+} = require('./accounting/balance_projection_scan');
+
+// Chart edits are server-only so the audit's financial mutation fence cannot
+// be bypassed by direct client updates to the chart of accounts.
+exports.mutateChartAccount = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  return mutateChartAccount({
+    db, FieldValue, HttpsError, userId: request.auth.uid,
+    data: request.data,
+    assertAccess: (member, storeId) => assertMembership(
+      member, storeId, 'modify chart of accounts', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+// A two-phase operational freeze: block all instrumented writes first,
+// then run and verify the four non-certifying historical source audits.
+exports.beginAccountingClose = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  return beginAccountingClose({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    throughDate: request.data.throughDate,
+    assertAccess: (member, id) => assertMembership(
+      member, id, 'begin accounting close', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.finalizeAccountingClose = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  const data = request.data;
+  return finalizeAccountingClose({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    ledgerRunId: data.ledgerRunId,
+    journalRunId: data.journalRunId,
+    orphanRunId: data.orphanRunId,
+    balanceRunId: data.balanceRunId,
+    assertAccess: (member, id) => assertMembership(
+      member, id, 'finalize accounting close', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.reopenAccountingClose = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  return reopenAccountingClose({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    reason: request.data.reason,
+    assertAccess: (member, id) => assertMembership(
+      member, id, 'reopen accounting close', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.createStore = onCall((request) =>
+  createStoreHandler({ db, FieldValue, HttpsError, request }),
+);
+
+exports.selectStore = onCall((request) =>
+  selectStoreHandler({ db, FieldValue, HttpsError, request }),
+);
+
 const QUANTITY_SCALE = 1000;
 const MAX_LINES = 100;
 const POSTING_ROLES = new Set(['owner', 'admin', 'accountant', 'sales']);
@@ -543,6 +702,25 @@ exports.postAccountTransfer = onCall(async (request) => {
   }
 });
 
+// Firestore can close a contended transaction before its competing attempt
+// observes the idempotency marker (emulator reports INVALID_ARGUMENT). Retry
+// only that exact transient failure through a NEW server transaction.
+// postExpenseInTransaction validates the immutable request fingerprint and
+// journal marker on every attempt, so retry cannot post twice.
+async function runExpenseTransactionWithClosedRetry(userId, command) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await db.runTransaction((transaction) =>
+        postExpenseInTransaction(transaction, userId, command),
+      );
+    } catch (error) {
+      const closedTransaction = !(error instanceof HttpsError) &&
+        /Transaction is invalid or closed/i.test(error?.message || '');
+      if (!closedTransaction || attempt === 2) throw error;
+    }
+  }
+}
+
 exports.postExpense = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
@@ -551,13 +729,9 @@ exports.postExpense = onCall(async (request) => {
   const command = parseExpenseCommand(request.data);
 
   try {
-    return await db.runTransaction(async (transaction) => {
-      return postExpenseInTransaction(
-        transaction,
-        request.auth.uid,
-        command,
-      );
-    });
+    return await runExpenseTransactionWithClosedRetry(
+      request.auth.uid, command,
+    );
   } catch (error) {
     if (error instanceof HttpsError) {
       throw error;
@@ -660,6 +834,9 @@ async function postInventoryMovementInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.movement.occurredAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const productRef = storeRef
     .collection('products')
@@ -745,6 +922,11 @@ async function postInventoryMovementInTransaction(
     );
   }
 
+  // Inventory-only movements are financial source mutations even when
+  // no GL journal is posted. Fence them in the same transaction.
+  markJournalPosting(
+    transaction, storeRef, 'inventory:' + movementRef.id, FieldValue,
+  );
   transaction.update(productRef, {
     quantityOnHandMilliUnits: nextQuantity,
     inventoryValueMinorUnits: nextInventoryValue,
@@ -820,8 +1002,12 @@ function parseJournalEntryCommand(rawCommand) {
       invalid('Each journal line must contain exactly one side.');
     }
 
-    totalDebitMinorUnits += debitMinorUnits;
-    totalCreditMinorUnits += creditMinorUnits;
+    totalDebitMinorUnits = checkedMinorAdd(
+      totalDebitMinorUnits, debitMinorUnits, 'Journal total debit',
+    );
+    totalCreditMinorUnits = checkedMinorAdd(
+      totalCreditMinorUnits, creditMinorUnits, 'Journal total credit',
+    );
     lines.push({
       id: lineId,
       accountId: safeId(
@@ -872,6 +1058,9 @@ async function postJournalEntryInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.entry.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const journalRef = storeRef
     .collection('journal_entries')
@@ -888,16 +1077,41 @@ async function postJournalEntryInTransaction(
     PAYMENT_POSTING_ROLES,
   );
 
+  const fingerprint = fingerprintJournal(command.entry);
   const idempotencySnapshot = await transaction.get(idempotencyRef);
   if (idempotencySnapshot.exists) {
-    const existingEntryId = idempotencySnapshot.data().entryId;
-    if (existingEntryId === command.entry.id) {
-      return {
-        status: 'already_posted',
-        entryId: command.entry.id,
-      };
+    const marker = idempotencySnapshot.data();
+    if (marker.entryId !== command.entry.id) {
+      conflict('The journal idempotency key is already assigned.');
     }
-    conflict('The journal idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('The journal idempotency key was reused with different data.');
+      }
+    } else {
+      // Pre-fingerprint V2 entries must also be verified before acknowledging
+      // a retry. Never claim a changed amount was already posted.
+      const oldJournal = await transaction.get(journalRef);
+      if (!oldJournal.exists ||
+          !isSameLegacyJournalHeader(oldJournal.data(), command.entry)) {
+        conflict('The historical journal cannot be verified for this retry.');
+      }
+      const oldLines = await transaction.get(journalRef.collection('lines'));
+      if (oldLines.size !== command.entry.lines.length) {
+        conflict('The historical journal lines differ from this retry.');
+      }
+      for (const line of command.entry.lines) {
+        const oldLine = oldLines.docs.find((doc) => doc.id === line.id);
+        if (!oldLine ||
+            !isSameLegacyJournalLine(oldLine.data(), line, command.entry)) {
+          conflict('The historical journal lines differ from this retry.');
+        }
+      }
+    }
+    return {
+      status: 'already_posted',
+      entryId: command.entry.id,
+    };
   }
 
   const existingJournalSnapshot = await transaction.get(journalRef);
@@ -942,10 +1156,18 @@ async function postJournalEntryInTransaction(
       credit: 0,
     };
     deltas.set(line.accountId, {
-      debit: previous.debit + line.debitMinorUnits,
-      credit: previous.credit + line.creditMinorUnits,
+      debit: checkedMinorAdd(
+        previous.debit, line.debitMinorUnits, 'Account debit delta',
+      ),
+      credit: checkedMinorAdd(
+        previous.credit, line.creditMinorUnits, 'Account credit delta',
+      ),
     });
   }
+
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
 
   transaction.set(journalRef, {
     storeId: command.storeId,
@@ -954,6 +1176,7 @@ async function postJournalEntryInTransaction(
     description: command.entry.description,
     status: 'posted',
     currency: command.entry.currency,
+    requestFingerprint: fingerprint,
     totalDebitMinorUnits: command.entry.totalDebitMinorUnits,
     totalCreditMinorUnits: command.entry.totalCreditMinorUnits,
     postedAt: Timestamp.fromDate(command.entry.postedAt),
@@ -978,12 +1201,21 @@ async function postJournalEntryInTransaction(
 
   for (const accountId of accountIds) {
     const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const previousDebit = storedInt(balance.debitMinorUnits, 0);
-    const previousCredit = storedInt(balance.creditMinorUnits, 0);
+    const previous = readBalanceForPosting(balanceSnapshot, {
+      storeId: command.storeId,
+      accountId,
+      currency: command.entry.currency,
+    });
     const delta = deltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      previous.debit, delta.debit, 'Running account debit balance',
+    );
+    const nextCredit = checkedMinorAdd(
+      previous.credit, delta.credit, 'Running account credit balance',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Running account net balance',
+    );
 
     transaction.set(
       storeRef.collection('account_balances').doc(accountId),
@@ -991,10 +1223,9 @@ async function postJournalEntryInTransaction(
         storeId: command.storeId,
         accountId,
         currency: command.entry.currency,
-        debitMinorUnits: previousDebit + delta.debit,
-        creditMinorUnits: previousCredit + delta.credit,
-        balanceMinorUnits:
-          previousDebit + delta.debit - previousCredit - delta.credit,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -1004,6 +1235,7 @@ async function postJournalEntryInTransaction(
     storeId: command.storeId,
     entryId: command.entry.id,
     idempotencyKey: command.entry.idempotencyKey,
+    requestFingerprint: fingerprint,
     createdAt: FieldValue.serverTimestamp(),
   });
 
@@ -1058,6 +1290,9 @@ async function postAccountTransferInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.transfer.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const transferRef = storeRef
     .collection('account_transfers')
@@ -1083,20 +1318,46 @@ async function postAccountTransferInTransaction(
     PAYMENT_POSTING_ROLES,
   );
 
+  const transferFingerprint = fingerprintAccountTransfer(command.transfer);
   const transferIdempotencySnapshot = await transaction.get(
     transferIdempotencyRef,
   );
   if (transferIdempotencySnapshot.exists) {
-    const existingTransferId =
-      transferIdempotencySnapshot.data().transferId;
-    if (existingTransferId === command.transfer.id) {
-      return {
-        status: 'already_posted',
-        transferId: command.transfer.id,
-        journalEntryId,
-      };
+    const marker = transferIdempotencySnapshot.data();
+    if (marker.transferId !== command.transfer.id) {
+      conflict('The transfer idempotency key is already assigned.');
     }
-    conflict('The transfer idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== transferFingerprint) {
+        conflict('The transfer key was replayed with changed financial details.');
+      }
+    } else {
+      // Preserve existing V2 transfer retries, but never trust a matching ID
+      // alone when an old marker predates request fingerprints.
+      const oldTransfer = await transaction.get(transferRef);
+      const oldJournal = await transaction.get(journalRef);
+      const oldJournalMarker = await transaction.get(journalIdempotencyRef);
+      if (!oldTransfer.exists ||
+          !sameLegacyTransfer(
+            oldTransfer.data(), command.transfer, journalEntryId,
+          ) ||
+          !oldJournal.exists ||
+          oldJournal.data().status !== 'posted' ||
+          oldJournal.data().sourceType !== 'accountTransfer' ||
+          oldJournal.data().totalDebitMinorUnits !==
+            command.transfer.amountMinorUnits ||
+          oldJournal.data().totalCreditMinorUnits !==
+            command.transfer.amountMinorUnits ||
+          !oldJournalMarker.exists ||
+          oldJournalMarker.data().entryId !== journalEntryId) {
+        conflict('The historical transfer cannot be verified for this retry.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      transferId: command.transfer.id,
+      journalEntryId,
+    };
   }
 
   const existingTransferSnapshot = await transaction.get(transferRef);
@@ -1202,6 +1463,7 @@ async function postAccountTransferInTransaction(
     {
       storeId: command.storeId,
       idempotencyKey: command.transfer.idempotencyKey,
+      requestFingerprint: transferFingerprint,
       postedAt: Timestamp.fromDate(command.transfer.postedAt),
       fromAccountId: command.transfer.fromAccountId,
       toAccountId: command.transfer.toAccountId,
@@ -1214,9 +1476,11 @@ async function postAccountTransferInTransaction(
     },
   );
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: 'accountTransfer',
@@ -1240,27 +1504,33 @@ async function postAccountTransferInTransaction(
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-
+    const previous = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.transfer.currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      previous.debit, delta.debit, 'Transfer account debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      previous.credit, delta.credit, 'Transfer account credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Transfer account net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
         storeId: command.storeId,
         accountId,
         currency: command.transfer.currency,
-        debitMinorUnits: currentDebit + delta.debit,
-        creditMinorUnits: currentCredit + delta.credit,
-        balanceMinorUnits:
-          currentDebit + delta.debit - currentCredit - delta.credit,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -1272,6 +1542,7 @@ async function postAccountTransferInTransaction(
       storeId: command.storeId,
       transferId: command.transfer.id,
       idempotencyKey: command.transfer.idempotencyKey,
+      requestFingerprint: transferFingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
@@ -1352,6 +1623,7 @@ function parseExpenseCommand(rawCommand) {
     expense.taxMinorUnits,
     'expense.taxMinorUnits',
   );
+  checkedMinorAdd(amountMinorUnits, taxMinorUnits, 'Expense inclusive tax total');
   if (taxMinorUnits > 0 && !accounts.inputTaxAccountId) {
     invalid('An input tax account is required when tax is present.');
   }
@@ -1391,6 +1663,9 @@ function parseExpenseCommand(rawCommand) {
 
 async function postExpenseInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.expense.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const expenseRef = storeRef
     .collection('expenses')
@@ -1414,6 +1689,9 @@ async function postExpenseInTransaction(transaction, userId, command) {
   const supplierLedgerRef = isCreditExpense
     ? storeRef.collection('party_ledger_entries').doc(supplierLedgerId)
     : null;
+  const supplierRef = isCreditExpense
+    ? storeRef.collection('parties').doc(command.expense.supplierId)
+    : null;
   const supplierBalanceId = isCreditExpense
     ? 'supplier-' + command.expense.supplierId
     : null;
@@ -1429,20 +1707,54 @@ async function postExpenseInTransaction(transaction, userId, command) {
     PAYMENT_POSTING_ROLES,
   );
 
+  const fingerprint = expenseFingerprint(command);
   const expenseIdempotencySnapshot = await transaction.get(
     expenseIdempotencyRef,
   );
   if (expenseIdempotencySnapshot.exists) {
-    const existingExpenseId =
-      expenseIdempotencySnapshot.data().expenseId;
-    if (existingExpenseId === command.expense.id) {
-      return {
-        status: 'already_posted',
-        expenseId: command.expense.id,
-        journalEntryId,
-      };
+    const marker = expenseIdempotencySnapshot.data();
+    if (marker.expenseId !== command.expense.id) {
+      conflict('The expense idempotency key is already assigned.');
     }
-    conflict('The expense idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('Expense idempotency key reused with different financial data.');
+      }
+    } else {
+      const oldExpense = await transaction.get(expenseRef);
+      const oldJournal = await transaction.get(journalRef);
+      const oldMarker = await transaction.get(journalIdempotencyRef);
+      const inclusiveTotal = checkedMinorAdd(
+        command.expense.amountMinorUnits, command.expense.taxMinorUnits,
+        'Expense total',
+      );
+      if (!oldExpense.exists ||
+          !sameLegacyExpense(
+            oldExpense.data(), command, journalEntryId, inclusiveTotal,
+          ) ||
+          !oldJournal.exists ||
+          oldJournal.data().storeId !== command.storeId ||
+          oldJournal.data().status !== 'posted' ||
+          oldJournal.data().sourceType !== 'expense' ||
+          oldJournal.data().currency !== command.expense.currency ||
+          oldJournal.data().totalDebitMinorUnits !== inclusiveTotal ||
+          oldJournal.data().totalCreditMinorUnits !== inclusiveTotal ||
+          !oldMarker.exists ||
+          oldMarker.data().entryId !== journalEntryId) {
+        conflict('Historical expense could not be verified for replay.');
+      }
+      const oldLines = await transaction.get(journalRef.collection('lines'));
+      if (!sameLegacyExpenseLines(
+        oldLines, command, journalEntryId, inclusiveTotal,
+      )) {
+        conflict('Historical expense journal lines differ from this replay.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      expenseId: command.expense.id,
+      journalEntryId,
+    };
   }
 
   const existingExpenseSnapshot = await transaction.get(expenseRef);
@@ -1465,6 +1777,11 @@ async function postExpenseInTransaction(transaction, userId, command) {
   let supplierLedgerSnapshot = null;
   let supplierBalanceSnapshot = null;
   if (isCreditExpense) {
+    const supplierSnapshot = await transaction.get(supplierRef);
+    assertParty(
+      supplierSnapshot, command.storeId, command.expense.supplierId,
+      'supplier',
+    );
     supplierLedgerSnapshot = await transaction.get(supplierLedgerRef);
     if (supplierLedgerSnapshot.exists) {
       conflict('A supplier ledger entry for this expense already exists.');
@@ -1552,8 +1869,10 @@ async function postExpenseInTransaction(transaction, userId, command) {
     );
   }
 
-  const totalMinorUnits =
-    command.expense.amountMinorUnits + command.expense.taxMinorUnits;
+  const totalMinorUnits = checkedMinorAdd(
+    command.expense.amountMinorUnits, command.expense.taxMinorUnits,
+    'Expense total',
+  );
   const accountDeltas = new Map();
   addDelta(
     accountDeltas,
@@ -1606,6 +1925,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
   const expenseData = {
     storeId: command.storeId,
     idempotencyKey: command.expense.idempotencyKey,
+    requestFingerprint: fingerprint,
     postedAt: Timestamp.fromDate(command.expense.postedAt),
     paymentMethod: command.expense.paymentMethod,
     expenseAccountId: command.expense.expenseAccountId,
@@ -1621,9 +1941,11 @@ async function postExpenseInTransaction(transaction, userId, command) {
   };
   transaction.set(expenseRef, expenseData);
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: 'expense',
@@ -1640,6 +1962,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
       journalRef.collection('lines').doc(line.id),
       {
         ...line,
+        currency: command.expense.currency,
         entryId: journalEntryId,
         postedAt: Timestamp.fromDate(command.expense.postedAt),
       },
@@ -1647,13 +1970,22 @@ async function postExpenseInTransaction(transaction, userId, command) {
   }
 
   if (isCreditExpense) {
-    const balance = supplierBalanceSnapshot.exists
-      ? supplierBalanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const nextDebit = currentDebit;
-    const nextCredit = currentCredit + totalMinorUnits;
+    const prior = readPartyBalanceForPosting(
+      supplierBalanceSnapshot,
+      {
+        storeId: command.storeId,
+        partyId: command.expense.supplierId,
+        partyType: 'supplier',
+        currency: command.expense.currency,
+      },
+    );
+    const nextDebit = prior.debit;
+    const nextCredit = checkedMinorAdd(
+      prior.credit, totalMinorUnits, 'Supplier payable balance',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Supplier payable net balance',
+    );
 
     transaction.set(
       supplierLedgerRef,
@@ -1679,26 +2011,31 @@ async function postExpenseInTransaction(transaction, userId, command) {
         currency: command.expense.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-    const nextDebit = currentDebit + delta.debit;
-    const nextCredit = currentCredit + delta.credit;
-
+    const prior = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.expense.currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      prior.debit, delta.debit, 'Expense account debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      prior.credit, delta.credit, 'Expense account credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Expense account net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
@@ -1707,7 +2044,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
         currency: command.expense.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -1719,6 +2056,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
       storeId: command.storeId,
       expenseId: command.expense.id,
       idempotencyKey: command.expense.idempotencyKey,
+      requestFingerprint: fingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
@@ -1828,6 +2166,9 @@ async function postPartyPaymentInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.payment.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const paymentRef = storeRef
     .collection('party_payments')
@@ -1864,20 +2205,54 @@ async function postPartyPaymentInTransaction(
     PAYMENT_POSTING_ROLES,
   );
 
+  const fingerprint = fingerprintPartyPayment(command);
   const paymentIdempotencySnapshot = await transaction.get(
     paymentIdempotencyRef,
   );
   if (paymentIdempotencySnapshot.exists) {
-    const existingPaymentId =
-      paymentIdempotencySnapshot.data().paymentId;
-    if (existingPaymentId === command.payment.id) {
-      return {
-        status: 'already_posted',
-        paymentId: command.payment.id,
-        journalEntryId,
-      };
+    const marker = paymentIdempotencySnapshot.data();
+    if (marker.paymentId !== command.payment.id) {
+      conflict('The payment idempotency key is already assigned.');
     }
-    conflict('The payment idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('Payment idempotency key reused with changed financial details.');
+      }
+    } else {
+      const previousPayment = await transaction.get(paymentRef);
+      const previousJournal = await transaction.get(journalRef);
+      const previousJournalMarker = await transaction.get(journalIdempotencyRef);
+      const type = command.payment.partyType === 'customer'
+        ? 'customerReceipt' : 'supplierPayment';
+      if (!previousPayment.exists ||
+          !sameLegacyPartyPayment(
+            previousPayment.data(), command, journalEntryId,
+          ) ||
+          !previousJournal.exists ||
+          previousJournal.data().storeId !== command.storeId ||
+          previousJournal.data().status !== 'posted' ||
+          previousJournal.data().sourceType !== type ||
+          previousJournal.data().currency !== command.payment.currency ||
+          previousJournal.data().totalDebitMinorUnits !==
+            command.payment.amountMinorUnits ||
+          previousJournal.data().totalCreditMinorUnits !==
+            command.payment.amountMinorUnits ||
+          !previousJournalMarker.exists ||
+          previousJournalMarker.data().entryId !== journalEntryId) {
+        conflict('Historical party payment cannot be verified for replay.');
+      }
+      const previousLines = await transaction.get(journalRef.collection('lines'));
+      if (!sameLegacyPartyPaymentLines(
+        previousLines, command, journalEntryId,
+      )) {
+        conflict('Historical party payment journal lines differ from replay.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      paymentId: command.payment.id,
+      journalEntryId,
+    };
   }
 
   const existingPaymentSnapshot = await transaction.get(paymentRef);
@@ -2027,6 +2402,7 @@ async function postPartyPaymentInTransaction(
   const paymentData = {
     storeId: command.storeId,
     idempotencyKey: command.payment.idempotencyKey,
+    requestFingerprint: fingerprint,
     postedAt: Timestamp.fromDate(command.payment.postedAt),
     partyType: command.payment.partyType,
     partyId: command.payment.partyId,
@@ -2065,21 +2441,26 @@ async function postPartyPaymentInTransaction(
     },
   );
 
-  const partyBalance = partyBalanceSnapshot.exists
-    ? partyBalanceSnapshot.data()
-    : {};
-  const currentPartyDebit = storedInt(
-    partyBalance.debitMinorUnits,
-    0,
+  const previousParty = readPartyBalanceForPosting(
+    partyBalanceSnapshot,
+    {
+      storeId: command.storeId,
+      partyId: command.payment.partyId,
+      partyType: command.payment.partyType,
+      currency: command.payment.currency,
+    },
   );
-  const currentPartyCredit = storedInt(
-    partyBalance.creditMinorUnits,
-    0,
+  const nextPartyDebit = checkedMinorAdd(
+    previousParty.debit, isCustomerPayment ? 0 : amount,
+    'Party settlement debit',
   );
-  const nextPartyDebit = currentPartyDebit +
-    (isCustomerPayment ? 0 : amount);
-  const nextPartyCredit = currentPartyCredit +
-    (isCustomerPayment ? amount : 0);
+  const nextPartyCredit = checkedMinorAdd(
+    previousParty.credit, isCustomerPayment ? amount : 0,
+    'Party settlement credit',
+  );
+  const nextPartyNet = checkedMinorAdd(
+    nextPartyDebit, -nextPartyCredit, 'Party settlement net',
+  );
   transaction.set(
     partyBalanceRef,
     {
@@ -2089,14 +2470,16 @@ async function postPartyPaymentInTransaction(
       currency: command.payment.currency,
       debitMinorUnits: nextPartyDebit,
       creditMinorUnits: nextPartyCredit,
-      balanceMinorUnits: nextPartyDebit - nextPartyCredit,
+      balanceMinorUnits: nextPartyNet,
       updatedAt: FieldValue.serverTimestamp(),
     },
   );
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: command.payment.partyType === 'customer'
@@ -2115,6 +2498,7 @@ async function postPartyPaymentInTransaction(
       journalRef.collection('lines').doc(line.id),
       {
         ...line,
+        currency: command.payment.currency,
         entryId: journalEntryId,
         postedAt: Timestamp.fromDate(command.payment.postedAt),
       },
@@ -2122,19 +2506,24 @@ async function postPartyPaymentInTransaction(
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-    const nextDebit = currentDebit + delta.debit;
-    const nextCredit = currentCredit + delta.credit;
-
+    const previous = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.payment.currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      previous.debit, delta.debit, 'Payment GL debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      previous.credit, delta.credit, 'Payment GL credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Payment GL net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
@@ -2143,7 +2532,7 @@ async function postPartyPaymentInTransaction(
         currency: command.payment.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -2155,6 +2544,7 @@ async function postPartyPaymentInTransaction(
       storeId: command.storeId,
       paymentId: command.payment.id,
       idempotencyKey: command.payment.idempotencyKey,
+      requestFingerprint: fingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
@@ -2318,6 +2708,9 @@ async function postPurchaseInTransaction(
   allowedRoles = POSTING_ROLES,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.purchase.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const purchaseRef = storeRef
     .collection('purchases')
@@ -2361,19 +2754,47 @@ async function postPurchaseInTransaction(
     allowedRoles,
   );
 
+  const fingerprint = fingerprintPurchase(command);
   const purchaseIdempotencySnapshot = await transaction.get(
     purchaseIdempotencyRef,
   );
   if (purchaseIdempotencySnapshot.exists) {
-    const existingPurchaseId = purchaseIdempotencySnapshot.data().purchaseId;
-    if (existingPurchaseId === command.purchase.id) {
-      return {
-        status: 'already_posted',
-        purchaseId: command.purchase.id,
-        journalEntryId,
-      };
+    const marker = purchaseIdempotencySnapshot.data();
+    if (marker.purchaseId !== command.purchase.id) {
+      conflict('The purchase idempotency key is already assigned.');
     }
-    conflict('The purchase idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('The purchase key was reused with changed invoice details.');
+      }
+    } else {
+      const oldInvoice = await transaction.get(purchaseRef);
+      const oldJournal = await transaction.get(journalRef);
+      const oldMarker = await transaction.get(journalIdempotencyRef);
+      if (!oldInvoice.exists ||
+          !oldJournal.exists ||
+          !oldMarker.exists ||
+          oldMarker.data().entryId !== journalEntryId ||
+          !matchesLegacyPurchaseHeader(
+            oldInvoice.data(), command, journalEntryId,
+          )) {
+        conflict('Historical purchase cannot be verified for replay.');
+      }
+      const invoiceLines = await transaction.get(purchaseRef.collection('lines'));
+      const journalLines = await transaction.get(journalRef.collection('lines'));
+      if (!matchesLegacyPurchaseLines(invoiceLines, command) ||
+          !matchesLegacyPurchaseJournal(
+            oldJournal.data(), journalLines, command,
+            journalEntryId, oldInvoice.data(),
+          )) {
+        conflict('Historical purchase lines/journal differ from replay.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      purchaseId: command.purchase.id,
+      journalEntryId,
+    };
   }
 
   const existingPurchaseSnapshot = await transaction.get(purchaseRef);
@@ -2582,15 +3003,21 @@ async function postPurchaseInTransaction(
       invalid('Purchase line discount exceeds its gross total.');
     }
     const totalMinorUnits = grossMinorUnits - line.discountMinorUnits;
-    subtotalMinorUnits += totalMinorUnits;
+    subtotalMinorUnits = checkedMinorAdd(
+      subtotalMinorUnits, totalMinorUnits, 'Purchase subtotal',
+    );
 
     const previous = receivedByProduct.get(line.productId) || {
       quantity: 0,
       cost: 0,
     };
     receivedByProduct.set(line.productId, {
-      quantity: previous.quantity + baseQuantityMilliUnits,
-      cost: previous.cost + totalMinorUnits,
+      quantity: checkedMinorAdd(
+        previous.quantity, baseQuantityMilliUnits, 'Purchased product quantity',
+      ),
+      cost: checkedMinorAdd(
+        previous.cost, totalMinorUnits, 'Purchased product cost',
+      ),
     });
 
     storedLines.push({
@@ -2614,8 +3041,9 @@ async function postPurchaseInTransaction(
     invalid('A purchase total must be greater than zero.');
   }
 
-  const grandTotalMinorUnits =
-    subtotalMinorUnits + command.purchase.taxMinorUnits;
+  const grandTotalMinorUnits = checkedMinorAdd(
+    subtotalMinorUnits, command.purchase.taxMinorUnits, 'Purchase grand total',
+  );
   if (grandTotalMinorUnits <= 0) {
     invalid('A purchase total must be greater than zero.');
   }
@@ -2623,19 +3051,32 @@ async function postPurchaseInTransaction(
   const nextProducts = new Map();
   for (const [productId, receipt] of receivedByProduct) {
     const product = productSnapshots.get(productId).data();
-    const currentQuantity = storedInt(
-      product.quantityOnHandMilliUnits,
-      0,
+    const currentQuantity = product.quantityOnHandMilliUnits ?? 0;
+    const currentUnitCost = product.purchasePriceMinorUnits ?? 0;
+    if (!Number.isSafeInteger(currentQuantity) || currentQuantity < 0 ||
+        !Number.isSafeInteger(currentUnitCost) || currentUnitCost < 0) {
+      throw new HttpsError(
+        'failed-precondition', 'Product quantity or cost is corrupt.',
+      );
+    }
+    // The stored inventory value is authoritative. Multiplying a rounded
+    // average unit cost may silently change historical stock value.
+    const currentTotalCost = product.inventoryValueMinorUnits ??
+      (currentQuantity > 0
+        ? multiplyAndRound(currentUnitCost, currentQuantity) : 0);
+    if (!Number.isSafeInteger(currentTotalCost) ||
+        currentTotalCost < 0 ||
+        (currentQuantity === 0 && currentTotalCost !== 0)) {
+      throw new HttpsError(
+        'failed-precondition', 'Product inventory value is corrupt.',
+      );
+    }
+    const nextQuantity = checkedMinorAdd(
+      currentQuantity, receipt.quantity, 'Purchase stock quantity',
     );
-    const currentUnitCost = storedInt(
-      product.purchasePriceMinorUnits,
-      0,
+    const nextTotalCost = checkedMinorAdd(
+      currentTotalCost, receipt.cost, 'Purchase stock value',
     );
-    const currentTotalCost = currentQuantity > 0
-      ? multiplyAndRound(currentUnitCost, currentQuantity)
-      : 0;
-    const nextQuantity = currentQuantity + receipt.quantity;
-    const nextTotalCost = currentTotalCost + receipt.cost;
     const nextUnitCost = divideAndRound(
       nextTotalCost,
       nextQuantity,
@@ -2669,8 +3110,9 @@ async function postPurchaseInTransaction(
     grandTotalMinorUnits,
   );
 
-  const totalDebitMinorUnits = subtotalMinorUnits +
-    command.purchase.taxMinorUnits;
+  const totalDebitMinorUnits = checkedMinorAdd(
+    subtotalMinorUnits, command.purchase.taxMinorUnits, 'Purchase GL debit',
+  );
   const totalCreditMinorUnits = grandTotalMinorUnits;
   if (totalDebitMinorUnits !== totalCreditMinorUnits) {
     throw new HttpsError(
@@ -2714,6 +3156,7 @@ async function postPurchaseInTransaction(
   const purchaseData = {
     storeId: command.storeId,
     idempotencyKey: command.purchase.idempotencyKey,
+    requestFingerprint: fingerprint,
     postedAt: Timestamp.fromDate(command.purchase.postedAt),
     paymentMethod: command.purchase.paymentMethod,
     supplierId: command.purchase.supplierId,
@@ -2776,9 +3219,11 @@ async function postPurchaseInTransaction(
     );
   }
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: 'purchase',
@@ -2795,6 +3240,7 @@ async function postPurchaseInTransaction(
       journalRef.collection('lines').doc(line.id),
       {
         ...line,
+        currency: command.purchase.currency,
         entryId: journalEntryId,
         postedAt: Timestamp.fromDate(command.purchase.postedAt),
       },
@@ -2802,13 +3248,21 @@ async function postPurchaseInTransaction(
   }
 
   if (isCreditPurchase) {
-    const balance = supplierBalanceSnapshot.exists
-      ? supplierBalanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const nextDebit = currentDebit;
-    const nextCredit = currentCredit + grandTotalMinorUnits;
+    const prior = readPartyBalanceForPosting(
+      supplierBalanceSnapshot, {
+        storeId: command.storeId,
+        partyId: command.purchase.supplierId,
+        partyType: 'supplier',
+        currency: command.purchase.currency,
+      },
+    );
+    const nextDebit = prior.debit;
+    const nextCredit = checkedMinorAdd(
+      prior.credit, grandTotalMinorUnits, 'Purchase supplier payable',
+    );
+    const nextPartyNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Purchase supplier net balance',
+    );
 
     transaction.set(
       supplierLedgerRef,
@@ -2834,26 +3288,30 @@ async function postPurchaseInTransaction(
         currency: command.purchase.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextPartyNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-    const nextDebit = currentDebit + delta.debit;
-    const nextCredit = currentCredit + delta.credit;
-
+    const prior = readBalanceForPosting(
+      balanceSnapshots.get(accountId), {
+        storeId: command.storeId,
+        accountId,
+        currency: command.purchase.currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      prior.debit, delta.debit, 'Purchase GL account debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      prior.credit, delta.credit, 'Purchase GL account credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Purchase GL account net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
@@ -2862,7 +3320,7 @@ async function postPurchaseInTransaction(
         currency: command.purchase.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -2874,6 +3332,7 @@ async function postPurchaseInTransaction(
       storeId: command.storeId,
       purchaseId: command.purchase.id,
       idempotencyKey: command.purchase.idempotencyKey,
+      requestFingerprint: fingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
@@ -3114,7 +3573,9 @@ async function createPurchaseOrderInTransaction(
       line.unitCostMinorUnits,
       baseQuantityMilliUnits,
     );
-    totalMinorUnits += lineTotalMinorUnits;
+    totalMinorUnits = checkedMinorAdd(
+      totalMinorUnits, lineTotalMinorUnits, 'Purchase order total',
+    );
     storedLines.push({
       id: line.id,
       productId: line.productId,
@@ -3208,6 +3669,9 @@ async function receivePurchaseOrderInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const orderRef = storeRef
     .collection('purchase_orders')
@@ -3224,18 +3688,64 @@ async function receivePurchaseOrderInTransaction(
     PURCHASE_ORDER_ROLES,
   );
 
+  const fingerprint = fingerprintPurchaseOrderReceipt(command);
   const idempotencySnapshot = await transaction.get(receiptIdempotencyRef);
   if (idempotencySnapshot.exists) {
     const previous = idempotencySnapshot.data();
-    if (previous.orderId === command.orderId) {
-      return {
-        status: 'already_received',
-        orderId: command.orderId,
-        purchaseId: previous.purchaseId,
-        journalEntryId: previous.journalEntryId,
-      };
+    if (previous.storeId !== command.storeId ||
+        previous.orderId !== command.orderId ||
+        previous.receiptId !== command.receiptId ||
+        previous.purchaseId !== command.receiptId ||
+        previous.journalEntryId !== command.receiptId + '-journal') {
+      conflict('The purchase order receipt key is already assigned.');
     }
-    conflict('The purchase order receipt key is already assigned.');
+    if (previous.requestFingerprint != null) {
+      if (previous.requestFingerprint !== fingerprint) {
+        conflict('Receipt retry differs from the original financial request.');
+      }
+    } else {
+      const historicalOrderRef = storeRef.collection('purchase_orders')
+        .doc(command.orderId);
+      const historicalPurchaseRef = storeRef.collection('purchases')
+        .doc(command.receiptId);
+      const historicalJournalRef = storeRef.collection('journal_entries')
+        .doc(command.receiptId + '-journal');
+      const historicalOrder = await transaction.get(historicalOrderRef);
+      const historicalPurchase = await transaction.get(historicalPurchaseRef);
+      const historicalJournal = await transaction.get(historicalJournalRef);
+      if (!historicalOrder.exists ||
+          !historicalPurchase.exists ||
+          !historicalJournal.exists ||
+          !matchesLegacyPurchaseOrderReceipt(
+            previous, historicalOrder.data(), historicalPurchase.data(),
+            historicalJournal.data(), command,
+          )) {
+        conflict('Historical purchase order receipt cannot be verified.');
+      }
+      const lineNames = [
+        command.receiptId + '-inventory',
+        ...(command.taxMinorUnits > 0
+          ? [command.receiptId + '-input-tax'] : []),
+        command.receiptId + '-settlement',
+      ];
+      const historicLines = [];
+      for (const name of lineNames) {
+        historicLines.push(await transaction.get(
+          historicalJournalRef.collection('lines').doc(name),
+        ));
+      }
+      if (!matchesLegacyPurchaseOrderJournalLines(
+        historicLines, historicalPurchase.data(), command,
+      )) {
+        conflict('Historical receipt journal accounts do not match replay.');
+      }
+    }
+    return {
+      status: 'already_received',
+      orderId: command.orderId,
+      purchaseId: command.receiptId,
+      journalEntryId: command.receiptId + '-journal',
+    };
   }
 
   const orderSnapshot = await transaction.get(orderRef);
@@ -3246,14 +3756,8 @@ async function receivePurchaseOrderInTransaction(
   if (order.storeId !== command.storeId) {
     deny('Purchase order belongs to another store.');
   }
-  if (order.status === 'completed' && order.receiptId === command.receiptId) {
-    return {
-      status: 'already_received',
-      orderId: command.orderId,
-      purchaseId: command.receiptId,
-      journalEntryId: order.journalEntryId || '',
-    };
-  }
+  // Without the receipt marker there is no safe way to distinguish an
+  // identical retry from a conflicting request: never acknowledge it.
   if (order.status !== 'pending') {
     conflict('Only pending purchase orders can be received.');
   }
@@ -3267,10 +3771,12 @@ async function receivePurchaseOrderInTransaction(
   }
   const purchaseLines = rawLines.map((rawLine, index) => {
     const line = asObject(rawLine, 'stored order line ' + index);
-    const receivedQuantity = storedInt(
-      line.receivedQuantityMilliUnits,
-      0,
-    );
+    const receivedQuantity = line.receivedQuantityMilliUnits ?? 0;
+    if (!Number.isSafeInteger(receivedQuantity) || receivedQuantity < 0) {
+      throw new HttpsError(
+        'failed-precondition', 'Purchase order received quantity is corrupt.',
+      );
+    }
     if (receivedQuantity !== 0) {
       invalid('Partial purchase order receipts are not supported yet.');
     }
@@ -3337,6 +3843,7 @@ async function receivePurchaseOrderInTransaction(
     orderId: command.orderId,
     receiptId: command.receiptId,
     idempotencyKey: command.idempotencyKey,
+    requestFingerprint: fingerprint,
     purchaseId: result.purchaseId,
     journalEntryId: result.journalEntryId,
     createdAt: FieldValue.serverTimestamp(),
@@ -3509,6 +4016,9 @@ async function postSaleInTransaction(
   allowedRoles = POSTING_ROLES,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.sale.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const saleRef = storeRef.collection('sales').doc(command.sale.id);
   const saleIdempotencyRef = storeRef
@@ -3548,19 +4058,45 @@ async function postSaleInTransaction(
     allowedRoles,
   );
 
-  const saleIdempotencySnapshot = await transaction.get(
-    saleIdempotencyRef,
-  );
+  const fingerprint = fingerprintSale(command);
+  const saleIdempotencySnapshot = await transaction.get(saleIdempotencyRef);
   if (saleIdempotencySnapshot.exists) {
-    const existingSaleId = saleIdempotencySnapshot.data().saleId;
-    if (existingSaleId === command.sale.id) {
-      return {
-        status: 'already_posted',
-        saleId: command.sale.id,
-        journalEntryId,
-      };
+    const marker = saleIdempotencySnapshot.data();
+    if (marker.saleId !== command.sale.id) {
+      conflict('The sale idempotency key is already assigned.');
     }
-    conflict('The sale idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('Sale key was reused with changed invoice details.');
+      }
+    } else {
+      const oldInvoice = await transaction.get(saleRef);
+      const oldJournal = await transaction.get(journalRef);
+      const oldMarker = await transaction.get(journalIdempotencyRef);
+      if (!oldInvoice.exists ||
+          !oldJournal.exists ||
+          !oldMarker.exists ||
+          oldMarker.data().entryId !== journalEntryId ||
+          !matchesLegacySaleInvoice(
+            oldInvoice.data(), command, journalEntryId,
+          )) {
+        conflict('Historical sale cannot be verified for retry.');
+      }
+      const invoiceLines = await transaction.get(saleRef.collection('lines'));
+      const journalLines = await transaction.get(journalRef.collection('lines'));
+      if (!matchesLegacySaleLines(invoiceLines, command) ||
+          !matchesLegacySaleJournal(
+            oldJournal.data(), journalLines, command,
+            journalEntryId, oldInvoice.data(),
+          )) {
+        conflict('Historical sale lines/journal differ from retry.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      saleId: command.sale.id,
+      journalEntryId,
+    };
   }
 
   const existingSaleSnapshot = await transaction.get(saleRef);
@@ -3771,10 +4307,13 @@ async function postSaleInTransaction(
       invalid('Product currency does not match the sale currency.');
     }
 
-    const purchasePriceMinorUnits = storedInt(
-      product.purchasePriceMinorUnits,
-      0,
-    );
+    const purchasePriceMinorUnits = product.purchasePriceMinorUnits ?? 0;
+    if (!Number.isSafeInteger(purchasePriceMinorUnits) ||
+        purchasePriceMinorUnits < 0) {
+      throw new HttpsError(
+        'failed-precondition', 'Product purchase cost is corrupt.',
+      );
+    }
     if (line.isService) {
       if (line.unitCostMinorUnits !== 0) {
         invalid('A service line must have zero inventory cost.');
@@ -3810,8 +4349,12 @@ async function postSaleInTransaction(
         baseQuantityMilliUnits,
       );
 
-    subtotalMinorUnits += totalMinorUnits;
-    costTotalMinorUnits += costMinorUnits;
+    subtotalMinorUnits = checkedMinorAdd(
+      subtotalMinorUnits, totalMinorUnits, 'Sale subtotal',
+    );
+    costTotalMinorUnits = checkedMinorAdd(
+      costTotalMinorUnits, costMinorUnits, 'Sale COGS total',
+    );
 
     if (!line.isService) {
       const previousIssued = issuedByProduct.get(line.productId) || {
@@ -3819,8 +4362,12 @@ async function postSaleInTransaction(
         cost: 0,
       };
       issuedByProduct.set(line.productId, {
-        quantity: previousIssued.quantity + baseQuantityMilliUnits,
-        cost: previousIssued.cost + costMinorUnits,
+        quantity: checkedMinorAdd(
+          previousIssued.quantity, baseQuantityMilliUnits, 'Sale issue quantity',
+        ),
+        cost: checkedMinorAdd(
+          previousIssued.cost, costMinorUnits, 'Sale issue cost',
+        ),
       });
     }
 
@@ -3848,8 +4395,9 @@ async function postSaleInTransaction(
     invalid('A sale total must be greater than zero.');
   }
 
-  const grandTotalMinorUnits =
-    subtotalMinorUnits + command.sale.taxMinorUnits;
+  const grandTotalMinorUnits = checkedMinorAdd(
+    subtotalMinorUnits, command.sale.taxMinorUnits, 'Sale gross total',
+  );
   if (grandTotalMinorUnits <= 0) {
     invalid('A sale total must be greater than zero.');
   }
@@ -3858,26 +4406,35 @@ async function postSaleInTransaction(
   for (const [productId, issued] of issuedByProduct) {
     const productSnapshot = productSnapshots.get(productId);
     const product = productSnapshot.data();
-    const currentQuantity = storedInt(
-      product.quantityOnHandMilliUnits,
-      0,
+    const currentQuantity = product.quantityOnHandMilliUnits ?? 0;
+    const currentUnitCost = product.purchasePriceMinorUnits ?? 0;
+    if (!Number.isSafeInteger(currentQuantity) || currentQuantity < 0 ||
+        !Number.isSafeInteger(currentUnitCost) || currentUnitCost < 0) {
+      throw new HttpsError(
+        'failed-precondition', 'Sale product quantity or price is corrupt.',
+      );
+    }
+    const currentInventoryValue = product.inventoryValueMinorUnits ??
+      multiplyAndRound(currentUnitCost, currentQuantity);
+    if (!Number.isSafeInteger(currentInventoryValue) ||
+        currentInventoryValue < 0 ||
+        (currentQuantity === 0 && currentInventoryValue !== 0)) {
+      throw new HttpsError(
+        'failed-precondition', 'Sale product inventory value is corrupt.',
+      );
+    }
+    const nextQuantity = checkedMinorAdd(
+      currentQuantity, -issued.quantity, 'Sale stock quantity',
     );
-    const currentUnitCost = storedInt(
-      product.purchasePriceMinorUnits,
-      0,
-    );
-    const currentInventoryValue = storedInt(
-      product.inventoryValueMinorUnits,
-      multiplyAndRound(currentUnitCost, currentQuantity),
-    );
-    const nextQuantity = currentQuantity - issued.quantity;
     if (nextQuantity < 0) {
       throw new HttpsError(
         'failed-precondition',
         'The sale would create negative stock for ' + productId + '.',
       );
     }
-    const nextInventoryValue = currentInventoryValue - issued.cost;
+    const nextInventoryValue = checkedMinorAdd(
+      currentInventoryValue, -issued.cost, 'Sale stock value',
+    );
     if (nextInventoryValue < 0) {
       throw new HttpsError(
         'failed-precondition',
@@ -3927,11 +4484,15 @@ async function postSaleInTransaction(
     );
   }
 
-  const totalDebitMinorUnits = grandTotalMinorUnits +
-    costTotalMinorUnits;
-  const totalCreditMinorUnits = subtotalMinorUnits +
-    command.sale.taxMinorUnits +
-    costTotalMinorUnits;
+  const totalDebitMinorUnits = checkedMinorAdd(
+    grandTotalMinorUnits, costTotalMinorUnits, 'Sale total debits',
+  );
+  const totalCreditMinorUnits = checkedMinorAdd(
+    checkedMinorAdd(
+      subtotalMinorUnits, command.sale.taxMinorUnits, 'Sale sales + tax',
+    ),
+    costTotalMinorUnits, 'Sale total credits',
+  );
   if (totalDebitMinorUnits !== totalCreditMinorUnits) {
     throw new HttpsError(
       'internal',
@@ -3987,7 +4548,7 @@ async function postSaleInTransaction(
         storeId: command.storeId,
         accountId: command.accounts.inventoryAccountId,
         description: 'Inventory issue',
-        lineNumber: journalLines.length + 1,
+        lineNumber: journalLines.length + 2,
         debitMinorUnits: zero,
         creditMinorUnits: costTotalMinorUnits,
       },
@@ -3997,6 +4558,7 @@ async function postSaleInTransaction(
   const saleData = {
     storeId: command.storeId,
     idempotencyKey: command.sale.idempotencyKey,
+    requestFingerprint: fingerprint,
     postedAt: Timestamp.fromDate(command.sale.postedAt),
     paymentMethod: command.sale.paymentMethod,
     customerId: command.sale.customerId,
@@ -4059,9 +4621,11 @@ async function postSaleInTransaction(
     );
   }
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: 'sale',
@@ -4078,6 +4642,7 @@ async function postSaleInTransaction(
       journalRef.collection('lines').doc(line.id),
       {
         ...line,
+        currency: command.sale.currency,
         entryId: journalEntryId,
         postedAt: Timestamp.fromDate(command.sale.postedAt),
       },
@@ -4085,13 +4650,21 @@ async function postSaleInTransaction(
   }
 
   if (isCreditSale) {
-    const balance = customerBalanceSnapshot.exists
-      ? customerBalanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const nextDebit = currentDebit + grandTotalMinorUnits;
-    const nextCredit = currentCredit;
+    const prior = readPartyBalanceForPosting(
+      customerBalanceSnapshot, {
+        storeId: command.storeId,
+        partyId: command.sale.customerId,
+        partyType: 'customer',
+        currency: command.sale.currency,
+      },
+    );
+    const nextDebit = checkedMinorAdd(
+      prior.debit, grandTotalMinorUnits, 'Sale customer receivable',
+    );
+    const nextCredit = prior.credit;
+    const nextPartyNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Sale customer net receivable',
+    );
 
     transaction.set(
       customerLedgerRef,
@@ -4117,26 +4690,32 @@ async function postSaleInTransaction(
         currency: command.sale.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextPartyNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-    const nextDebit = currentDebit + delta.debit;
-    const nextCredit = currentCredit + delta.credit;
-
+    const prior = readBalanceForPosting(
+      balanceSnapshots.get(accountId), {
+        storeId: command.storeId,
+        accountId,
+        currency: command.sale.currency,
+      },
+    );
+    // Optional tax and service-only COGS accounts can legitimately have
+    // no posting delta, but existing balances must still validate.
+    const delta = accountDeltas.get(accountId) || { debit: 0, credit: 0 };
+    const nextDebit = checkedMinorAdd(
+      prior.debit, delta.debit, 'Sale GL account debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      prior.credit, delta.credit, 'Sale GL account credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Sale GL account net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
@@ -4145,7 +4724,7 @@ async function postSaleInTransaction(
         currency: command.sale.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -4157,6 +4736,7 @@ async function postSaleInTransaction(
       storeId: command.storeId,
       saleId: command.sale.id,
       idempotencyKey: command.sale.idempotencyKey,
+      requestFingerprint: fingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
@@ -5193,19 +5773,33 @@ function parseChequeSettlementCommand(rawCommand) {
   };
 }
 
+// A competing cheque settlement can close one Firestore transaction before
+// the contender observes its durable idempotency marker. Only retry this
+// specific transient error in a FRESH transaction. The settlement fingerprint
+// and unique journal identity are checked again on every retry.
+async function runChequeTransactionWithClosedRetry(userId, command) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await db.runTransaction((transaction) =>
+        settleChequeInTransaction(transaction, userId, command),
+      );
+    } catch (error) {
+      const closedTransaction = !(error instanceof HttpsError) &&
+        /Transaction is invalid or closed/i.test(error?.message || '');
+      if (!closedTransaction || attempt === 2) throw error;
+    }
+  }
+}
+
 exports.settleCheque = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
   }
   const command = parseChequeSettlementCommand(request.data);
   try {
-    return await db.runTransaction(async (transaction) => {
-      return settleChequeInTransaction(
-        transaction,
-        request.auth.uid,
-        command,
-      );
-    });
+    return await runChequeTransactionWithClosedRetry(
+      request.auth.uid, command,
+    );
   } catch (error) {
     if (error instanceof HttpsError) {
       throw error;
@@ -5223,6 +5817,9 @@ exports.settleCheque = onCall(async (request) => {
 
 async function settleChequeInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const chequeRef = storeRef.collection('party_payments').doc(command.chequeId);
   const settlementIdempotencyRef = storeRef
@@ -5244,18 +5841,44 @@ async function settleChequeInTransaction(transaction, userId, command) {
     'settle cheques',
     PAYMENT_POSTING_ROLES,
   );
+  const fingerprint = fingerprintChequeSettlement(command);
   const idempotencySnapshot = await transaction.get(settlementIdempotencyRef);
   if (idempotencySnapshot.exists) {
     const existing = idempotencySnapshot.data();
-    if (existing.chequeId === command.chequeId &&
-        existing.action === command.action) {
-      return {
-        status: command.action === 'clear' ? 'cleared' : 'bounced',
-        chequeId: command.chequeId,
-        journalEntryId: existing.journalEntryId,
-      };
+    if (existing.chequeId !== command.chequeId ||
+        existing.action !== command.action ||
+        existing.journalEntryId !== journalEntryId) {
+      conflict('The cheque settlement idempotency key is already assigned.');
     }
-    conflict('The cheque settlement idempotency key is already assigned.');
+    if (existing.requestFingerprint != null) {
+      if (existing.requestFingerprint !== fingerprint) {
+        conflict('Cheque settlement retry changed its financial details.');
+      }
+    } else {
+      const previousCheque = await transaction.get(chequeRef);
+      const previousJournal = await transaction.get(journalRef);
+      const previousMarker = await transaction.get(journalIdempotencyRef);
+      if (!previousCheque.exists || !previousJournal.exists ||
+          !previousMarker.exists ||
+          previousMarker.data().entryId !== journalEntryId ||
+          !sameLegacyChequeSettlement(
+            previousJournal.data(), previousCheque.data(),
+            command, journalEntryId,
+          )) {
+        conflict('Cannot confirm old cheque settlement for retry.');
+      }
+      const previousLines = await transaction.get(journalRef.collection('lines'));
+      if (!sameLegacyChequeLines(
+        previousLines, previousCheque.data(), command, journalEntryId,
+      )) {
+        conflict('Historical cheque journal differs from settlement request.');
+      }
+    }
+    return {
+      status: command.action === 'clear' ? 'cleared' : 'bounced',
+      chequeId: command.chequeId,
+      journalEntryId,
+    };
   }
 
   const chequeSnapshot = await transaction.get(chequeRef);
@@ -5359,9 +5982,15 @@ async function settleChequeInTransaction(transaction, userId, command) {
     const bouncedBalanceSnapshot = await transaction.get(
       bouncedPartyBalanceRef,
     );
-    bouncedPartyBalance = bouncedBalanceSnapshot.exists
-      ? bouncedBalanceSnapshot.data()
-      : {};
+    bouncedPartyBalance = readPartyBalanceForPosting(
+      bouncedBalanceSnapshot,
+      {
+        storeId: command.storeId,
+        partyType: cheque.partyType,
+        partyId: cheque.partyId,
+        currency: cheque.currency,
+      },
+    );
   }
 
   const debitAccountId = isCustomerCheque
@@ -5413,6 +6042,9 @@ async function settleChequeInTransaction(transaction, userId, command) {
     settledAt: Timestamp.fromDate(command.postedAt),
     updatedAt: FieldValue.serverTimestamp(),
   });
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
   transaction.set(journalRef, {
     storeId: command.storeId,
     idempotencyKey: journalIdempotencyKey,
@@ -5439,10 +6071,17 @@ async function settleChequeInTransaction(transaction, userId, command) {
   }
 
   if (command.action === 'bounce') {
-    const currentDebit = storedInt(bouncedPartyBalance.debitMinorUnits, 0);
-    const currentCredit = storedInt(bouncedPartyBalance.creditMinorUnits, 0);
     const partyDebit = isCustomerCheque ? amount : 0;
     const partyCredit = isCustomerCheque ? 0 : amount;
+    const nextPartyDebit = checkedMinorAdd(
+      bouncedPartyBalance.debit, partyDebit, 'Bounced cheque party debit',
+    );
+    const nextPartyCredit = checkedMinorAdd(
+      bouncedPartyBalance.credit, partyCredit, 'Bounced cheque party credit',
+    );
+    const nextPartyNet = checkedMinorAdd(
+      nextPartyDebit, -nextPartyCredit, 'Bounced cheque party net',
+    );
     transaction.set(bouncedPartyLedgerRef, {
       storeId: command.storeId,
       partyType: cheque.partyType,
@@ -5462,31 +6101,41 @@ async function settleChequeInTransaction(transaction, userId, command) {
       partyType: cheque.partyType,
       partyId: cheque.partyId,
       currency: cheque.currency,
-      debitMinorUnits: currentDebit + partyDebit,
-      creditMinorUnits: currentCredit + partyCredit,
-      balanceMinorUnits:
-        currentDebit + partyDebit - currentCredit - partyCredit,
+      debitMinorUnits: nextPartyDebit,
+      creditMinorUnits: nextPartyCredit,
+      balanceMinorUnits: nextPartyNet,
       updatedAt: FieldValue.serverTimestamp(),
     });
   }
 
   for (const accountId of accountIds) {
-    const balance = balanceSnapshots.get(accountId).exists
-      ? balanceSnapshots.get(accountId).data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
+    const previous = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: cheque.currency,
+      },
+    );
     const delta = deltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      previous.debit, delta.debit, 'Cheque settlement GL debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      previous.credit, delta.credit, 'Cheque settlement GL credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Cheque settlement GL net',
+    );
     transaction.set(
       storeRef.collection('account_balances').doc(accountId),
       {
         storeId: command.storeId,
         accountId,
         currency: cheque.currency,
-        debitMinorUnits: currentDebit + delta.debit,
-        creditMinorUnits: currentCredit + delta.credit,
-        balanceMinorUnits:
-          currentDebit + delta.debit - currentCredit - delta.credit,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -5498,6 +6147,7 @@ async function settleChequeInTransaction(transaction, userId, command) {
     action: command.action,
     journalEntryId,
     idempotencyKey: command.idempotencyKey,
+    requestFingerprint: fingerprint,
     createdAt: FieldValue.serverTimestamp(),
   });
   transaction.set(journalIdempotencyRef, {
@@ -5514,6 +6164,217 @@ async function settleChequeInTransaction(transaction, userId, command) {
   };
 }
 
+
+// Persistent, read-only source-enumeration checkpoints. This is deliberately
+// NOT an accounting reconciliation, certified audit or production migration.
+const HISTORY_SCAN_ROLES = new Set(['owner', 'admin', 'accountant']);
+
+exports.startAccountingHistoryScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return createHistoryScan({
+    db, FieldValue, storeId, userId: request.auth.uid,
+    assertAccess: (membership, tenantId) => assertMembership(
+      membership, tenantId, 'start accounting history inventory',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingHistoryScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advanceHistoryScan({
+    db, FieldValue, HttpsError, storeId, runId,
+    userId: request.auth.uid,
+    assertAccess: (membership, tenantId) => assertMembership(
+      membership, tenantId, 'continue accounting history inventory',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Per-account GL evidence is checkpointed independently of document counts.
+// Reconciliation remains non-atomic and cannot certify financial statements.
+exports.startAccountingLedgerReconciliation = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return startLedgerReconciliation({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start ledger reconciliation', HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingLedgerReconciliation = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advanceLedgerReconciliation({
+    db, FieldValue, HttpsError, storeId, runId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'continue ledger reconciliation', HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Compare every existing journal header with its direct line totals.
+// Account projection reconciliation is separate; neither result certifies
+// a consistent historical cutoff or detects every orphan descendant.
+exports.startAccountingJournalReconciliation = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return startJournalHeaderReconciliation({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start journal header reconciliation',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingJournalReconciliation = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advanceJournalHeaderReconciliation({
+    db, FieldValue, HttpsError, storeId, runId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'continue journal header reconciliation',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Cross-compare complete server-owned ledger and direct-journal evidence.
+// It is non-atomic and can NEVER certify a financial posting cutoff.
+// Read-only path-based scan for orphan journal descendants, even with
+// missing/wrong line.storeId. Bounded pages, tenant-path checks, no repairs.
+exports.startAccountingOrphanPathScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return startPathOrphanScan({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start orphan path scan', HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingOrphanPathScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advancePathOrphanScan({
+    db, FieldValue, HttpsError, storeId, runId,
+    uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'advance orphan path scan', HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Reverse census of every stored GL balance document (including unknown
+// chart accounts). It does not mutate balances or attest to one snapshot.
+exports.startAccountingBalanceProjectionScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return startBalanceProjectionScan({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start balance projection scan',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingBalanceProjectionScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advanceBalanceProjectionScan({
+    db, FieldValue, HttpsError, storeId, runId,
+    uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'advance balance projection scan',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Consolidated read-only evidence from four independent audit runs; no
+// single accounting snapshot or immutable posting cutoff is guaranteed.
+// in-progress audits. It never certifies a historical accounting snapshot.
+exports.getUnifiedAccountingAuditReport = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const ledgerRunId = safeId(input.ledgerRunId, 'ledgerRunId');
+  const journalRunId = safeId(input.journalRunId, 'journalRunId');
+  const orphanRunId = safeId(input.orphanRunId, 'orphanRunId');
+  const balanceRunId = safeId(input.balanceRunId, 'balanceRunId');
+  return getUnifiedAuditReport({
+    db, HttpsError, storeId, ledgerRunId, journalRunId, orphanRunId,
+    balanceRunId,
+    uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'get unified accounting audit report',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.compareAccountingAuditCoverage = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const ledgerRunId = safeId(input.ledgerRunId, 'ledgerRunId');
+  const journalRunId = safeId(input.journalRunId, 'journalRunId');
+  return compareAuditRunCoverage({
+    db, HttpsError, storeId, ledgerRunId, journalRunId,
+    uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'compare accounting audit evidence',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
 
 exports.auditAccountingIntegrity = onCall(async (request) => {
   if (!request.auth) {
@@ -5562,31 +6423,74 @@ async function runAccountingIntegrityAudit(userId, command) {
     new Set(['owner', 'admin', 'accountant']),
   );
 
-  const [
-    accountsSnapshot,
-    accountBalancesSnapshot,
-    journalEntriesSnapshot,
-    journalLinesSnapshot,
-    partiesSnapshot,
-    partyBalancesSnapshot,
-    partyLedgerSnapshot,
-    productsSnapshot,
-    inventoryMovementsSnapshot,
-  ] = await Promise.all([
-    storeRef.collection('accounts').get(),
-    storeRef.collection('account_balances').get(),
-    storeRef.collection('journal_entries').get(),
-    db.collectionGroup('lines')
-      .where('storeId', '==', command.storeId)
-      .get(),
-    storeRef.collection('parties').get(),
-    storeRef.collection('party_balances').get(),
-    storeRef.collection('party_ledger_entries').get(),
-    storeRef.collection('products').get(),
-    storeRef.collection('inventory_movements').get(),
-  ]);
+  // Read all pages from direct store-scoped collections. A read-only audit
+  // must not silently skip later documents or confuse invoice lines with GL.
+  const collectionNames = [
+    'accounts',
+    'account_balances',
+    'journal_entries',
+    'parties',
+    'party_balances',
+    'party_ledger_entries',
+    'products',
+    'inventory_movements',
+  ];
+  const scans = new Map();
+  let scannedDocuments = 0;
+  let scanIncomplete = false;
+  for (const name of collectionNames) {
+    if (scanIncomplete) {
+      scans.set(name, {docs: [], size: 0, truncated: true});
+      continue;
+    }
+    const remaining = MAX_AUDIT_TOTAL_DOCS - scannedDocuments;
+    const snapshot = await readAuditPages(
+      storeRef.collection(name), {
+        maxDocuments: Math.min(MAX_AUDIT_DOCS_PER_COLLECTION, remaining),
+      },
+    );
+    scans.set(name, snapshot);
+    scannedDocuments += snapshot.size;
+    scanIncomplete = snapshot.truncated;
+  }
+
+  const accountsSnapshot = scans.get('accounts');
+  const accountBalancesSnapshot = scans.get('account_balances');
+  const journalEntriesSnapshot = scans.get('journal_entries');
+  const partiesSnapshot = scans.get('parties');
+  const partyBalancesSnapshot = scans.get('party_balances');
+  const partyLedgerSnapshot = scans.get('party_ledger_entries');
+  const productsSnapshot = scans.get('products');
+  const inventoryMovementsSnapshot = scans.get('inventory_movements');
+  // Directly scan every journal's own lines. Unlike collectionGroup where
+  // storeId is indexed, this detects malformed/missing line.storeId as well.
+  const journalLinesSnapshot = scanIncomplete
+    ? {docs: [], size: 0, truncated: true}
+    : await readJournalAuditLines(journalEntriesSnapshot.docs, {
+      maxDocuments: Math.min(
+        MAX_AUDIT_DOCS_PER_COLLECTION,
+        MAX_AUDIT_TOTAL_DOCS - scannedDocuments,
+      ),
+    });
+  // Direct parent traversal cannot see subcollections whose parent journal
+  // document was deleted. Independently discover store-ID-indexed lines,
+  // including invoice lines, then restrict findings to actual journal paths.
+  // Count all queried documents (including invoices) toward the shared cap.
+  scannedDocuments += journalLinesSnapshot.size;
+  const indexedLinesSnapshot = scanIncomplete || journalLinesSnapshot.truncated
+    ? {docs: [], size: 0, truncated: true}
+    : await readAuditPages(
+      db.collectionGroup('lines').where('storeId', '==', command.storeId), {
+        maxDocuments: Math.min(
+          MAX_AUDIT_DOCS_PER_COLLECTION,
+          Math.max(0, MAX_AUDIT_TOTAL_DOCS - scannedDocuments),
+        ),
+      },
+    );
 
   const issues = [];
+  let totalIssueCount = 0;
+  let totalErrorCount = 0;
   const addIssue = ({
     code,
     scope,
@@ -5598,6 +6502,8 @@ async function runAccountingIntegrityAudit(userId, command) {
     expected,
     actual,
   }) => {
+    totalIssueCount += 1;
+    if (severity === 'error') totalErrorCount += 1;
     if (issues.length >= 200) {
       return;
     }
@@ -5613,6 +6519,58 @@ async function runAccountingIntegrityAudit(userId, command) {
       actual: Number.isSafeInteger(actual) ? actual : null,
     });
   };
+
+  const sources = {
+    accounts: accountsSnapshot,
+    balances: accountBalancesSnapshot,
+    journals: journalEntriesSnapshot,
+    ledgerLines: journalLinesSnapshot,
+    indexedLineDiscovery: indexedLinesSnapshot,
+    parties: partiesSnapshot,
+    partyBalances: partyBalancesSnapshot,
+    partyMovements: partyLedgerSnapshot,
+    products: productsSnapshot,
+    stockMovements: inventoryMovementsSnapshot,
+  };
+  const truncated = Object.entries(sources)
+    .filter(([, snapshot]) => snapshot.truncated)
+    .map(([name]) => name);
+  if (truncated.length > 0) {
+    return {
+      status: 'incomplete',
+      complete: false,
+      consistency: 'non_atomic',
+      orphanDiscoveryCoverage: 'matching_embedded_store_id_only',
+      storeId: command.storeId,
+      generatedAt: new Date().toISOString(),
+      checked: {
+        accounts: accountsSnapshot.size,
+        journalEntries: journalEntriesSnapshot.size,
+        journalLines: journalLinesSnapshot.size,
+        indexedLineDiscovery: indexedLinesSnapshot.size,
+        parties: partiesSnapshot.size,
+        partyLedgerEntries: partyLedgerSnapshot.size,
+        products: productsSnapshot.size,
+        inventoryMovements: inventoryMovementsSnapshot.size,
+      },
+      issueCount: 1,
+      issues: [{
+        code: 'AUDIT_INCOMPLETE_DATASET',
+        scope: 'audit',
+        referenceId: truncated.join(','),
+        message: 'Data exceeds audit safety limit: no conclusion can be drawn.',
+        severity: 'error',
+        valueKind: null,
+        currency: null,
+        expected: null,
+        actual: null,
+      }],
+    };
+  }
+  const readMinor = (value, scope, referenceId, allowNegative = false) =>
+    auditInteger(value, {scope, referenceId}, addIssue, {allowNegative});
+  const addMinor = (x, y, scope, referenceId, valueKind) =>
+    auditSum(x, y, {scope, referenceId, valueKind}, addIssue);
 
   const accountMap = new Map();
   for (const document of accountsSnapshot.docs) {
@@ -5655,6 +6613,10 @@ async function runAccountingIntegrityAudit(userId, command) {
 
   const linesByEntry = new Map();
   for (const document of journalLinesSnapshot.docs) {
+    if (!isJournalLinePath(document.ref, command.storeId)) {
+      // Collection-group also contains sale and purchase invoice lines.
+      continue;
+    }
     const data = document.data();
     if (data.storeId !== command.storeId) {
       addIssue({
@@ -5666,9 +6628,8 @@ async function runAccountingIntegrityAudit(userId, command) {
       continue;
     }
 
-    const parentEntryId = data.entryId ||
-      (document.ref.parent.parent && document.ref.parent.parent.id);
-    if (!parentEntryId) {
+    const parentEntryId = document.ref.parent.parent.id;
+    if (data.entryId !== parentEntryId) {
       addIssue({
         code: 'ORPHAN_JOURNAL_LINE',
         scope: 'journalLine',
@@ -5686,6 +6647,14 @@ async function runAccountingIntegrityAudit(userId, command) {
   for (const document of journalEntriesSnapshot.docs) {
     const entry = document.data();
     const entryId = document.id;
+    if (entry.storeId !== command.storeId) {
+      addIssue({
+        code: 'JOURNAL_STORE_MISMATCH',
+        scope: 'journal',
+        referenceId: entryId,
+        message: 'Journal header is assigned to a different store.',
+      });
+    }
     const currency = typeof entry.currency === 'string'
       ? entry.currency
       : 'ILS';
@@ -5704,10 +6673,10 @@ async function runAccountingIntegrityAudit(userId, command) {
 
     for (const line of lines) {
       const data = line.data;
-      const debit = storedInt(data.debitMinorUnits, 0);
-      const credit = storedInt(data.creditMinorUnits, 0);
-      totalDebit += debit;
-      totalCredit += credit;
+      const debit = readMinor(data.debitMinorUnits, 'journalLine', line.id);
+      const credit = readMinor(data.creditMinorUnits, 'journalLine', line.id);
+      totalDebit = addMinor(totalDebit, debit, 'journal', entryId);
+      totalCredit = addMinor(totalCredit, credit, 'journal', entryId);
 
       if ((debit === 0) === (credit === 0)) {
         addIssue({
@@ -5759,41 +6728,53 @@ async function runAccountingIntegrityAudit(userId, command) {
           referenceId: line.id,
           message: 'سطر القيد يشير إلى حساب غير موجود.',
         });
+      } else if (account.currency !== currency) {
+        addIssue({
+          code: 'JOURNAL_LINE_ACCOUNT_CURRENCY_MISMATCH',
+          scope: 'journalLine',
+          referenceId: line.id,
+          message: 'عملة حساب الأستاذ لا تطابق عملة القيد.',
+          currency,
+        });
       }
 
       const total = ensureAccountTotal(
         accountId,
         data.currency || currency,
       );
-      total.debit += debit;
-      total.credit += credit;
+      total.debit = addMinor(total.debit, debit, 'accountBalance', accountId);
+      total.credit = addMinor(total.credit, credit, 'accountBalance', accountId);
     }
 
-    const headerDebit = storedInt(entry.totalDebitMinorUnits, 0);
-    const headerCredit = storedInt(entry.totalCreditMinorUnits, 0);
-    if (totalDebit !== headerDebit || totalCredit !== headerCredit) {
+    const headerDebit = readMinor(
+      entry.totalDebitMinorUnits, 'journal', entryId,
+    );
+    const headerCredit = readMinor(
+      entry.totalCreditMinorUnits, 'journal', entryId,
+    );
+    if (totalDebit !== headerDebit) {
       addIssue({
         code: 'JOURNAL_HEADER_TOTAL_MISMATCH',
         scope: 'journal',
         referenceId: entryId,
-        message: 'إجمالي القيد لا يطابق مجموع سطوره.',
+        message: 'إجمالي المدين في القيد لا يطابق مجموع سطوره.',
         valueKind: 'minorUnits',
         currency,
         expected: totalDebit,
         actual: headerDebit,
       });
-      if (totalCredit !== headerCredit) {
-        addIssue({
-          code: 'JOURNAL_HEADER_CREDIT_MISMATCH',
-          scope: 'journal',
-          referenceId: entryId,
-          message: 'إجمالي الدائن في القيد لا يطابق مجموع سطوره.',
-          valueKind: 'minorUnits',
-          currency,
-          expected: totalCredit,
-          actual: headerCredit,
-        });
-      }
+    }
+    if (totalCredit !== headerCredit) {
+      addIssue({
+        code: 'JOURNAL_HEADER_CREDIT_MISMATCH',
+        scope: 'journal',
+        referenceId: entryId,
+        message: 'إجمالي الدائن في القيد لا يطابق مجموع سطوره.',
+        valueKind: 'minorUnits',
+        currency,
+        expected: totalCredit,
+        actual: headerCredit,
+      });
     }
 
     if (totalDebit <= 0 || totalDebit !== totalCredit) {
@@ -5813,6 +6794,20 @@ async function runAccountingIntegrityAudit(userId, command) {
   const journalEntryIds = new Set(
     journalEntriesSnapshot.docs.map((document) => document.id),
   );
+  // Orphans beneath deleted journal headers have no direct parent to scan.
+  // A matching embedded storeId is required by this indexed discovery, but
+  // actual ownership is verified from the document path before reporting.
+  const orphanJournalLines = findIndexedOrphanJournalLines(
+    indexedLinesSnapshot.docs, journalEntryIds, command.storeId,
+  );
+  for (const orphan of orphanJournalLines) {
+    addIssue({
+      code: 'ORPHAN_JOURNAL_LINE',
+      scope: 'journalLine',
+      referenceId: orphan.path,
+      message: 'A journal line exists below a missing journal header.',
+    });
+  }
   for (const [entryId] of linesByEntry) {
     if (!journalEntryIds.has(entryId)) {
       addIssue({
@@ -5827,7 +6822,15 @@ async function runAccountingIntegrityAudit(userId, command) {
   const storedAccountBalances = new Map();
   for (const document of accountBalancesSnapshot.docs) {
     const data = document.data();
-    const accountId = data.accountId || document.id;
+    const accountId = document.id;
+    if (data.storeId !== command.storeId || data.accountId !== accountId) {
+      addIssue({
+        code: 'ACCOUNT_BALANCE_IDENTITY_MISMATCH',
+        scope: 'accountBalance',
+        referenceId: document.id,
+        message: 'Balance projection has a wrong store or account identity.',
+      });
+    }
     storedAccountBalances.set(accountId, data);
   }
 
@@ -5863,11 +6866,14 @@ async function runAccountingIntegrityAudit(userId, command) {
     }
 
     const storedCurrency = stored.currency || expected.currency;
-    const storedDebit = storedInt(stored.debitMinorUnits, 0);
-    const storedCredit = storedInt(stored.creditMinorUnits, 0);
-    const storedBalance = storedInt(
-      stored.balanceMinorUnits,
-      storedDebit - storedCredit,
+    const storedDebit = readMinor(
+      stored.debitMinorUnits, 'accountBalance', accountId,
+    );
+    const storedCredit = readMinor(
+      stored.creditMinorUnits, 'accountBalance', accountId,
+    );
+    const storedBalance = readMinor(
+      stored.balanceMinorUnits, 'accountBalance', accountId, true,
     );
 
     if (storedCurrency !== expected.currency) {
@@ -5954,6 +6960,14 @@ async function runAccountingIntegrityAudit(userId, command) {
     const key = partyType + ':' + partyId;
     const existing = partyTotals.get(key);
     if (existing) {
+      if (existing.currency !== currency) {
+        addIssue({
+          code: 'PARTY_MULTI_CURRENCY',
+          scope: 'partyLedger',
+          referenceId: key,
+          message: 'Party movements have conflicting currency codes.',
+        });
+      }
       return existing;
     }
     const created = {
@@ -5972,6 +6986,14 @@ async function runAccountingIntegrityAudit(userId, command) {
     const partyType = data.partyType;
     const partyId = data.partyId;
     const currency = data.currency || 'ILS';
+    if (data.storeId !== command.storeId) {
+      addIssue({
+        code: 'PARTY_LEDGER_STORE_MISMATCH',
+        scope: 'partyLedger',
+        referenceId: document.id,
+        message: 'Party ledger entry belongs to another store.',
+      });
+    }
     if (!partyType || !partyId) {
       addIssue({
         code: 'PARTY_LEDGER_ID_MISSING',
@@ -5982,8 +7004,16 @@ async function runAccountingIntegrityAudit(userId, command) {
       continue;
     }
     const total = ensurePartyTotal(partyType, partyId, currency);
-    total.debit += storedInt(data.debitMinorUnits, 0);
-    total.credit += storedInt(data.creditMinorUnits, 0);
+    total.debit = addMinor(
+      total.debit,
+      readMinor(data.debitMinorUnits, 'partyLedger', document.id),
+      'partyBalance', partyType + ':' + partyId,
+    );
+    total.credit = addMinor(
+      total.credit,
+      readMinor(data.creditMinorUnits, 'partyLedger', document.id),
+      'partyBalance', partyType + ':' + partyId,
+    );
 
     if (!partyMap.has(partyType + ':' + partyId)) {
       addIssue({
@@ -6008,6 +7038,15 @@ async function runAccountingIntegrityAudit(userId, command) {
         message: 'إسقاط الطرف بلا نوع أو معرف طرف.',
       });
       continue;
+    }
+    if (data.storeId !== command.storeId ||
+        document.id !== partyType + '-' + partyId) {
+      addIssue({
+        code: 'PARTY_BALANCE_IDENTITY_MISMATCH',
+        scope: 'partyBalance',
+        referenceId: document.id,
+        message: 'Party projection store or document identity does not match.',
+      });
     }
     storedPartyBalances.set(partyType + ':' + partyId, data);
   }
@@ -6039,14 +7078,27 @@ async function runAccountingIntegrityAudit(userId, command) {
       continue;
     }
 
-    const storedDebit = storedInt(stored.debitMinorUnits, 0);
-    const storedCredit = storedInt(stored.creditMinorUnits, 0);
-    const storedBalance = storedInt(
-      stored.balanceMinorUnits,
-      storedDebit - storedCredit,
+    if (stored.currency !== expected.currency) {
+      addIssue({
+        code: 'PARTY_BALANCE_CURRENCY_MISMATCH',
+        scope: 'partyBalance',
+        referenceId: key,
+        message: 'Party projection currency does not match movement currency.',
+      });
+    }
+    const storedDebit = readMinor(
+      stored.debitMinorUnits, 'partyBalance', key,
+    );
+    const storedCredit = readMinor(
+      stored.creditMinorUnits, 'partyBalance', key,
+    );
+    const storedBalance = readMinor(
+      stored.balanceMinorUnits, 'partyBalance', key, true,
     );
     if (storedDebit !== expected.debit ||
-        storedCredit !== expected.credit) {
+        storedCredit !== expected.credit ||
+        storedBalance !== storedDebit - storedCredit ||
+        storedBalance !== expected.debit - expected.credit) {
       addIssue({
         code: 'PARTY_BALANCE_MISMATCH',
         scope: 'partyBalance',
@@ -6063,15 +7115,30 @@ async function runAccountingIntegrityAudit(userId, command) {
   const productMap = new Map();
   for (const document of productsSnapshot.docs) {
     const data = document.data();
-    if (data.storeId === command.storeId) {
-      productMap.set(document.id, data);
+    if (data.storeId !== command.storeId) {
+      addIssue({
+        code: 'PRODUCT_STORE_MISMATCH',
+        scope: 'inventory',
+        referenceId: document.id,
+        message: 'Product is attached to a different store.',
+      });
+      continue;
     }
+    productMap.set(document.id, data);
   }
 
   const inventoryTotals = new Map();
   for (const document of inventoryMovementsSnapshot.docs) {
     const data = document.data();
     const productId = data.productId;
+    if (data.storeId !== command.storeId) {
+      addIssue({
+        code: 'INVENTORY_MOVEMENT_STORE_MISMATCH',
+        scope: 'inventoryMovement',
+        referenceId: document.id,
+        message: 'Stock movement is attached to a different store.',
+      });
+    }
     if (!productId) {
       addIssue({
         code: 'INVENTORY_MOVEMENT_PRODUCT_MISSING',
@@ -6081,15 +7148,67 @@ async function runAccountingIntegrityAudit(userId, command) {
       });
       continue;
     }
-    const total = inventoryTotals.get(productId) || {
+    // A matching quantity/value total must never hide a currency conflict.
+    // Older movements may omit currency; in that case use the product's
+    // currency as a read-only comparison fallback, never an exchange rate.
+    const hasMovementCurrency = Object.prototype.hasOwnProperty.call(
+      data, 'currency',
+    );
+    const explicitCurrency = typeof data.currency === 'string' &&
+        data.currency.trim() !== '' ? data.currency : null;
+    if (hasMovementCurrency && !explicitCurrency) {
+      addIssue({
+        code: 'INVENTORY_MOVEMENT_CURRENCY_INVALID',
+        scope: 'inventoryMovement',
+        referenceId: document.id,
+        message: 'Stock movement currency is malformed or empty.',
+      });
+    }
+    const product = productMap.get(productId);
+    if (product && explicitCurrency && explicitCurrency !== product.currency) {
+      addIssue({
+        code: 'INVENTORY_MOVEMENT_PRODUCT_CURRENCY_MISMATCH',
+        scope: 'inventoryMovement',
+        referenceId: document.id,
+        message: 'Stock movement currency differs from product currency.',
+        currency: explicitCurrency,
+      });
+    }
+    const existingTotal = inventoryTotals.get(productId);
+    // Missing legacy currency is unknown, NOT evidence of another currency.
+    if (existingTotal && explicitCurrency &&
+        existingTotal.observedCurrency &&
+        existingTotal.observedCurrency !== explicitCurrency) {
+      addIssue({
+        code: 'INVENTORY_MOVEMENT_MULTI_CURRENCY',
+        scope: 'inventoryMovement',
+        referenceId: document.id,
+        message: 'Stock movements of one product use multiple currencies.',
+        currency: explicitCurrency,
+      });
+    }
+    const total = existingTotal || {
       quantity: 0,
       value: 0,
-      currency: data.currency || 'ILS',
+      currency: explicitCurrency || (product && product.currency) || 'ILS',
+      observedCurrency: null,
     };
-    const quantity = storedInt(data.quantityDeltaMilliUnits, 0);
-    const value = storedInt(data.totalCostMinorUnits, 0);
-    total.quantity += quantity;
-    total.value += quantity < 0 ? -value : value;
+    if (explicitCurrency && !total.observedCurrency) {
+      total.observedCurrency = explicitCurrency;
+    }
+    const quantity = readMinor(
+      data.quantityDeltaMilliUnits, 'inventoryMovement', document.id, true,
+    );
+    const value = readMinor(
+      data.totalCostMinorUnits, 'inventoryMovement', document.id,
+    );
+    total.quantity = addMinor(
+      total.quantity, quantity, 'inventory', productId, 'milliUnits',
+    );
+    total.value = addMinor(
+      total.value, quantity < 0 ? -value : value,
+      'inventory', productId,
+    );
     inventoryTotals.set(productId, total);
   }
 
@@ -6105,8 +7224,12 @@ async function runAccountingIntegrityAudit(userId, command) {
       continue;
     }
 
-    const actualQuantity = storedInt(product.quantityOnHandMilliUnits, 0);
-    const actualValue = storedInt(product.inventoryValueMinorUnits, 0);
+    const actualQuantity = readMinor(
+      product.quantityOnHandMilliUnits, 'inventory', productId,
+    );
+    const actualValue = readMinor(
+      product.inventoryValueMinorUnits, 'inventory', productId,
+    );
     if (actualQuantity !== expected.quantity) {
       addIssue({
         code: 'INVENTORY_QUANTITY_MISMATCH',
@@ -6132,22 +7255,108 @@ async function runAccountingIntegrityAudit(userId, command) {
     }
   }
 
+  // Detect stock that lacks documented movement/opening provenance, and
+  // independently compare the product valuation projection with inventory GL.
+  const productValues = new Map();
+  for (const [productId, product] of productMap) {
+    if (product.isService === true) continue;
+    const currency = product.currency;
+    if (typeof currency !== 'string' || !currency.trim()) {
+      addIssue({
+        code: 'PRODUCT_CURRENCY_INVALID',
+        scope: 'inventory',
+        referenceId: productId,
+        message: 'Stock product currency is missing or invalid.',
+      });
+      continue;
+    }
+    const value = readMinor(
+      product.inventoryValueMinorUnits, 'inventory', productId,
+    );
+    const quantity = readMinor(
+      product.quantityOnHandMilliUnits, 'inventory', productId,
+    );
+    if (!inventoryTotals.has(productId) && (value !== 0 || quantity !== 0)) {
+      addIssue({
+        code: 'INVENTORY_OPENING_SOURCE_UNVERIFIED',
+        scope: 'inventory',
+        referenceId: productId,
+        message: 'Stock has value or quantity without movement/opening evidence.',
+        currency,
+        valueKind: 'minorUnits',
+        actual: value,
+      });
+    }
+    productValues.set(currency, addMinor(
+      productValues.get(currency) || 0, value, 'inventory', productId,
+    ));
+  }
+  const glInventoryValues = new Map();
+  for (const [accountId, account] of accountMap) {
+    if (account.controlType !== 'inventory' || account.isHeader === true) {
+      continue;
+    }
+    const currency = account.currency;
+    if (typeof currency !== 'string' || !currency.trim()) {
+      addIssue({
+        code: 'INVENTORY_GL_CURRENCY_INVALID',
+        scope: 'accountBalance',
+        referenceId: accountId,
+        message: 'Inventory GL account currency is invalid.',
+      });
+      continue;
+    }
+    const projection = storedAccountBalances.get(accountId);
+    const debit = projection
+      ? readMinor(projection.debitMinorUnits, 'accountBalance', accountId) : 0;
+    const credit = projection
+      ? readMinor(projection.creditMinorUnits, 'accountBalance', accountId) : 0;
+    const net = addMinor(debit, -credit, 'accountBalance', accountId);
+    glInventoryValues.set(currency, addMinor(
+      glInventoryValues.get(currency) || 0, net,
+      'accountBalance', accountId,
+    ));
+  }
+  const inventoryCurrencies = new Set([
+    ...productValues.keys(), ...glInventoryValues.keys(),
+  ]);
+  for (const currency of inventoryCurrencies) {
+    const productValue = productValues.get(currency) || 0;
+    const ledgerValue = glInventoryValues.get(currency) || 0;
+    if (productValue !== ledgerValue) {
+      addIssue({
+        code: 'INVENTORY_GL_VALUATION_MISMATCH',
+        scope: 'inventory',
+        referenceId: currency,
+        message: 'Stock product valuations do not equal inventory GL net.',
+        currency,
+        valueKind: 'minorUnits',
+        expected: ledgerValue,
+        actual: productValue,
+      });
+    }
+  }
+
   return {
-    status: issues.some((issue) => issue.severity === 'error')
-      ? 'issues_found'
-      : 'healthy',
+    status: totalErrorCount > 0 ? 'issues_found' : 'healthy',
+    complete: true,
+    consistency: 'non_atomic',
+    orphanDiscoveryCoverage: 'matching_embedded_store_id_only',
     storeId: command.storeId,
     generatedAt: new Date().toISOString(),
     checked: {
       accounts: accountMap.size,
       journalEntries: journalEntriesSnapshot.size,
       journalLines: journalLinesSnapshot.size,
+      indexedLineDiscovery: indexedLinesSnapshot.size,
       parties: partyMap.size,
       partyLedgerEntries: partyLedgerSnapshot.size,
       products: productMap.size,
       inventoryMovements: inventoryMovementsSnapshot.size,
     },
-    issueCount: issues.length,
+    issueCount: totalIssueCount,
+    errorCount: totalErrorCount,
+    issuesTruncated: totalIssueCount > issues.length,
     issues,
   };
 }
@@ -6540,6 +7749,7 @@ function parseRepairPayload(rawRepair) {
 
 async function createRepairInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const repairRef = storeRef.collection('repairs').doc(command.repair.id);
   const idempotencyRef = storeRef
     .collection('repair_idempotency')
@@ -6604,6 +7814,7 @@ async function createRepairInTransaction(transaction, userId, command) {
 
 async function updateRepairInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const repairRef = storeRef.collection('repairs').doc(command.repairId);
   const memberSnapshot = await transaction.get(
     storeRef.collection('members').doc(userId),
@@ -6783,6 +7994,9 @@ function assertRepairTransition(currentStatus, nextStatus) {
 
 async function deliverRepairInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.postedAt,
+  );
   const repairRef = storeRef.collection('repairs').doc(command.repairId);
   const deliveryIdempotencyRef = storeRef
     .collection('repair_delivery_idempotency')
@@ -7154,6 +8368,9 @@ async function deliverRepairInTransaction(transaction, userId, command) {
 
   const totalDebit = total + partsCost + advance;
   const totalCredit = total + partsCost + advance;
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
   transaction.set(journalRef, {
     storeId: command.storeId,
     idempotencyKey: journalIdempotencyKey,
@@ -7334,6 +8551,9 @@ async function postRepairAdvanceInTransaction(
     invalid('Cheque advances need a posted repair invoice.');
   }
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.payment.postedAt,
+  );
   const memberSnapshot = await transaction.get(
     storeRef.collection('members').doc(userId),
   );
@@ -7475,6 +8695,9 @@ async function postRepairAdvanceInTransaction(
     createdAt: FieldValue.serverTimestamp(),
   };
   transaction.set(paymentRef, paymentData);
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
   transaction.set(journalRef, {
     storeId: command.storeId,
     idempotencyKey: journalIdempotencyKey,
@@ -7573,6 +8796,9 @@ async function postRepairPaymentInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.payment.postedAt,
+  );
   const memberSnapshot = await transaction.get(
     storeRef.collection('members').doc(userId),
   );
