@@ -4,9 +4,16 @@
 // indexed-line reconciliation. Read-only source; checkpoints server-owned.
 // Non-atomic across pages; NEVER certify an accounting cutoff.
 
+const {
+  validateBalanceTotals,
+  addStoredBalance,
+} = require('./balance_currency_coverage');
+
 const PAGE_SIZE = 40;
 const MAX_ISSUE_SAMPLES = 20;
-const VERSION = 1;
+// Older partial checkpoints lack totals: reject instead of silently
+// reconstructing misleading evidence after some pages were already read.
+const VERSION = 2;
 
 function fail(HttpsError, message) {
   throw new HttpsError('failed-precondition', message);
@@ -53,6 +60,7 @@ function validState(state, storeId, uid, HttpsError) {
       state.consistency !== 'non_atomic') {
     fail(HttpsError, 'Invalid reverse balance projection checkpoint.');
   }
+  validateBalanceTotals(state, HttpsError);
 }
 function present(runId, state) {
   return {
@@ -68,6 +76,7 @@ function present(runId, state) {
     headerAccountsWithBalance: state.headerAccountsWithBalance,
     currencyMismatchBalances: state.currencyMismatchBalances,
     invalidMoneyBalances: state.invalidMoneyBalances,
+    balanceTotalsByCurrency: {...state.balanceTotalsByCurrency},
     issueSamples: [...state.issueSamples],
   };
 }
@@ -88,6 +97,7 @@ async function startBalanceProjectionScan({
     headerAccountsWithBalance: 0,
     currencyMismatchBalances: 0,
     invalidMoneyBalances: 0,
+    balanceTotalsByCurrency: {},
     issueSamples: [],
     consistency: 'non_atomic', certified: false,
     accountingCutoffApplied: false,
@@ -139,6 +149,7 @@ async function advanceBalanceProjectionScan({
     let header = state.headerAccountsWithBalance;
     let currency = state.currencyMismatchBalances;
     let money = state.invalidMoneyBalances;
+    let totals = state.balanceTotalsByCurrency;
     const samples = [...state.issueSamples];
     const issue = (code, path) => {
       if (samples.length < MAX_ISSUE_SAMPLES) {
@@ -189,7 +200,13 @@ async function advanceBalanceProjectionScan({
         defective = true;
         issue('BALANCE_MONEY_OR_NET_INVALID', row.ref.path);
       }
-      if (defective) invalid = add(invalid, 1, HttpsError);
+      if (defective) {
+        invalid = add(invalid, 1, HttpsError);
+      } else {
+        // Only individually validated, tenant-owned, non-header balances
+        // may contribute to independent source totals.
+        totals = addStoredBalance(totals, value, HttpsError);
+      }
     }
     const next = {
       ...state,
@@ -203,6 +220,7 @@ async function advanceBalanceProjectionScan({
       headerAccountsWithBalance: header,
       currencyMismatchBalances: currency,
       invalidMoneyBalances: money,
+      balanceTotalsByCurrency: totals,
       issueSamples: samples,
       updatedAt: FieldValue.serverTimestamp(),
     };
