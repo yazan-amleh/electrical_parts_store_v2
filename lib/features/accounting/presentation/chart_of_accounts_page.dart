@@ -36,8 +36,10 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
   String? _errorMessage;
   bool _isSaving = false;
 
-  bool get _mayChangeChart => widget.mutationRepository != null &&
-      widget.membership.isActive && widget.membership.role.canManageStore;
+  bool get _mayChangeChart =>
+      widget.mutationRepository != null &&
+      widget.membership.isActive &&
+      widget.membership.role.canManageStore;
 
   @override
   void initState() {
@@ -164,16 +166,13 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
                   if (account.isHeader)
                     IconButton(
                       tooltip: 'إضافة حساب فرعي',
-                      onPressed: _isSaving
-                          ? null
-                          : () => _addChildAccount(account),
+                      onPressed:
+                          _isSaving ? null : () => _addChildAccount(account),
                       icon: const Icon(Icons.add_circle_outline),
                     ),
                   IconButton(
                     tooltip: 'تعديل اسم الحساب',
-                    onPressed: _isSaving
-                        ? null
-                        : () => _renameAccount(account),
+                    onPressed: _isSaving ? null : () => _renameAccount(account),
                     icon: const Icon(Icons.edit_outlined),
                   ),
                 ],
@@ -215,8 +214,11 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
       ),
     );
     controller.dispose();
-    if (!mounted || name == null || name.trim().isEmpty ||
-        name.trim() == account.name || !_mayChangeChart) {
+    if (!mounted ||
+        name == null ||
+        name.trim().isEmpty ||
+        name.trim() == account.name ||
+        !_mayChangeChart) {
       return;
     }
     setState(() => _isSaving = true);
@@ -265,8 +267,8 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
             child: const Text('إلغاء'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext,
-                [idController.text, nameController.text]),
+            onPressed: () => Navigator.pop(
+                dialogContext, [idController.text, nameController.text]),
             child: const Text('إضافة'),
           ),
         ],
@@ -277,8 +279,7 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
     if (!mounted || input == null || !_mayChangeChart) return;
     final id = input[0].trim();
     final name = input[1].trim();
-    if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) ||
-        name.isEmpty) {
+    if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) || name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('رقم الحساب أو اسمه غير صالح')),
       );
