@@ -615,6 +615,25 @@ exports.postAccountTransfer = onCall(async (request) => {
   }
 });
 
+// Firestore can close a contended transaction before its competing attempt
+// observes the idempotency marker (emulator reports INVALID_ARGUMENT). Retry
+// only that exact transient failure through a NEW server transaction.
+// postExpenseInTransaction validates the immutable request fingerprint and
+// journal marker on every attempt, so retry cannot post twice.
+async function runExpenseTransactionWithClosedRetry(userId, command) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await db.runTransaction((transaction) =>
+        postExpenseInTransaction(transaction, userId, command),
+      );
+    } catch (error) {
+      const closedTransaction = !(error instanceof HttpsError) &&
+        /Transaction is invalid or closed/i.test(error?.message || '');
+      if (!closedTransaction || attempt === 2) throw error;
+    }
+  }
+}
+
 exports.postExpense = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
@@ -623,13 +642,9 @@ exports.postExpense = onCall(async (request) => {
   const command = parseExpenseCommand(request.data);
 
   try {
-    return await db.runTransaction(async (transaction) => {
-      return postExpenseInTransaction(
-        transaction,
-        request.auth.uid,
-        command,
-      );
-    });
+    return await runExpenseTransactionWithClosedRetry(
+      request.auth.uid, command,
+    );
   } catch (error) {
     if (error instanceof HttpsError) {
       throw error;
