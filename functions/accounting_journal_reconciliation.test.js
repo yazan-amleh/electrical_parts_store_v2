@@ -20,6 +20,12 @@ async function seed(storeId) {
   batch.set(store.collection('members').doc(UID), {
     storeId, userId: UID, role: 'accountant', isActive: true,
   });
+  for (const accountId of ['1110', '3110']) {
+    batch.set(store.collection('accounts').doc(accountId), {
+      storeId, id: accountId, currency: 'ILS',
+      isHeader: false, isActive: true,
+    });
+  }
   batch.set(store.collection('journal_entries').doc('journal-1'), {
     storeId, currency: 'ILS', status: 'posted',
     totalDebitMinorUnits: 200, totalCreditMinorUnits: 200,
@@ -120,6 +126,89 @@ describe('checkpointed journal header vs direct line totals', () => {
     assert.equal(codes.includes('JOURNAL_LINE_CURRENCY_MISMATCH'), true);
     assert.equal(codes.includes('JOURNAL_LINE_MONEY_INVALID'), true);
     assert.equal(codes.includes('JOURNAL_HEADER_DEBIT_MISMATCH'), true);
+    await db.recursiveDelete(store);
+  });
+
+  it('finds a deleted chart account despite balanced matching journal totals', async () => {
+    const store = await seed('journal-history-missing-chart-account');
+    await store.collection('accounts').doc('1110').delete();
+    const run = await start(store.id);
+    const result = await finish(store.id, run.runId);
+    assert.equal(result.status, 'reconciliation_complete');
+    assert.equal(result.failedEntries, 1);
+    assert.equal(result.linesChecked, 2);
+    assert.equal(result.invalidAccountReferenceLines, 1);
+    assert.equal(result.potentiallyUnindexedLines, 1);
+    const evidence = (await store.collection('accounting_journal_runs')
+      .doc(run.runId).collection('entry_results').doc('journal-1')
+      .get()).data();
+    assert.equal(evidence.debitMinorUnits, 200);
+    assert.equal(evidence.creditMinorUnits, 200);
+    assert.equal(evidence.matched, false);
+    assert.equal(evidence.issueSamples.some(
+      (issue) => issue.code === 'JOURNAL_LINE_ACCOUNT_MISSING'), true);
+    assert.equal((await store.collection('accounts').doc('1110').get())
+      .exists, false);
+    await db.recursiveDelete(store);
+  });
+
+  it('flags journal lines that cannot appear in the indexed ledger scan', async () => {
+    const store = await seed('journal-history-invisible-index-line');
+    await store.collection('journal_entries').doc('journal-1')
+      .collection('lines').doc('debit').update({
+        storeId: admin.firestore.FieldValue.delete(),
+      });
+    const run = await start(store.id);
+    const result = await finish(store.id, run.runId);
+    assert.equal(result.status, 'reconciliation_complete');
+    assert.equal(result.failedEntries, 1);
+    assert.equal(result.potentiallyUnindexedLines, 1);
+    assert.equal(result.invalidAccountReferenceLines, 0);
+    assert.equal(result.linesChecked, 2);
+    const evidence = (await store.collection('accounting_journal_runs')
+      .doc(run.runId).collection('entry_results').doc('journal-1')
+      .get()).data();
+    assert.equal(evidence.issueSamples.some(
+      (issue) => issue.code === 'JOURNAL_LINE_IDENTITY_INVALID'), true);
+    await db.recursiveDelete(store);
+  });
+
+  it('flags attempts to post to chart header accounts and foreign account data', async () => {
+    const store = await seed('journal-history-nonposting-chart-account');
+    await store.collection('accounts').doc('1110').update({
+      isHeader: true, currency: 'USD', storeId: 'another-store',
+    });
+    const run = await start(store.id);
+    const result = await finish(store.id, run.runId);
+    assert.equal(result.invalidAccountReferenceLines, 1);
+    assert.equal(result.potentiallyUnindexedLines, 0);
+    assert.equal(result.failedEntries, 1);
+    const evidence = (await store.collection('accounting_journal_runs')
+      .doc(run.runId).collection('entry_results').doc('journal-1')
+      .get()).data();
+    const codes = evidence.issueSamples.map((issue) => issue.code);
+    assert.equal(codes.includes('JOURNAL_LINE_ACCOUNT_STORE_MISMATCH'), true);
+    assert.equal(codes.includes('JOURNAL_LINE_ACCOUNT_NON_POSTING'), true);
+    assert.equal(codes.includes('JOURNAL_LINE_ACCOUNT_CURRENCY_MISMATCH'), true);
+    await db.recursiveDelete(store);
+  });
+
+  it('detects missing accountId even though the journal remains balanced', async () => {
+    const store = await seed('journal-history-missing-account-id');
+    await store.collection('journal_entries').doc('journal-1')
+      .collection('lines').doc('debit').update({
+        accountId: admin.firestore.FieldValue.delete(),
+      });
+    const run = await start(store.id);
+    const result = await finish(store.id, run.runId);
+    assert.equal(result.invalidAccountReferenceLines, 1);
+    assert.equal(result.potentiallyUnindexedLines, 1);
+    assert.equal(result.failedEntries, 1);
+    const evidence = (await store.collection('accounting_journal_runs')
+      .doc(run.runId).collection('entry_results').doc('journal-1')
+      .get()).data();
+    assert.equal(evidence.issueSamples.some(
+      (issue) => issue.code === 'JOURNAL_LINE_ACCOUNT_ID_INVALID'), true);
     await db.recursiveDelete(store);
   });
 
