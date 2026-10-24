@@ -6,6 +6,12 @@
 // stored transactionally. Non-atomic across invocations: never certify balances.
 
 const {
+  readPostingEpoch,
+  validateEpoch,
+  epochsMatch,
+} = require('./posting_epoch');
+
+const {
   validateTrialBalance,
   appendAccountToTrialBalance,
   trialBalanceSummary,
@@ -15,7 +21,7 @@ const PAGE_SIZE = 40;
 const ISSUE_SAMPLE_LIMIT = 20;
 // Reject checkpoints from the pre-trial-balance format rather than derive
 // false aggregates from an already partially scanned history.
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 function fail(HttpsError, message) {
   throw new HttpsError('failed-precondition', message);
@@ -78,6 +84,7 @@ function validateState(state, storeId, uid, HttpsError) {
     fail(HttpsError, 'Invalid accounting ledger reconciliation checkpoint.');
   }
   validateTrialBalance(state, HttpsError);
+  validateEpoch(state.postingEpoch, HttpsError);
 }
 
 function status(runId, state) {
@@ -107,14 +114,16 @@ function journalPath(lineRef, storeId) {
 }
 
 async function startLedgerReconciliation({
-  db, FieldValue, storeId, uid, assertAccess,
+  db, FieldValue, HttpsError, storeId, uid, assertAccess,
 }) {
   const store = db.collection('stores').doc(storeId);
   const member = await store.collection('members').doc(uid).get();
   assertAccess(member, storeId);
+  const postingEpoch = await readPostingEpoch(db, store, HttpsError);
   const runRef = store.collection('accounting_ledger_runs').doc();
   const state = {
     schemaVersion: SCHEMA_VERSION,
+    postingEpoch,
     storeId,
     createdBy: uid,
     status: 'running',
@@ -167,6 +176,17 @@ async function advanceLedgerReconciliation({
     validateState(state, storeId, uid, HttpsError);
     if (state.status !== 'running') {
       return status(runId, state);
+    }
+    const currentPostingEpoch = await readPostingEpoch(
+      tx, store, HttpsError,
+    );
+    if (!epochsMatch(currentPostingEpoch, state.postingEpoch)) {
+      const changed = {
+        ...state, status: 'source_changed',
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      tx.update(runRef, changed);
+      return status(runId, changed);
     }
 
     let accountId = state.activeAccountId;
