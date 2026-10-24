@@ -7,6 +7,7 @@ import '../../categories/domain/repositories/category_repository.dart';
 import '../../categories/domain/services/category_inventory_document_builder.dart';
 import '../../categories/presentation/categories_page.dart';
 import '../../accounting/domain/repositories/accounting_query_repository.dart';
+import '../../accounting/data/repositories/firestore_chart_mutation_repository.dart';
 import '../../accounting/domain/repositories/accounting_repository.dart';
 import '../../accounting/presentation/financial_statements_page.dart';
 import '../../accounting_audit/domain/repositories/accounting_audit_repository.dart';
@@ -586,6 +587,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.partyLedgerRepository,
     required this.accountTransferRepository,
     required this.accountingQueryRepository,
+    this.chartMutationRepository,
     required this.repairRepository,
     required this.repairDocumentBuilder,
     required this.reportsRepository,
@@ -617,6 +619,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final PartyLedgerRepository? partyLedgerRepository;
   final AccountTransferRepository? accountTransferRepository;
   final AccountingQueryRepository? accountingQueryRepository;
+  final FirestoreChartMutationRepository? chartMutationRepository;
   final RepairRepository? repairRepository;
   final RepairDocumentBuilder? repairDocumentBuilder;
   final ReportsRepository? reportsRepository;
@@ -760,6 +763,7 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'chart-of-accounts') {
       return ChartOfAccountsPage(
         repository: accountingQueryRepository,
+        mutationRepository: chartMutationRepository,
         user: user,
         membership: membership,
       );
