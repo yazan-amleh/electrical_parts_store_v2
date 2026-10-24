@@ -219,8 +219,8 @@ describe('Firestore security rules', function () {
     );
   });
 
-  it('allows only the intended roles to manage accounts and inventory', async () => {
-    await assertSucceeds(
+  it('requires server-side chart writes and preserves inventory role controls', async () => {
+    await assertFails(
       setDoc(storeDoc(ownerDb, 'accounts', '1121'), {
         storeId: STORE_ID,
         id: '1121',
@@ -229,6 +229,11 @@ describe('Firestore security rules', function () {
         type: 'asset',
         isHeader: false,
         isActive: true,
+      }),
+    );
+    await assertFails(
+      updateDoc(storeDoc(ownerDb, 'accounts', '1110'), {
+        name: 'Owner must use chart callable',
       }),
     );
     await assertFails(
