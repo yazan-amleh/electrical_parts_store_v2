@@ -32,10 +32,26 @@ status. Integer overflow fails closed.
 
 This verifies:
 - journal header tenant, posted status and nonempty currency;
-- each direct line's store/entry/account identity and currency;
+- each direct line's store/entry/account identity and currency, even when
+  embedded `storeId` or `accountId` is missing and indexed GL queries
+  would exclude it;
+- each direct line's *actual chart-account document* exists in that store,
+  has matching tenant/currency, and is not a non-posting header account;
 - nonnegative safe-integer debit/credit with exactly one positive side;
 - independently, the summed debit and credit against each header amount;
 - balanced, nonempty posted journal evidence.
+
+Each paginated read resolves at most 40 distinct chart documents, inside
+the same transaction as the journal line page. This is not a global scan.
+The run records two additional evidence counters:
+`invalidAccountReferenceLines` (bad/missing/foreign/header/currency
+account references) and `potentiallyUnindexedLines` (missing or wrong
+embedded line store ID, invalid line account ID, or missing chart account).
+One line is counted at most once in each category.
+
+Checkpoint schema is upgraded to version 2. Any previously started v1
+journal audit must be restarted; it is never silently upgraded halfway
+through its financial scan.
 
 If the parent header disappears or its Firestore `updateTime` changes
 *between pages*, the run becomes `source_changed`; no per-entry completion
@@ -62,9 +78,11 @@ is marked verified.
 ## Explicit gaps to close before financial sign-off
 
 1. The run only starts from **existing journal headers**. Descendant lines
-   beneath deleted headers need the separate orphan finder; wrong/missing
-   embedded identifiers and historical migrations also need an
-   independent, comprehensive source accounting.
+   beneath deleted headers need the separate orphan finder; orphan lines
+   with wrong/missing embedded tenant IDs remain outside the indexed
+   orphan-discovery query. This new chart-reference verification *does*
+   catch wrong/missing embedded identifiers under a present header, but
+   does not prove completeness across deleted headers or sources.
 2. Journal-line additions/deletions/revisions between pages can escape
    header-revision detection. Each transaction sees one consistent page
    but the entire run is **non-atomic**. A genuine immutable posting cutoff
