@@ -993,6 +993,28 @@ describe('Firestore security rules', function () {
     }));
   });
 
+  it('denies client forgery or disabling of accounting close controls', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(storeDoc(context.firestore(),
+        'accounting_period_control', 'current'), {
+        storeId: STORE_ID, status: 'locked', closeId: 'audit-lock',
+      });
+      await setDoc(storeDoc(context.firestore(),
+        'accounting_close_events', 'audit-lock'), {
+        storeId: STORE_ID, kind: 'began',
+      });
+    });
+    const control = storeDoc(ownerDb, 'accounting_period_control', 'current');
+    await assertFails(getDoc(control));
+    await assertFails(updateDoc(control, {status: 'open'}));
+    await assertFails(setDoc(storeDoc(ownerDb,
+      'accounting_period_control', 'other'), {status: 'open'}));
+    await assertFails(getDoc(storeDoc(accountantDb,
+      'accounting_close_events', 'audit-lock')));
+    await assertFails(setDoc(storeDoc(ownerDb,
+      'accounting_close_events', 'forged'), {kind: 'reopened'}));
+  });
+
   it('denies clients reading or forging sharded posting epochs', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(storeDoc(context.firestore(),
