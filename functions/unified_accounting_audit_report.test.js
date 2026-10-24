@@ -97,6 +97,10 @@ describe('read-only consolidated accounting audit evidence', () => {
     assert.equal(result.consistency, 'non_atomic');
     assert.equal(result.accountingCutoffApplied, false);
     assert.equal(result.sourceSnapshotGuaranteed, false);
+    assert.equal(result.postingEpochGuardApplied, true);
+    assert.equal(result.checks.postingEpoch.acrossRunsMatch, true);
+    assert.equal(result.checks.postingEpoch.currentMatchesRuns, true);
+    assert.equal(result.checks.postingEpoch.postingChangesObserved, false);
     assert.equal(result.checks.ledger.mismatchedAccounts, 0);
     assert.equal(result.checks.journal.failedEntries, 0);
     assert.equal(result.checks.orphanPaths.orphanLines, 0);
@@ -350,6 +354,120 @@ describe('read-only consolidated accounting audit evidence', () => {
     assert.equal(rows[0].stored.debitTurnoverMinorUnits, 77);
     assert.equal(rows[1].stored.debitTurnoverMinorUnits, 22);
     assert.equal(result.verdict, 'observed_aggregates_agree_non_atomic');
+    await db.recursiveDelete(store);
+  });
+
+
+  it('marks all running audit sources stale after a real journal posting', async () => {
+    const store = await fixture('unified-posting-epoch-running');
+    for (const [id, type] of [['1110', 'asset'], ['3110', 'equity']]) {
+      await store.collection('accounts').doc(id).update({
+        code: id, name: id, type, isActive: true,
+      });
+    }
+    const scans = [
+      [functions.startAccountingLedgerReconciliation,
+        functions.advanceAccountingLedgerReconciliation],
+      [functions.startAccountingJournalReconciliation,
+        functions.advanceAccountingJournalReconciliation],
+      [functions.startAccountingOrphanPathScan,
+        functions.advanceAccountingOrphanPathScan],
+      [functions.startAccountingBalanceProjectionScan,
+        functions.advanceAccountingBalanceProjectionScan],
+    ];
+    const started = [];
+    for (const [startFn] of scans) {
+      started.push(await startFn.run(req({storeId: store.id})));
+    }
+    const posting = await functions.postJournalEntry.run(req({
+      storeId: store.id,
+      entry: {
+        id: 'later-journal',
+        idempotencyKey: 'later-journal-key',
+        sourceType: 'manual',
+        postedAt: '2026-10-24T09:00:00.000Z',
+        description: 'Interleaved posting marker test',
+        currency: 'ILS',
+        lines: [
+          {id: 'new-debit', accountId: '1110',
+            debitMinorUnits: 3, creditMinorUnits: 0},
+          {id: 'new-credit', accountId: '3110',
+            debitMinorUnits: 0, creditMinorUnits: 3},
+        ],
+      },
+    }));
+    assert.equal(posting.status, 'posted');
+    for (let i = 0; i < scans.length; i++) {
+      const result = await scans[i][1].run(req({
+        storeId: store.id, runId: started[i].runId,
+      }));
+      assert.equal(result.status, 'source_changed');
+      assert.equal(result.certified, false);
+    }
+    const report = await getReport(store.id, {
+      ledgerRunId: started[0].runId,
+      journalRunId: started[1].runId,
+      orphanRunId: started[2].runId,
+      balanceRunId: started[3].runId,
+    });
+    assert.equal(report.verdict, 'source_changed');
+    assert.equal(report.complete, false);
+    assert.equal(report.certified, false);
+    assert.equal(report.checks.postingEpoch.currentMatchesRuns, false);
+    assert.equal(report.checks.postingEpoch.postingChangesObserved, true);
+    assert.equal(report.findings.some((f) =>
+      f.code === 'BACKEND_FINANCIAL_POSTING_EPOCH_CHANGED'), true);
+    assert.equal((await store.collection('account_balances').doc('1110')
+      .get()).data().balanceMinorUnits, 80);
+    await db.recursiveDelete(store);
+  });
+
+  it('does not accept an old ledger scan mixed with a newer journal epoch', async () => {
+    const store = await fixture('unified-posting-epoch-mixed-runs');
+    for (const [id, type] of [['1110', 'asset'], ['3110', 'equity']]) {
+      await store.collection('accounts').doc(id).update({
+        code: id, name: id, type, isActive: true,
+      });
+    }
+    const ledger = await scan(store.id,
+      functions.startAccountingLedgerReconciliation,
+      functions.advanceAccountingLedgerReconciliation,
+      'reconciliation_complete');
+    await functions.postJournalEntry.run(req({
+      storeId: store.id,
+      entry: {
+        id: 'epoch-after-ledger', idempotencyKey: 'epoch-after-ledger-key',
+        sourceType: 'manual', postedAt: '2026-10-24T10:00:00.000Z',
+        currency: 'ILS', description: 'Posting between audit runs',
+        lines: [
+          {id: 'd', accountId: '1110',
+            debitMinorUnits: 2, creditMinorUnits: 0},
+          {id: 'c', accountId: '3110',
+            debitMinorUnits: 0, creditMinorUnits: 2},
+        ],
+      },
+    }));
+    const journal = await scan(store.id,
+      functions.startAccountingJournalReconciliation,
+      functions.advanceAccountingJournalReconciliation,
+      'reconciliation_complete');
+    const orphan = await scan(store.id,
+      functions.startAccountingOrphanPathScan,
+      functions.advanceAccountingOrphanPathScan,
+      'enumeration_complete');
+    const balance = await scan(store.id,
+      functions.startAccountingBalanceProjectionScan,
+      functions.advanceAccountingBalanceProjectionScan,
+      'enumeration_complete');
+    const result = await getReport(store.id, {
+      ledgerRunId: ledger.runId, journalRunId: journal.runId,
+      orphanRunId: orphan.runId, balanceRunId: balance.runId,
+    });
+    assert.equal(result.checks.postingEpoch.acrossRunsMatch, false);
+    assert.equal(result.checks.postingEpoch.currentMatchesRuns, false);
+    assert.equal(result.verdict, 'source_changed');
+    assert.equal(result.complete, true); // individual scans finished, but stale
+    assert.equal(result.certified, false);
     await db.recursiveDelete(store);
   });
 
