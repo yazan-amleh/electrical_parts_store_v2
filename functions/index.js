@@ -90,6 +90,9 @@ const {
   advancePathOrphanScan,
 } = require('./accounting/orphan_path_scan');
 const {getUnifiedAuditReport} = require('./accounting/unified_audit_report');
+const {
+  startBalanceProjectionScan, advanceBalanceProjectionScan,
+} = require('./accounting/balance_projection_scan');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -6162,7 +6165,42 @@ exports.advanceAccountingOrphanPathScan = onCall(async (request) => {
   });
 });
 
-// Consolidated, read-only evidence from three independently completed or
+// Reverse census of every stored GL balance document (including unknown
+// chart accounts). It does not mutate balances or attest to one snapshot.
+exports.startAccountingBalanceProjectionScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return startBalanceProjectionScan({
+    db, FieldValue, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start balance projection scan',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingBalanceProjectionScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advanceBalanceProjectionScan({
+    db, FieldValue, HttpsError, storeId, runId,
+    uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'advance balance projection scan',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Consolidated read-only evidence from four independent audit runs; no
+// single accounting snapshot or immutable posting cutoff is guaranteed.
 // in-progress audits. It never certifies a historical accounting snapshot.
 exports.getUnifiedAccountingAuditReport = onCall(async (request) => {
   if (!request.auth) {
@@ -6173,8 +6211,10 @@ exports.getUnifiedAccountingAuditReport = onCall(async (request) => {
   const ledgerRunId = safeId(input.ledgerRunId, 'ledgerRunId');
   const journalRunId = safeId(input.journalRunId, 'journalRunId');
   const orphanRunId = safeId(input.orphanRunId, 'orphanRunId');
+  const balanceRunId = safeId(input.balanceRunId, 'balanceRunId');
   return getUnifiedAuditReport({
     db, HttpsError, storeId, ledgerRunId, journalRunId, orphanRunId,
+    balanceRunId,
     uid: request.auth.uid,
     assertAccess: (member, tenantId) => assertMembership(
       member, tenantId, 'get unified accounting audit report',
