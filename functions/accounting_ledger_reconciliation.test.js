@@ -84,6 +84,22 @@ describe('ledger reconciliation checkpointed per account', () => {
     assert.equal(result.consistency, 'non_atomic');
     assert.equal(result.certified, false);
     assert.equal(result.accountingCutoffApplied, false);
+    assert.equal(result.trialBalance.verdict,
+      'balanced_indexed_evidence_only');
+    assert.equal(result.trialBalance.certified, false);
+    assert.equal(result.trialBalance.complete, true);
+    assert.equal(result.trialBalance.currencies.length, 1);
+    assert.deepEqual(result.trialBalance.currencies[0], {
+      currency: 'ILS',
+      postingAccounts: 2,
+      mismatchedAccounts: 0,
+      debitTurnoverMinorUnits: 200,
+      creditTurnoverMinorUnits: 200,
+      debitClosingMinorUnits: 200,
+      creditClosingMinorUnits: 200,
+      turnoverBalanced: true,
+      closingBalanced: true,
+    });
     const accountResult = (await store.collection('accounting_ledger_runs')
       .doc(run.runId).collection('account_results').doc('1110').get()).data();
     assert.equal(accountResult.matched, true);
@@ -102,6 +118,8 @@ describe('ledger reconciliation checkpointed per account', () => {
     const run = await start(store.id);
     const result = await finish(store.id, run.runId);
     assert.equal(result.mismatchedAccounts, 1);
+    assert.equal(result.trialBalance.verdict, 'issues_found');
+    assert.equal(result.trialBalance.currencies[0].turnoverBalanced, true);
     const document = (await store.collection('accounting_ledger_runs')
       .doc(run.runId).collection('account_results').doc('1110').get()).data();
     assert.equal(document.matched, false);
@@ -174,6 +192,131 @@ describe('ledger reconciliation checkpointed per account', () => {
       .doc(started.runId).collection('account_results').doc('1110').get()).data();
     assert.equal(evidence.indexedDocumentsScanned, 95);
     assert.equal(evidence.debitMinorUnits, 190);
+    await db.recursiveDelete(store);
+  });
+
+  it('separates ILS and USD totals and never nets currencies together', async () => {
+    const store = await seed('ledger-multi-currency-trial');
+    const batch = db.batch();
+    for (const accountId of ['1111', '3111']) {
+      batch.set(store.collection('accounts').doc(accountId), {
+        id: accountId, storeId: store.id, isHeader: false,
+        currency: 'USD',
+      });
+    }
+    batch.set(store.collection('journal_entries').doc('usd-1'), {
+      storeId: store.id, status: 'posted', currency: 'USD',
+      totalDebitMinorUnits: 150, totalCreditMinorUnits: 150,
+    });
+    batch.set(store.collection('journal_entries').doc('usd-1')
+      .collection('lines').doc('debit'), {
+      storeId: store.id, entryId: 'usd-1', accountId: '1111',
+      currency: 'USD', debitMinorUnits: 150, creditMinorUnits: 0,
+    });
+    batch.set(store.collection('journal_entries').doc('usd-1')
+      .collection('lines').doc('credit'), {
+      storeId: store.id, entryId: 'usd-1', accountId: '3111',
+      currency: 'USD', debitMinorUnits: 0, creditMinorUnits: 150,
+    });
+    batch.set(store.collection('account_balances').doc('1111'), {
+      storeId: store.id, accountId: '1111', currency: 'USD',
+      debitMinorUnits: 150, creditMinorUnits: 0,
+      balanceMinorUnits: 150,
+    });
+    batch.set(store.collection('account_balances').doc('3111'), {
+      storeId: store.id, accountId: '3111', currency: 'USD',
+      debitMinorUnits: 0, creditMinorUnits: 150,
+      balanceMinorUnits: -150,
+    });
+    await batch.commit();
+
+    const started = await start(store.id);
+    const report = await finish(store.id, started.runId);
+    assert.equal(report.mismatchedAccounts, 0);
+    assert.equal(report.trialBalance.verdict,
+      'balanced_indexed_evidence_only');
+    assert.equal(report.trialBalance.postingAccountsCompared, 4);
+    assert.deepEqual(report.trialBalance.currencies.map(
+      (row) => row.currency), ['ILS', 'USD']);
+    const [ils, usd] = report.trialBalance.currencies;
+    assert.equal(ils.debitTurnoverMinorUnits, 200);
+    assert.equal(ils.creditTurnoverMinorUnits, 200);
+    assert.equal(usd.debitTurnoverMinorUnits, 150);
+    assert.equal(usd.creditTurnoverMinorUnits, 150);
+    await db.recursiveDelete(store);
+  });
+
+  it('shows out_of_balance when every account projection matches but USD does not balance', async () => {
+    const store = await seed('ledger-currency-not-netted');
+    await store.collection('accounts').doc('1111').set({
+      id: '1111', storeId: store.id, isHeader: false, currency: 'USD',
+    });
+    await store.collection('journal_entries').doc('usd-incomplete').set({
+      storeId: store.id, status: 'posted', currency: 'USD',
+      totalDebitMinorUnits: 9, totalCreditMinorUnits: 9,
+    });
+    await store.collection('journal_entries').doc('usd-incomplete')
+      .collection('lines').doc('debit').set({
+        storeId: store.id, entryId: 'usd-incomplete', accountId: '1111',
+        currency: 'USD', debitMinorUnits: 9, creditMinorUnits: 0,
+      });
+    await store.collection('account_balances').doc('1111').set({
+      storeId: store.id, accountId: '1111', currency: 'USD',
+      debitMinorUnits: 9, creditMinorUnits: 0, balanceMinorUnits: 9,
+    });
+    const started = await start(store.id);
+    const report = await finish(store.id, started.runId);
+    assert.equal(report.mismatchedAccounts, 0);
+    assert.equal(report.trialBalance.verdict, 'out_of_balance');
+    const [ils, usd] = report.trialBalance.currencies;
+    assert.equal(ils.closingBalanced, true);
+    assert.equal(usd.closingBalanced, false);
+    assert.equal(usd.debitClosingMinorUnits, 9);
+    assert.equal(usd.creditClosingMinorUnits, 0);
+    await db.recursiveDelete(store);
+  });
+
+  it('excludes clean header accounts but flags accidental header postings', async () => {
+    const store = await seed('ledger-trial-chart-headers');
+    await store.collection('accounts').doc('1000').set({
+      id: '1000', storeId: store.id, isHeader: true, currency: 'ILS',
+    });
+    const clean = await start(store.id);
+    const cleanReport = await finish(store.id, clean.runId);
+    assert.equal(cleanReport.accountsCompared, 3);
+    assert.equal(cleanReport.mismatchedAccounts, 0);
+    assert.equal(cleanReport.trialBalance.postingAccountsCompared, 2);
+    assert.equal(cleanReport.trialBalance.currencies[0].postingAccounts, 2);
+
+    await store.collection('account_balances').doc('1000').set({
+      storeId: store.id, accountId: '1000', currency: 'ILS',
+      debitMinorUnits: 0, creditMinorUnits: 0, balanceMinorUnits: 0,
+    });
+    const bad = await start(store.id);
+    const badReport = await finish(store.id, bad.runId);
+    assert.equal(badReport.mismatchedAccounts, 1);
+    assert.equal(badReport.trialBalance.verdict, 'issues_found');
+    assert.equal(badReport.trialBalance.postingAccountsCompared, 2);
+    const badHeader = (await store.collection('accounting_ledger_runs')
+      .doc(bad.runId).collection('account_results').doc('1000')
+      .get()).data();
+    assert.equal(badHeader.issueSamples.some(
+      (issue) => issue.code === 'LEDGER_HEADER_ACCOUNT_HAS_BALANCE'), true);
+    await db.recursiveDelete(store);
+  });
+
+  it('never treats invalid account currency as a valid balance-sheet group', async () => {
+    const store = await seed('ledger-trial-unknown-currency');
+    await store.collection('accounts').doc('4990').set({
+      id: '4990', storeId: store.id, isHeader: false, currency: '??',
+    });
+    const run = await start(store.id);
+    const report = await finish(store.id, run.runId);
+    assert.equal(report.trialBalance.verdict, 'issues_found');
+    assert.equal(report.trialBalance.postingAccountsCompared, 3);
+    assert.equal(report.trialBalance.unclassifiedPostingAccounts, 1);
+    assert.equal(report.trialBalance.currencies.length, 1);
+    assert.equal(report.trialBalance.currencies[0].currency, 'ILS');
     await db.recursiveDelete(store);
   });
 
