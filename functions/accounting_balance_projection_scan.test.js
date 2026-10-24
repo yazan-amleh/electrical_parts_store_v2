@@ -65,6 +65,13 @@ describe('reverse GL account balance census', () => {
     assert.equal(result.balancesChecked, 2);
     assert.equal(result.invalidBalanceDocuments, 0);
     assert.equal(result.missingChartAccounts, 0);
+    assert.deepEqual(result.balanceTotalsByCurrency.ILS, {
+      balanceDocuments: 2,
+      debitTurnoverMinorUnits: 100,
+      creditTurnoverMinorUnits: 100,
+      debitClosingMinorUnits: 100,
+      creditClosingMinorUnits: 100,
+    });
     assert.deepEqual(await advance(store.id, run.runId), result);
     assert.equal((await store.collection('account_balances').doc('1110')
       .get()).data().balanceMinorUnits, 100);
@@ -82,6 +89,8 @@ describe('reverse GL account balance census', () => {
     assert.equal(result.balancesChecked, 3);
     assert.equal(result.missingChartAccounts, 1);
     assert.equal(result.invalidBalanceDocuments, 1);
+    assert.equal(result.balanceTotalsByCurrency.ILS.balanceDocuments, 2);
+    assert.equal(result.balanceTotalsByCurrency.ILS.debitTurnoverMinorUnits, 100);
     assert.equal(result.issueSamples.some(
       (i) => i.code === 'BALANCE_CHART_ACCOUNT_MISSING' &&
         i.referenceId.endsWith('/account_balances/9999')), true);
@@ -109,6 +118,7 @@ describe('reverse GL account balance census', () => {
     assert.equal(result.headerAccountsWithBalance, 1);
     assert.equal(result.currencyMismatchBalances, 1);
     assert.equal(result.invalidMoneyBalances, 2);
+    assert.deepEqual(result.balanceTotalsByCurrency, {});
     const codes = result.issueSamples.map((i) => i.code);
     assert.equal(codes.includes('BALANCE_ON_NON_POSTING_HEADER'), true);
     assert.equal(codes.includes('BALANCE_MONEY_OR_NET_INVALID'), true);
@@ -141,6 +151,44 @@ describe('reverse GL account balance census', () => {
     assert.equal(end.balancesChecked, 97);
     assert.equal(end.invalidBalanceDocuments, 0);
     assert.equal(end.pagesChecked, 3);
+    assert.equal(end.balanceTotalsByCurrency.ILS.balanceDocuments, 97);
+    assert.equal(end.balanceTotalsByCurrency.ILS.debitTurnoverMinorUnits, 100);
+    await db.recursiveDelete(store);
+  });
+
+
+  it('aggregates USD independently and never adds it to ILS totals', async () => {
+    const store = await seed('reverse-balance-separated-currency');
+    await store.collection('accounts').doc('1111').set({
+      storeId: store.id, id: '1111', currency: 'USD', isHeader: false,
+    });
+    await store.collection('account_balances').doc('1111').set({
+      storeId: store.id, accountId: '1111', currency: 'USD',
+      debitMinorUnits: 9, creditMinorUnits: 4, balanceMinorUnits: 5,
+    });
+    const run = await start(store.id);
+    const completed = await finish(store.id, run.runId);
+    assert.equal(completed.invalidBalanceDocuments, 0);
+    assert.deepEqual(Object.keys(completed.balanceTotalsByCurrency).sort(),
+      ['ILS', 'USD']);
+    assert.equal(completed.balanceTotalsByCurrency.USD.debitTurnoverMinorUnits, 9);
+    assert.equal(completed.balanceTotalsByCurrency.USD.creditTurnoverMinorUnits, 4);
+    assert.equal(completed.balanceTotalsByCurrency.USD.debitClosingMinorUnits, 5);
+    assert.equal(completed.balanceTotalsByCurrency.ILS.debitTurnoverMinorUnits, 100);
+    await db.recursiveDelete(store);
+  });
+
+  it('rejects tampered persisted currency totals, not silent zero aggregation', async () => {
+    const store = await seed('reverse-balance-corrupt-totals');
+    const run = await start(store.id);
+    await store.collection('accounting_balance_path_runs').doc(run.runId)
+      .update({balanceTotalsByCurrency: {ILS: {
+        balanceDocuments: 1, debitTurnoverMinorUnits: 50,
+      }}});
+    await assert.rejects(advance(store.id, run.runId),
+      (error) => error.code === 'failed-precondition');
+    assert.equal((await store.collection('account_balances')
+      .doc('1110').get()).data().balanceMinorUnits, 100);
     await db.recursiveDelete(store);
   });
 
