@@ -242,5 +242,6 @@ module.exports = {
   validateJournalCoverage,
   appendJournalCoverage,
   comparison,
+  checkComparable,
   compareAuditRunCoverage,
 };
