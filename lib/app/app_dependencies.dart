@@ -1,5 +1,6 @@
 import '../core/config/app_runtime_config.dart';
 import '../features/accounting/domain/repositories/accounting_query_repository.dart';
+import '../features/accounting/data/repositories/firestore_chart_mutation_repository.dart';
 import '../features/offers/domain/repositories/offer_repository.dart';
 import '../features/accounting/domain/repositories/accounting_repository.dart';
 import '../features/accounting_audit/domain/repositories/accounting_audit_repository.dart';
@@ -38,6 +39,7 @@ class AppDependencies {
     this.categoryInventoryDocumentBuilder,
     this.chequeRepository,
     this.accountingQueryRepository,
+    this.chartMutationRepository,
     this.inventoryRepository,
     this.productRepository,
     this.saleRepository,
@@ -69,6 +71,7 @@ class AppDependencies {
   final CategoryInventoryDocumentBuilder? categoryInventoryDocumentBuilder;
   final ChequeRepository? chequeRepository;
   final AccountingQueryRepository? accountingQueryRepository;
+  final FirestoreChartMutationRepository? chartMutationRepository;
   final InventoryRepository? inventoryRepository;
   final ProductRepository? productRepository;
   final SaleRepository? saleRepository;
