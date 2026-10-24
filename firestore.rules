@@ -404,6 +404,14 @@ service cloud.firestore {
         }
       }
 
+      // Journal header/line reconciliation evidence is server-owned only.
+      match /accounting_journal_runs/{runId} {
+        allow read, write: if false;
+        match /entry_results/{entryId} {
+          allow read, write: if false;
+        }
+      }
+
       match /idempotency_keys/{key} {
         allow read, write: if false;
       }
