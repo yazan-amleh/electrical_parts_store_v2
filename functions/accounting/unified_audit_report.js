@@ -210,7 +210,7 @@ function buildUnifiedAuditReport({
         acrossRunsMatch,
         currentMatchesRuns,
         postingChangesObserved: postingEpochChanged,
-        scope: 'v2_server_journal_posting_transactions_only',
+        scope: 'v2_server_journal_chart_inventory_mutations',
         sourceSnapshotGuaranteed: false,
       },
       ledger: {
