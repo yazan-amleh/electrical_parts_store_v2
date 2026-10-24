@@ -21,6 +21,7 @@ function emptyCurrency() {
   return {
     postingAccounts: 0,
     mismatchedAccounts: 0,
+    indexedJournalLines: 0,
     debitTurnoverMinorUnits: 0,
     creditTurnoverMinorUnits: 0,
     debitClosingMinorUnits: 0,
@@ -64,9 +65,13 @@ function validateTrialBalance(state, HttpsError) {
 }
 
 function appendAccountToTrialBalance(
-  state, {storeId, account, debit, credit, matched}, HttpsError,
+  state, {storeId, account, debit, credit, matched,
+    acceptedLines = 0}, HttpsError,
 ) {
   validateTrialBalance(state, HttpsError);
+  if (!Number.isSafeInteger(acceptedLines) || acceptedLines < 0) {
+    fail(HttpsError, 'Invalid indexed journal line count.');
+  }
   if (account.isHeader === true) {
     return {
       postingAccountsCompared: state.postingAccountsCompared,
@@ -101,6 +106,9 @@ function appendAccountToTrialBalance(
   const net = safeAdd(debit, -credit, HttpsError);
   values[currency] = {
     postingAccounts: safeAdd(old.postingAccounts, 1, HttpsError),
+    indexedJournalLines: safeAdd(
+      old.indexedJournalLines, acceptedLines, HttpsError,
+    ),
     mismatchedAccounts: safeAdd(
       old.mismatchedAccounts, matched ? 0 : 1, HttpsError,
     ),
