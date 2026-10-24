@@ -5,6 +5,12 @@
 // and must never certify a complete ledger or balance sheet.
 
 const {
+  readPostingEpoch,
+  validateEpoch,
+  epochsMatch,
+} = require('./posting_epoch');
+
+const {
   validateJournalCoverage,
   appendJournalCoverage,
 } = require('./audit_coverage');
@@ -13,7 +19,7 @@ const PAGE_SIZE = 40;
 const MAX_SAMPLE_ISSUES = 20;
 // Version 3 adds per-currency evidence to durable account-reference/index counters.
 // Older partially scanned checkpoints cannot safely be upgraded mid-run.
-const VERSION = 3;
+const VERSION = 4;
 
 function validAccountId(value) {
   return typeof value === 'string' &&
@@ -83,6 +89,7 @@ function validateState(state, storeId, uid, HttpsError) {
     fail(HttpsError, 'Invalid persisted journal audit checkpoint.');
   }
   validateJournalCoverage(state, HttpsError);
+  validateEpoch(state.postingEpoch, HttpsError);
 }
 
 function publicStatus(runId, state) {
@@ -107,14 +114,16 @@ function publicStatus(runId, state) {
 }
 
 async function startJournalHeaderReconciliation({
-  db, FieldValue, storeId, uid, assertAccess,
+  db, FieldValue, HttpsError, storeId, uid, assertAccess,
 }) {
   const store = db.collection('stores').doc(storeId);
   const member = await store.collection('members').doc(uid).get();
   assertAccess(member, storeId);
+  const postingEpoch = await readPostingEpoch(db, store, HttpsError);
   const ref = store.collection('accounting_journal_runs').doc();
   const state = {
     schemaVersion: VERSION,
+    postingEpoch,
     storeId,
     createdBy: uid,
     status: 'running',
@@ -167,6 +176,17 @@ async function advanceJournalHeaderReconciliation({
     validateState(state, storeId, uid, HttpsError);
     if (state.status !== 'running') {
       return publicStatus(runId, state);
+    }
+    const currentPostingEpoch = await readPostingEpoch(
+      tx, store, HttpsError,
+    );
+    if (!epochsMatch(currentPostingEpoch, state.postingEpoch)) {
+      const changed = {
+        ...state, status: 'source_changed',
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      tx.update(runRef, changed);
+      return publicStatus(runId, changed);
     }
 
     let entryId = state.activeEntryId;
