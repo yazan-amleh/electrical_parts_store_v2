@@ -25,11 +25,11 @@ class FirestoreChartMutationRepository {
         AuthorizationFailure('Chart account is assigned to another store.'),
       );
     }
-    final data = AccountFirestoreMapper.toMap(account)
-      ..remove('storeId');
+    final data = AccountFirestoreMapper.toMap(account)..remove('storeId');
     try {
-      final response = await _functions.httpsCallable('mutateChartAccount').call<
-          Map<String, dynamic>>({
+      final response = await _functions
+          .httpsCallable('mutateChartAccount')
+          .call<Map<String, dynamic>>({
         'storeId': context.storeId,
         'operation': 'create',
         'account': data,
@@ -64,15 +64,18 @@ class FirestoreChartMutationRepository {
       'isActive',
       'parentId',
     };
-    if (accountId.isEmpty || accountId.contains('/') ||
-        changes.isEmpty || changes.keys.any((key) => !editable.contains(key))) {
+    if (accountId.isEmpty ||
+        accountId.contains('/') ||
+        changes.isEmpty ||
+        changes.keys.any((key) => !editable.contains(key))) {
       return const FailureResult<String>(
         ValidationFailure('Unsupported chart account metadata changes.'),
       );
     }
     try {
-      final response = await _functions.httpsCallable('mutateChartAccount').call<
-          Map<String, dynamic>>({
+      final response = await _functions
+          .httpsCallable('mutateChartAccount')
+          .call<Map<String, dynamic>>({
         'storeId': context.storeId,
         'operation': 'update',
         'account': {'id': accountId, ...changes},
