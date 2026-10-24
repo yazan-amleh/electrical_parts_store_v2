@@ -93,6 +93,7 @@ describe('ledger reconciliation checkpointed per account', () => {
       currency: 'ILS',
       postingAccounts: 2,
       mismatchedAccounts: 0,
+      indexedJournalLines: 2,
       debitTurnoverMinorUnits: 200,
       creditTurnoverMinorUnits: 200,
       debitClosingMinorUnits: 200,
