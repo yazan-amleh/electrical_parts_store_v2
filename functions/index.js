@@ -78,6 +78,10 @@ const {
   startLedgerReconciliation,
   advanceLedgerReconciliation,
 } = require('./accounting/ledger_reconciliation');
+const {
+  startJournalHeaderReconciliation,
+  advanceJournalHeaderReconciliation,
+} = require('./accounting/journal_header_reconciliation');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -6078,6 +6082,40 @@ exports.advanceAccountingLedgerReconciliation = onCall(async (request) => {
     db, FieldValue, HttpsError, storeId, runId, uid: request.auth.uid,
     assertAccess: (member, tenantId) => assertMembership(
       member, tenantId, 'continue ledger reconciliation', HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Compare every existing journal header with its direct line totals.
+// Account projection reconciliation is separate; neither result certifies
+// a consistent historical cutoff or detects every orphan descendant.
+exports.startAccountingJournalReconciliation = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return startJournalHeaderReconciliation({
+    db, FieldValue, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start journal header reconciliation',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingJournalReconciliation = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advanceJournalHeaderReconciliation({
+    db, FieldValue, HttpsError, storeId, runId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'continue journal header reconciliation',
+      HISTORY_SCAN_ROLES,
     ),
   });
 });
