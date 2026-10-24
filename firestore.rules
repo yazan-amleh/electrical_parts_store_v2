@@ -396,6 +396,14 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      // Audit checkpoints/results cannot be forged by any client.
+      match /accounting_ledger_runs/{runId} {
+        allow read, write: if false;
+        match /account_results/{accountId} {
+          allow read, write: if false;
+        }
+      }
+
       match /idempotency_keys/{key} {
         allow read, write: if false;
       }
