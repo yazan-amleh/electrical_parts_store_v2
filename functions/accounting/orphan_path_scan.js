@@ -10,10 +10,16 @@
 // snapshots; the server-owned cursor makes progress resumable. This is a
 // non-atomic historical audit, not a source-of-truth or certified snapshot.
 
+const {
+  readPostingEpoch,
+  validateEpoch,
+  epochsMatch,
+} = require('./posting_epoch');
+
 const PAGE_SIZE = 40;
 const MAX_GROUP_DOCUMENTS = 100000;
 const SAMPLE_LIMIT = 20;
-const VERSION = 1;
+const VERSION = 2;
 
 function abort(HttpsError, message) {
   throw new HttpsError('failed-precondition', message);
@@ -34,7 +40,8 @@ function isJournalLinePath(ref, storeId) {
 function validate(state, storeId, uid, HttpsError) {
   if (!state || state.schemaVersion !== VERSION ||
       state.storeId !== storeId || state.createdBy !== uid ||
-      !['running', 'enumeration_complete', 'budget_exhausted']
+      !['running', 'enumeration_complete', 'budget_exhausted',
+        'source_changed']
         .includes(state.status) ||
       (state.cursorPath !== null &&
        (typeof state.cursorPath !== 'string' ||
@@ -59,6 +66,7 @@ function validate(state, storeId, uid, HttpsError) {
       state.journalLinesScanned > state.groupDocumentsScanned) {
     abort(HttpsError, 'Invalid path-based orphan census checkpoint.');
   }
+  validateEpoch(state.postingEpoch, HttpsError);
 }
 
 function present(runId, state) {
@@ -78,14 +86,16 @@ function present(runId, state) {
 }
 
 async function startPathOrphanScan({
-  db, FieldValue, storeId, uid, assertAccess,
+  db, FieldValue, HttpsError, storeId, uid, assertAccess,
 }) {
   const store = db.collection('stores').doc(storeId);
   const member = await store.collection('members').doc(uid).get();
   assertAccess(member, storeId);
+  const postingEpoch = await readPostingEpoch(db, store, HttpsError);
   const ref = store.collection('accounting_orphan_path_runs').doc();
   const state = {
     schemaVersion: VERSION,
+    postingEpoch,
     storeId, createdBy: uid, status: 'running',
     cursorPath: null,
     groupDocumentsScanned: 0,
@@ -123,6 +133,17 @@ async function advancePathOrphanScan({
     }
     validate(state, storeId, uid, HttpsError);
     if (state.status !== 'running') return present(runId, state);
+    const currentPostingEpoch = await readPostingEpoch(
+      tx, store, HttpsError,
+    );
+    if (!epochsMatch(currentPostingEpoch, state.postingEpoch)) {
+      const changed = {
+        ...state, status: 'source_changed',
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      tx.update(run, changed);
+      return present(runId, changed);
+    }
 
     const remaining = MAX_GROUP_DOCUMENTS - state.groupDocumentsScanned;
     if (remaining <= 0) {
