@@ -91,9 +91,25 @@ const {
 } = require('./accounting/orphan_path_scan');
 const {getUnifiedAuditReport} = require('./accounting/unified_audit_report');
 const {markJournalPosting} = require('./accounting/posting_epoch');
+const {mutateChartAccount} = require('./accounting/chart_mutation');
 const {
   startBalanceProjectionScan, advanceBalanceProjectionScan,
 } = require('./accounting/balance_projection_scan');
+
+// Chart edits are server-only so the audit's financial mutation fence cannot
+// be bypassed by direct client updates to the chart of accounts.
+exports.mutateChartAccount = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  return mutateChartAccount({
+    db, FieldValue, HttpsError, userId: request.auth.uid,
+    data: request.data,
+    assertAccess: (member, storeId) => assertMembership(
+      member, storeId, 'modify chart of accounts', new Set(['owner', 'admin']),
+    ),
+  });
+});
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
