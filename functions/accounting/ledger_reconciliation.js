@@ -30,7 +30,11 @@ function validateState(state, storeId, uid, HttpsError) {
       (state.activeAccountId !== null &&
        (typeof state.activeAccountId !== 'string' || !state.activeAccountId)) ||
       (state.lineCursorPath !== null &&
-       (typeof state.lineCursorPath !== 'string' || !state.lineCursorPath)) ||
+       (typeof state.lineCursorPath !== 'string' ||
+        state.lineCursorPath.split('/').length % 2 !== 0 ||
+        state.lineCursorPath.split('/').length < 2 ||
+        state.lineCursorPath.split('/').at(-2) !== 'lines' ||
+        state.lineCursorPath.split('/').some((segment) => !segment))) ||
       (state.activeAccountId === null && state.lineCursorPath !== null) ||
       (state.activeAccountId !== null &&
        state.lastAccountId === state.activeAccountId) ||
