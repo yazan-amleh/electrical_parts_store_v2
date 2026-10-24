@@ -64,7 +64,7 @@ function parseCommand(data, HttpsError) {
         account.sortOrder < 0 || account.sortOrder > 1000000 ||
         !cleanText(account.statementSection, 120) ||
         !cleanText(account.controlType, 80) ||
-        (account.isHeader && account.controlType !== 'none')) {
+        account.controlType !== 'none') {
       error(HttpsError, 'invalid-argument', 'Invalid chart account metadata.');
     }
   } else {
@@ -125,7 +125,7 @@ async function mutateChartAccount({
         'Cannot deactivate a grouping account.');
     }
 
-    if (after.parentId !== null) {
+    if (after.parentId != null) {
       const parentRef = store.collection('accounts').doc(after.parentId);
       const parent = await tx.get(parentRef);
       if (!parent.exists || parent.data().storeId !== storeId ||
