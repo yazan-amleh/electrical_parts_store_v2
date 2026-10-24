@@ -6093,7 +6093,7 @@ exports.startAccountingLedgerReconciliation = onCall(async (request) => {
   const input = asObject(request.data, 'command');
   const storeId = safeId(input.storeId, 'storeId');
   return startLedgerReconciliation({
-    db, FieldValue, storeId, uid: request.auth.uid,
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
     assertAccess: (member, tenantId) => assertMembership(
       member, tenantId, 'start ledger reconciliation', HISTORY_SCAN_ROLES,
     ),
@@ -6125,7 +6125,7 @@ exports.startAccountingJournalReconciliation = onCall(async (request) => {
   const input = asObject(request.data, 'command');
   const storeId = safeId(input.storeId, 'storeId');
   return startJournalHeaderReconciliation({
-    db, FieldValue, storeId, uid: request.auth.uid,
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
     assertAccess: (member, tenantId) => assertMembership(
       member, tenantId, 'start journal header reconciliation',
       HISTORY_SCAN_ROLES,
@@ -6160,7 +6160,7 @@ exports.startAccountingOrphanPathScan = onCall(async (request) => {
   const input = asObject(request.data, 'command');
   const storeId = safeId(input.storeId, 'storeId');
   return startPathOrphanScan({
-    db, FieldValue, storeId, uid: request.auth.uid,
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
     assertAccess: (member, tenantId) => assertMembership(
       member, tenantId, 'start orphan path scan', HISTORY_SCAN_ROLES,
     ),
@@ -6192,7 +6192,7 @@ exports.startAccountingBalanceProjectionScan = onCall(async (request) => {
   const input = asObject(request.data, 'command');
   const storeId = safeId(input.storeId, 'storeId');
   return startBalanceProjectionScan({
-    db, FieldValue, storeId, uid: request.auth.uid,
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
     assertAccess: (member, tenantId) => assertMembership(
       member, tenantId, 'start balance projection scan',
       HISTORY_SCAN_ROLES,
