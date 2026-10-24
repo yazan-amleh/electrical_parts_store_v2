@@ -4,6 +4,11 @@
 // This is a consistency signal, NEVER point-in-time audit certification.
 const MAX_CURRENCIES = 16;
 const VALID_CURRENCY = /^[A-Z]{3}$/;
+const {
+  readPostingEpoch,
+  validateEpoch,
+  epochsMatch,
+} = require('./posting_epoch');
 
 function fail(HttpsError, message) {
   throw new HttpsError('failed-precondition', message);
@@ -207,6 +212,8 @@ function checkComparable(ledger, journal, storeId, uid, HttpsError) {
   const {validateTrialBalance} = require('./trial_balance');
   validateTrialBalance(ledger, HttpsError);
   validateJournalCoverage(journal, HttpsError);
+  validateEpoch(ledger.postingEpoch, HttpsError);
+  validateEpoch(journal.postingEpoch, HttpsError);
 }
 
 async function compareAuditRunCoverage({
@@ -228,11 +235,19 @@ async function compareAuditRunCoverage({
     const ledger = ledgerSnapshot.data();
     const journal = journalSnapshot.data();
     checkComparable(ledger, journal, storeId, uid, HttpsError);
+    const currentEpoch = await readPostingEpoch(tx, store, HttpsError);
+    const epochAgrees = epochsMatch(ledger.postingEpoch, journal.postingEpoch) &&
+      epochsMatch(currentEpoch, ledger.postingEpoch);
+    const result = comparison(ledger, journal);
     return {
       storeId,
       ledgerRunId,
       journalRunId,
-      ...comparison(ledger, journal),
+      ...result,
+      verdict: epochAgrees ? result.verdict : 'source_changed',
+      postingEpochGuardApplied: true,
+      postingChangesObserved: !epochAgrees,
+      certified: false,
     };
   });
 }
