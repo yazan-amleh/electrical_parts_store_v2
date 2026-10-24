@@ -170,6 +170,56 @@ describe('read-only consolidated accounting audit evidence', () => {
     await db.recursiveDelete(store);
   });
 
+  it('marks changed source as stale without a false clean verdict', async () => {
+    const store = await fixture('unified-audit-source-changed');
+    const runs = await allRuns(store.id);
+    await store.collection('accounting_journal_runs')
+      .doc(runs.journalRunId).update({status: 'source_changed'});
+    const result = await getReport(store.id, runs);
+    assert.equal(result.verdict, 'source_changed');
+    assert.equal(result.complete, false);
+    assert.equal(result.certified, false);
+    assert.equal(result.findings.some(
+      (f) => f.code === 'JOURNAL_SCAN_NOT_COMPLETE'), true);
+    await db.recursiveDelete(store);
+  });
+
+  it('flags differing historical scans even when ledger and journal agree', async () => {
+    const store = await fixture('unified-audit-cross-time-drift');
+    const ledger = await scan(store.id,
+      functions.startAccountingLedgerReconciliation,
+      functions.advanceAccountingLedgerReconciliation,
+      'reconciliation_complete');
+    const journal = await scan(store.id,
+      functions.startAccountingJournalReconciliation,
+      functions.advanceAccountingJournalReconciliation,
+      'reconciliation_complete');
+    // New source line arrives between historical scans. Only the final
+    // tenant-path scan sees it; the independent sources are not atomic.
+    await store.collection('journal_entries').doc('posted')
+      .collection('lines').doc('late-line').set({
+        storeId: store.id, entryId: 'posted', accountId: '1110',
+        currency: 'ILS', debitMinorUnits: 1, creditMinorUnits: 0,
+      });
+    const orphan = await scan(store.id,
+      functions.startAccountingOrphanPathScan,
+      functions.advanceAccountingOrphanPathScan,
+      'enumeration_complete');
+    const report = await getReport(store.id, {
+      ledgerRunId: ledger.runId,
+      journalRunId: journal.runId,
+      orphanRunId: orphan.runId,
+    });
+    assert.equal(report.checks.crossRun.currencies[0].linesAgree, true);
+    assert.equal(report.checks.directPathCoverage.agrees, false);
+    assert.equal(report.checks.directPathCoverage.directHeaderLines, 2);
+    assert.equal(report.checks.directPathCoverage.knownParentPathLines, 3);
+    assert.equal(report.verdict, 'issues_found');
+    assert.equal(report.findings.some(
+      (f) => f.code === 'DIRECT_JOURNAL_PATH_COUNT_DIFFERENCE'), true);
+    await db.recursiveDelete(store);
+  });
+
   it('denies missing auth, revoked membership and foreign store ownership', async () => {
     const store = await fixture('unified-audit-secure');
     const foreign = await fixture('unified-audit-foreign');
