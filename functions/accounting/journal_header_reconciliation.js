@@ -6,7 +6,14 @@
 
 const PAGE_SIZE = 40;
 const MAX_SAMPLE_ISSUES = 20;
-const VERSION = 1;
+// Version 2 adds durable account-reference and index-coverage counters.
+// Older partially scanned checkpoints cannot safely be upgraded mid-run.
+const VERSION = 2;
+
+function validAccountId(value) {
+  return typeof value === 'string' &&
+    /^[A-Za-z0-9_-]{1,128}$/.test(value);
+}
 
 function fail(HttpsError, message) {
   throw new HttpsError('failed-precondition', message);
@@ -58,6 +65,12 @@ function validateState(state, storeId, uid, HttpsError) {
       !Number.isSafeInteger(state.linesChecked) || state.linesChecked < 0 ||
       !Number.isSafeInteger(state.pagesChecked) || state.pagesChecked < 0 ||
       !Number.isSafeInteger(state.failedEntries) || state.failedEntries < 0 ||
+      !Number.isSafeInteger(state.invalidAccountReferenceLines) ||
+      state.invalidAccountReferenceLines < 0 ||
+      !Number.isSafeInteger(state.potentiallyUnindexedLines) ||
+      state.potentiallyUnindexedLines < 0 ||
+      state.potentiallyUnindexedLines > state.invalidAccountReferenceLines ||
+      state.invalidAccountReferenceLines > state.linesChecked ||
       !Array.isArray(state.activeIssueSamples) ||
       state.activeIssueSamples.length > MAX_SAMPLE_ISSUES ||
       (state.status === 'reconciliation_complete' &&
@@ -79,6 +92,8 @@ function publicStatus(runId, state) {
     linesChecked: state.linesChecked,
     pagesChecked: state.pagesChecked,
     failedEntries: state.failedEntries,
+    invalidAccountReferenceLines: state.invalidAccountReferenceLines,
+    potentiallyUnindexedLines: state.potentiallyUnindexedLines,
     activeEntryId: state.activeEntryId,
   };
 }
@@ -108,6 +123,8 @@ async function startJournalHeaderReconciliation({
     linesChecked: 0,
     pagesChecked: 0,
     failedEntries: 0,
+    invalidAccountReferenceLines: 0,
+    potentiallyUnindexedLines: 0,
     scope: 'existing_journal_headers_and_direct_lines',
     consistency: 'non_atomic',
     certified: false,
@@ -187,6 +204,21 @@ async function advanceJournalHeaderReconciliation({
     const lines = page.docs.slice(0, PAGE_SIZE);
     const hasMore = page.docs.length > PAGE_SIZE;
 
+    // Traverse the actual journal subcollection, including records absent
+    // from indexed storeId/accountId lookups. Resolve each distinct chart
+    // account in the same transaction, bounded to this page's 40 lines.
+    const chartAccounts = new Map();
+    for (const line of lines) {
+      const accountId = line.data().accountId;
+      if (validAccountId(accountId) && !chartAccounts.has(accountId)) {
+        chartAccounts.set(accountId, await tx.get(
+          store.collection('accounts').doc(accountId),
+        ));
+      }
+    }
+
+    let invalidAccountReferenceLines = 0;
+    let potentiallyUnindexedLines = 0;
     let debit = state.activeEntryId === null ? 0 : state.debit;
     let credit = state.activeEntryId === null ? 0 : state.credit;
     let lineCount = state.activeEntryId === null
@@ -205,9 +237,49 @@ async function advanceJournalHeaderReconciliation({
     for (const doc of lines) {
       lineCount = safeAdd(lineCount, 1, HttpsError);
       const row = doc.data();
+      const accountIdValid = validAccountId(row.accountId);
+      const accountSnapshot = accountIdValid
+        ? chartAccounts.get(row.accountId) : null;
+      let accountReferenceInvalid = false;
+      let potentiallyUnindexed = row.storeId !== storeId;
+
       if (row.storeId !== storeId || row.entryId !== entryId ||
-          typeof row.accountId !== 'string' || !row.accountId.trim()) {
+          !accountIdValid) {
         issue('JOURNAL_LINE_IDENTITY_INVALID', doc.ref.path);
+      }
+      if (!accountIdValid) {
+        issue('JOURNAL_LINE_ACCOUNT_ID_INVALID', doc.ref.path);
+        accountReferenceInvalid = true;
+        potentiallyUnindexed = true;
+      } else if (!accountSnapshot || !accountSnapshot.exists) {
+        issue('JOURNAL_LINE_ACCOUNT_MISSING', doc.ref.path);
+        accountReferenceInvalid = true;
+        potentiallyUnindexed = true;
+      } else {
+        const account = accountSnapshot.data();
+        if (account.storeId !== storeId) {
+          issue('JOURNAL_LINE_ACCOUNT_STORE_MISMATCH', doc.ref.path);
+          accountReferenceInvalid = true;
+        }
+        if (account.isHeader === true) {
+          issue('JOURNAL_LINE_ACCOUNT_NON_POSTING', doc.ref.path);
+          accountReferenceInvalid = true;
+        }
+        if (account.currency !== row.currency ||
+            account.currency !== data.currency) {
+          issue('JOURNAL_LINE_ACCOUNT_CURRENCY_MISMATCH', doc.ref.path);
+          accountReferenceInvalid = true;
+        }
+      }
+      if (accountReferenceInvalid) {
+        invalidAccountReferenceLines = safeAdd(
+          invalidAccountReferenceLines, 1, HttpsError,
+        );
+      }
+      if (potentiallyUnindexed) {
+        potentiallyUnindexedLines = safeAdd(
+          potentiallyUnindexedLines, 1, HttpsError,
+        );
       }
       if (row.currency !== data.currency) {
         issue('JOURNAL_LINE_CURRENCY_MISMATCH', doc.ref.path);
@@ -226,6 +298,13 @@ async function advanceJournalHeaderReconciliation({
 
     const linesChecked = safeAdd(state.linesChecked, lines.length, HttpsError);
     const pagesChecked = safeAdd(state.pagesChecked, 1, HttpsError);
+    const accountReferenceCount = safeAdd(
+      state.invalidAccountReferenceLines,
+      invalidAccountReferenceLines, HttpsError,
+    );
+    const indexCoverageCount = safeAdd(
+      state.potentiallyUnindexedLines, potentiallyUnindexedLines, HttpsError,
+    );
     if (hasMore) {
       const progress = {
         ...state,
@@ -235,6 +314,8 @@ async function advanceJournalHeaderReconciliation({
         debit, credit, activeLineCount: lineCount,
         activeIssueCount: issueCount, activeIssueSamples: samples,
         linesChecked, pagesChecked,
+        invalidAccountReferenceLines: accountReferenceCount,
+        potentiallyUnindexedLines: indexCoverageCount,
         updatedAt: FieldValue.serverTimestamp(),
       };
       tx.update(runRef, progress);
@@ -294,6 +375,8 @@ async function advanceJournalHeaderReconciliation({
       failedEntries: safeAdd(
         state.failedEntries, matched ? 0 : 1, HttpsError),
       linesChecked, pagesChecked,
+      invalidAccountReferenceLines: accountReferenceCount,
+      potentiallyUnindexedLines: indexCoverageCount,
       updatedAt: FieldValue.serverTimestamp(),
     };
     tx.update(runRef, progress);
