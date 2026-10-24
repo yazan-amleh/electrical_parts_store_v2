@@ -85,6 +85,10 @@ const {
 const {
   compareAuditRunCoverage,
 } = require('./accounting/audit_coverage');
+const {
+  startPathOrphanScan,
+  advancePathOrphanScan,
+} = require('./accounting/orphan_path_scan');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -6125,6 +6129,38 @@ exports.advanceAccountingJournalReconciliation = onCall(async (request) => {
 
 // Cross-compare complete server-owned ledger and direct-journal evidence.
 // It is non-atomic and can NEVER certify a financial posting cutoff.
+// Read-only path-based scan for orphan journal descendants, even with
+// missing/wrong line.storeId. Bounded pages, tenant-path checks, no repairs.
+exports.startAccountingOrphanPathScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return startPathOrphanScan({
+    db, FieldValue, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start orphan path scan', HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingOrphanPathScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advancePathOrphanScan({
+    db, FieldValue, HttpsError, storeId, runId,
+    uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'advance orphan path scan', HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
 exports.compareAccountingAuditCoverage = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
