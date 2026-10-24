@@ -72,8 +72,12 @@ async function allRuns(storeId) {
     functions.startAccountingOrphanPathScan,
     functions.advanceAccountingOrphanPathScan,
     'enumeration_complete');
+  const balance = await scan(storeId,
+    functions.startAccountingBalanceProjectionScan,
+    functions.advanceAccountingBalanceProjectionScan,
+    'enumeration_complete');
   return {ledgerRunId: ledger.runId, journalRunId: journal.runId,
-    orphanRunId: orphan.runId};
+    orphanRunId: orphan.runId, balanceRunId: balance.runId};
 }
 const getReport = (storeId, runs, uid = UID) =>
   functions.getUnifiedAccountingAuditReport.run(
@@ -96,6 +100,8 @@ describe('read-only consolidated accounting audit evidence', () => {
     assert.equal(result.checks.ledger.mismatchedAccounts, 0);
     assert.equal(result.checks.journal.failedEntries, 0);
     assert.equal(result.checks.orphanPaths.orphanLines, 0);
+    assert.equal(result.checks.storedBalances.invalidBalanceDocuments, 0);
+    assert.equal(result.checks.storedBalances.balancesChecked, 2);
     assert.equal(result.checks.directPathCoverage.agrees, true);
     assert.equal(result.checks.directPathCoverage.knownParentPathLines, 2);
     assert.equal(result.checks.crossRun.currencies[0].linesAgree, true);
@@ -142,10 +148,13 @@ describe('read-only consolidated accounting audit evidence', () => {
       .run(req({storeId: store.id}));
     const orphan = await functions.startAccountingOrphanPathScan
       .run(req({storeId: store.id}));
+    const balance = await functions.startAccountingBalanceProjectionScan
+      .run(req({storeId: store.id}));
     const runs = {
       ledgerRunId: ledger.runId,
       journalRunId: journal.runId,
       orphanRunId: orphan.runId,
+      balanceRunId: balance.runId,
     };
     const result = await getReport(store.id, runs);
     assert.equal(result.verdict, 'incomplete');
@@ -205,10 +214,15 @@ describe('read-only consolidated accounting audit evidence', () => {
       functions.startAccountingOrphanPathScan,
       functions.advanceAccountingOrphanPathScan,
       'enumeration_complete');
+    const balance = await scan(store.id,
+      functions.startAccountingBalanceProjectionScan,
+      functions.advanceAccountingBalanceProjectionScan,
+      'enumeration_complete');
     const report = await getReport(store.id, {
       ledgerRunId: ledger.runId,
       journalRunId: journal.runId,
       orphanRunId: orphan.runId,
+      balanceRunId: balance.runId,
     });
     assert.equal(report.checks.crossRun.currencies[0].linesAgree, true);
     assert.equal(report.checks.directPathCoverage.agrees, false);
@@ -217,6 +231,41 @@ describe('read-only consolidated accounting audit evidence', () => {
     assert.equal(report.verdict, 'issues_found');
     assert.equal(report.findings.some(
       (f) => f.code === 'DIRECT_JOURNAL_PATH_COUNT_DIFFERENCE'), true);
+    await db.recursiveDelete(store);
+  });
+
+  it('detects an orphan stored balance even when all three older scans agree', async () => {
+    const store = await fixture('unified-unmapped-account-balance');
+    await store.collection('account_balances').doc('9999').set({
+      storeId: store.id, accountId: '9999', currency: 'ILS',
+      debitMinorUnits: 10, creditMinorUnits: 0, balanceMinorUnits: 10,
+    });
+    const runs = await allRuns(store.id);
+    const report = await getReport(store.id, runs);
+    assert.equal(report.complete, true);
+    assert.equal(report.verdict, 'issues_found');
+    assert.equal(report.certified, false);
+    assert.equal(report.checks.ledger.mismatchedAccounts, 0);
+    assert.equal(report.checks.storedBalances.balancesChecked, 3);
+    assert.equal(report.checks.storedBalances.missingChartAccounts, 1);
+    assert.equal(report.findings.some((finding) =>
+      finding.code === 'BALANCES_WITHOUT_CHART_ACCOUNTS' &&
+      finding.count === 1), true);
+    assert.equal((await store.collection('account_balances')
+      .doc('9999').get()).data().balanceMinorUnits, 10);
+    await db.recursiveDelete(store);
+  });
+
+  it('does not report complete before mandatory reverse balance census ends', async () => {
+    const store = await fixture('unified-reverse-balance-pending');
+    const runs = await allRuns(store.id);
+    await store.collection('accounting_balance_path_runs')
+      .doc(runs.balanceRunId).update({status: 'running'});
+    const report = await getReport(store.id, runs);
+    assert.equal(report.complete, false);
+    assert.equal(report.verdict, 'incomplete');
+    assert.equal(report.findings.some((finding) =>
+      finding.code === 'REVERSE_BALANCE_SCAN_NOT_COMPLETE'), true);
     await db.recursiveDelete(store);
   });
 
@@ -231,6 +280,10 @@ describe('read-only consolidated accounting audit evidence', () => {
       (e) => e.code === 'permission-denied');
     await assert.rejects(
       getReport(store.id, {...runs, orphanRunId: otherRuns.orphanRunId}),
+      (e) => e.code === 'not-found',
+    );
+    await assert.rejects(
+      getReport(store.id, {...runs, balanceRunId: otherRuns.balanceRunId}),
       (e) => e.code === 'not-found',
     );
     await store.collection('members').doc(UID).update({isActive: false});
