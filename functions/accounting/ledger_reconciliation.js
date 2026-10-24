@@ -15,7 +15,7 @@ const PAGE_SIZE = 40;
 const ISSUE_SAMPLE_LIMIT = 20;
 // Reject checkpoints from the pre-trial-balance format rather than derive
 // false aggregates from an already partially scanned history.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 function fail(HttpsError, message) {
   throw new HttpsError('failed-precondition', message);
@@ -354,7 +354,8 @@ async function advanceLedgerReconciliation({
 
     const matches = issueCount === 0;
     const trialBalance = appendAccountToTrialBalance(
-      state, {storeId, account, debit, credit, matched: matches}, HttpsError,
+      state, {storeId, account, debit, credit, matched: matches,
+        acceptedLines}, HttpsError,
     );
     const resultRef = runRef.collection('account_results').doc(accountId);
     tx.create(resultRef, {
