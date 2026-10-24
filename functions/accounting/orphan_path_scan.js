@@ -212,5 +212,6 @@ async function advancePathOrphanScan({
 
 module.exports = {
   PAGE_SIZE, MAX_GROUP_DOCUMENTS, isJournalLinePath,
+  validatePathRun: validate,
   startPathOrphanScan, advancePathOrphanScan,
 };
