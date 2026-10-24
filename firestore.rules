@@ -422,6 +422,12 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      // Sharded financial posting revision fence, only Cloud Functions may
+      // change these counters as part of the posted journal transaction.
+      match /accounting_posting_epochs/{shardId} {
+        allow read, write: if false;
+      }
+
       match /idempotency_keys/{key} {
         allow read, write: if false;
       }
