@@ -99,7 +99,9 @@ abstract final class AppBootstrap {
         functions: functions,
         commandQueue: commandQueue,
       ),
-      chartMutationRepository: FirestoreChartMutationRepository(functions: functions),
+      chartMutationRepository: FirestoreChartMutationRepository(
+        functions: functions,
+      ),
       accountingQueryRepository: FirestoreAccountingQueryRepository(
         firestore: firestore,
       ),
