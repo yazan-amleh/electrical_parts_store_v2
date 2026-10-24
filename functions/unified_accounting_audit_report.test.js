@@ -102,6 +102,8 @@ describe('read-only consolidated accounting audit evidence', () => {
     assert.equal(result.checks.orphanPaths.orphanLines, 0);
     assert.equal(result.checks.storedBalances.invalidBalanceDocuments, 0);
     assert.equal(result.checks.storedBalances.balancesChecked, 2);
+    assert.equal(result.checks.storedBalanceAgreement.comparable, true);
+    assert.equal(result.checks.storedBalanceAgreement.allAgree, true);
     assert.equal(result.checks.directPathCoverage.agrees, true);
     assert.equal(result.checks.directPathCoverage.knownParentPathLines, 2);
     assert.equal(result.checks.crossRun.currencies[0].linesAgree, true);
@@ -160,6 +162,8 @@ describe('read-only consolidated accounting audit evidence', () => {
     assert.equal(result.verdict, 'incomplete');
     assert.equal(result.complete, false);
     assert.equal(result.checks.directPathCoverage.agrees, null);
+    assert.equal(result.checks.storedBalanceAgreement.comparable, false);
+    assert.equal(result.checks.storedBalanceAgreement.allAgree, null);
     assert.equal(result.findings.some(
       (f) => f.code === 'ORPHAN_SCAN_NOT_COMPLETE'), true);
     await db.recursiveDelete(store);
@@ -266,6 +270,86 @@ describe('read-only consolidated accounting audit evidence', () => {
     assert.equal(report.verdict, 'incomplete');
     assert.equal(report.findings.some((finding) =>
       finding.code === 'REVERSE_BALANCE_SCAN_NOT_COMPLETE'), true);
+    await db.recursiveDelete(store);
+  });
+
+
+  it('flags internally valid balances changed after the ledger was scanned', async () => {
+    const store = await fixture('unified-valid-money-cross-scan-drift');
+    const ledger = await scan(store.id,
+      functions.startAccountingLedgerReconciliation,
+      functions.advanceAccountingLedgerReconciliation,
+      'reconciliation_complete');
+    const journal = await scan(store.id,
+      functions.startAccountingJournalReconciliation,
+      functions.advanceAccountingJournalReconciliation,
+      'reconciliation_complete');
+    const orphan = await scan(store.id,
+      functions.startAccountingOrphanPathScan,
+      functions.advanceAccountingOrphanPathScan,
+      'enumeration_complete');
+    // Balanced internally, but disagrees with the earlier ledger scan.
+    await store.collection('account_balances').doc('1110').update({
+      debitMinorUnits: 78, balanceMinorUnits: 78,
+    });
+    const balance = await scan(store.id,
+      functions.startAccountingBalanceProjectionScan,
+      functions.advanceAccountingBalanceProjectionScan,
+      'enumeration_complete');
+    const result = await getReport(store.id, {
+      ledgerRunId: ledger.runId, journalRunId: journal.runId,
+      orphanRunId: orphan.runId, balanceRunId: balance.runId,
+    });
+    assert.equal(result.complete, true);
+    assert.equal(result.checks.ledger.mismatchedAccounts, 0);
+    assert.equal(result.checks.storedBalances.invalidBalanceDocuments, 0);
+    assert.equal(result.checks.crossRun.currencies[0].debitAgrees, true);
+    assert.equal(result.checks.storedBalanceAgreement.allAgree, false);
+    const [ils] = result.checks.storedBalanceAgreement.currencies;
+    assert.equal(ils.indexed.debitTurnoverMinorUnits, 77);
+    assert.equal(ils.stored.debitTurnoverMinorUnits, 78);
+    assert.equal(ils.debitAgrees, false);
+    assert.equal(result.verdict, 'issues_found');
+    assert.equal(result.certified, false);
+    assert.equal(result.findings.some((f) =>
+      f.code === 'STORED_BALANCE_TOTALS_DIFFER_FROM_LEDGER'), true);
+    assert.equal((await store.collection('account_balances')
+      .doc('1110').get()).data().balanceMinorUnits, 78);
+    await db.recursiveDelete(store);
+  });
+
+  it('compares ILS and USD without aggregating different currencies', async () => {
+    const store = await fixture('unified-independent-currency-totals');
+    for (const [id, debit, credit] of [
+      ['1111', 22, 0], ['3111', 0, 22],
+    ]) {
+      await store.collection('accounts').doc(id).set({
+        storeId: store.id, id, isHeader: false, currency: 'USD',
+      });
+      await store.collection('account_balances').doc(id).set({
+        storeId: store.id, accountId: id, currency: 'USD',
+        debitMinorUnits: debit, creditMinorUnits: credit,
+        balanceMinorUnits: debit - credit,
+      });
+      await store.collection('journal_entries').doc('usd-posted')
+        .collection('lines').doc(id).set({
+          storeId: store.id, entryId: 'usd-posted', accountId: id,
+          currency: 'USD', debitMinorUnits: debit,
+          creditMinorUnits: credit,
+        });
+    }
+    await store.collection('journal_entries').doc('usd-posted').set({
+      storeId: store.id, status: 'posted', currency: 'USD',
+      totalDebitMinorUnits: 22, totalCreditMinorUnits: 22,
+    });
+    const runs = await allRuns(store.id);
+    const result = await getReport(store.id, runs);
+    const rows = result.checks.storedBalanceAgreement.currencies;
+    assert.deepEqual(rows.map((r) => r.currency), ['ILS', 'USD']);
+    assert.equal(result.checks.storedBalanceAgreement.allAgree, true);
+    assert.equal(rows[0].stored.debitTurnoverMinorUnits, 77);
+    assert.equal(rows[1].stored.debitTurnoverMinorUnits, 22);
+    assert.equal(result.verdict, 'observed_aggregates_agree_non_atomic');
     await db.recursiveDelete(store);
   });
 
