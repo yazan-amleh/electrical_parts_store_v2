@@ -69,7 +69,7 @@ function validateState(state, storeId, uid, HttpsError) {
       state.invalidAccountReferenceLines < 0 ||
       !Number.isSafeInteger(state.potentiallyUnindexedLines) ||
       state.potentiallyUnindexedLines < 0 ||
-      state.potentiallyUnindexedLines > state.invalidAccountReferenceLines ||
+      state.potentiallyUnindexedLines > state.linesChecked ||
       state.invalidAccountReferenceLines > state.linesChecked ||
       !Array.isArray(state.activeIssueSamples) ||
       state.activeIssueSamples.length > MAX_SAMPLE_ISSUES ||
