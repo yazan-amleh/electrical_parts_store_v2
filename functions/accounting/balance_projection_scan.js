@@ -134,7 +134,7 @@ async function advanceBalanceProjectionScan({
         'Reverse balance audit belongs to another user or store.');
     }
     validState(state, storeId, uid, HttpsError);
-    if (state.status === 'enumeration_complete') {
+    if (state.status !== 'running') {
       return present(runId, state);
     }
     const currentPostingEpoch = await readPostingEpoch(
