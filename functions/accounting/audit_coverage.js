@@ -185,7 +185,7 @@ function checkComparable(ledger, journal, storeId, uid, HttpsError) {
     throw new HttpsError('permission-denied',
       'Audit runs must belong to the current store and requester.');
   }
-  if (ledger.schemaVersion !== 3 || journal.schemaVersion !== 3) {
+  if (ledger.schemaVersion !== 4 || journal.schemaVersion !== 4) {
     fail(HttpsError, 'Audits must use compatible evidence schema versions.');
   }
   if (!['running', 'reconciliation_complete', 'source_changed']
