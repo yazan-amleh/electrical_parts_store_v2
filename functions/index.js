@@ -90,6 +90,7 @@ const {
   advancePathOrphanScan,
 } = require('./accounting/orphan_path_scan');
 const {getUnifiedAuditReport} = require('./accounting/unified_audit_report');
+const {markJournalPosting} = require('./accounting/posting_epoch');
 const {
   startBalanceProjectionScan, advanceBalanceProjectionScan,
 } = require('./accounting/balance_projection_scan');
@@ -1082,6 +1083,10 @@ async function postJournalEntryInTransaction(
     });
   }
 
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
   transaction.set(journalRef, {
     storeId: command.storeId,
     idempotencyKey: command.entry.idempotencyKey,
@@ -1386,9 +1391,11 @@ async function postAccountTransferInTransaction(
     },
   );
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: 'accountTransfer',
@@ -1846,9 +1853,11 @@ async function postExpenseInTransaction(transaction, userId, command) {
   };
   transaction.set(expenseRef, expenseData);
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: 'expense',
@@ -2375,9 +2384,11 @@ async function postPartyPaymentInTransaction(
     },
   );
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: command.payment.partyType === 'customer'
@@ -3114,9 +3125,11 @@ async function postPurchaseInTransaction(
     );
   }
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: 'purchase',
@@ -4508,9 +4521,11 @@ async function postSaleInTransaction(
     );
   }
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: 'sale',
@@ -5910,6 +5925,9 @@ async function settleChequeInTransaction(transaction, userId, command) {
     settledAt: Timestamp.fromDate(command.postedAt),
     updatedAt: FieldValue.serverTimestamp(),
   });
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
   transaction.set(journalRef, {
     storeId: command.storeId,
     idempotencyKey: journalIdempotencyKey,
@@ -8228,6 +8246,9 @@ async function deliverRepairInTransaction(transaction, userId, command) {
 
   const totalDebit = total + partsCost + advance;
   const totalCredit = total + partsCost + advance;
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
   transaction.set(journalRef, {
     storeId: command.storeId,
     idempotencyKey: journalIdempotencyKey,
@@ -8549,6 +8570,9 @@ async function postRepairAdvanceInTransaction(
     createdAt: FieldValue.serverTimestamp(),
   };
   transaction.set(paymentRef, paymentData);
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
   transaction.set(journalRef, {
     storeId: command.storeId,
     idempotencyKey: journalIdempotencyKey,
