@@ -864,6 +864,11 @@ async function postInventoryMovementInTransaction(
     );
   }
 
+  // Inventory-only movements are financial source mutations even when
+  // no GL journal is posted. Fence them in the same transaction.
+  markJournalPosting(
+    transaction, storeRef, 'inventory:' + movementRef.id, FieldValue,
+  );
   transaction.update(productRef, {
     quantityOnHandMilliUnits: nextQuantity,
     inventoryValueMinorUnits: nextInventoryValue,
