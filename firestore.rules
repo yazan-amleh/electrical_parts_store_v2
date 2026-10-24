@@ -417,6 +417,11 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      // Reverse balance census checkpoints are exclusively server-owned.
+      match /accounting_balance_path_runs/{runId} {
+        allow read, write: if false;
+      }
+
       match /idempotency_keys/{key} {
         allow read, write: if false;
       }
