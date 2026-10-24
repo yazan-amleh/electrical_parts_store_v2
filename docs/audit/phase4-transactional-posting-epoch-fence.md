@@ -66,8 +66,8 @@ Unified response schema version is now v4.
 ## What this does NOT guarantee
 
 The posting epoch is **not** an immutable historical cutoff and does
-not provide a true Firestore snapshot across requests. It currently
-covers only the identified server journal/GL posting transactions in
+not provide a true Firestore snapshot across requests. It now covers guarded server-side journal/GL postings, chart-account
+mutations through the callable, and standalone inventory valuation movements in
 `functions/index.js`.
 
 Not covered by the epoch:
