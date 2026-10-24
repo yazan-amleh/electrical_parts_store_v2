@@ -74,6 +74,10 @@ const {
   createHistoryScan,
   advanceHistoryScan,
 } = require('./accounting/history_scan');
+const {
+  startLedgerReconciliation,
+  advanceLedgerReconciliation,
+} = require('./accounting/ledger_reconciliation');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -6028,6 +6032,37 @@ exports.advanceAccountingHistoryScan = onCall(async (request) => {
     assertAccess: (membership, tenantId) => assertMembership(
       membership, tenantId, 'continue accounting history inventory',
       HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Per-account GL evidence is checkpointed independently of document counts.
+// Reconciliation remains non-atomic and cannot certify financial statements.
+exports.startAccountingLedgerReconciliation = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return startLedgerReconciliation({
+    db, FieldValue, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start ledger reconciliation', HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingLedgerReconciliation = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advanceLedgerReconciliation({
+    db, FieldValue, HttpsError, storeId, runId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'continue ledger reconciliation', HISTORY_SCAN_ROLES,
     ),
   });
 });
