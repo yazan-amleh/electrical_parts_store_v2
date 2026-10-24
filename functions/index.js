@@ -127,6 +127,7 @@ exports.beginAccountingClose = onCall(async (request) => {
   const storeId = parseIds(request.data, HttpsError);
   return beginAccountingClose({
     db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    throughDate: request.data.throughDate,
     assertAccess: (member, id) => assertMembership(
       member, id, 'begin accounting close', new Set(['owner', 'admin']),
     ),
@@ -833,7 +834,9 @@ async function postInventoryMovementInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
-  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.movement.occurredAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const productRef = storeRef
     .collection('products')
@@ -1055,7 +1058,9 @@ async function postJournalEntryInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
-  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.entry.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const journalRef = storeRef
     .collection('journal_entries')
@@ -1285,7 +1290,9 @@ async function postAccountTransferInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
-  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.transfer.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const transferRef = storeRef
     .collection('account_transfers')
@@ -1656,7 +1663,9 @@ function parseExpenseCommand(rawCommand) {
 
 async function postExpenseInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
-  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.expense.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const expenseRef = storeRef
     .collection('expenses')
@@ -2157,7 +2166,9 @@ async function postPartyPaymentInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
-  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.payment.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const paymentRef = storeRef
     .collection('party_payments')
@@ -2697,7 +2708,9 @@ async function postPurchaseInTransaction(
   allowedRoles = POSTING_ROLES,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
-  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.purchase.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const purchaseRef = storeRef
     .collection('purchases')
@@ -3656,7 +3669,9 @@ async function receivePurchaseOrderInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
-  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const orderRef = storeRef
     .collection('purchase_orders')
@@ -4001,7 +4016,9 @@ async function postSaleInTransaction(
   allowedRoles = POSTING_ROLES,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
-  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.sale.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const saleRef = storeRef.collection('sales').doc(command.sale.id);
   const saleIdempotencyRef = storeRef
@@ -5800,7 +5817,9 @@ exports.settleCheque = onCall(async (request) => {
 
 async function settleChequeInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
-  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const chequeRef = storeRef.collection('party_payments').doc(command.chequeId);
   const settlementIdempotencyRef = storeRef
@@ -7975,7 +7994,9 @@ function assertRepairTransition(currentStatus, nextStatus) {
 
 async function deliverRepairInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
-  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.postedAt,
+  );
   const repairRef = storeRef.collection('repairs').doc(command.repairId);
   const deliveryIdempotencyRef = storeRef
     .collection('repair_delivery_idempotency')
@@ -8530,7 +8551,9 @@ async function postRepairAdvanceInTransaction(
     invalid('Cheque advances need a posted repair invoice.');
   }
   const storeRef = db.collection('stores').doc(command.storeId);
-  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.payment.postedAt,
+  );
   const memberSnapshot = await transaction.get(
     storeRef.collection('members').doc(userId),
   );
@@ -8773,7 +8796,9 @@ async function postRepairPaymentInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
-  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.payment.postedAt,
+  );
   const memberSnapshot = await transaction.get(
     storeRef.collection('members').doc(userId),
   );
