@@ -934,12 +934,13 @@ describe('Firestore security rules', function () {
 
   it('blocks client forgery of GL reconciliation runs and results', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
-      await setDoc(storeDoc(context.firestore(), 'accounting_ledger_runs',
+      const adminDb = context.firestore();
+      await setDoc(storeDoc(adminDb, 'accounting_ledger_runs',
         'verified-run'), {
         storeId: STORE_ID, createdBy: 'owner-1',
         status: 'running', certified: false,
       });
-      await setDoc(storeDoc(context.firestore(), 'accounting_ledger_runs',
+      await setDoc(storeDoc(adminDb, 'accounting_ledger_runs',
         'verified-run', 'account_results', '1110'), {
         storeId: STORE_ID, accountId: '1110', matched: false,
       });
