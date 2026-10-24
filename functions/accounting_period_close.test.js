@@ -115,7 +115,7 @@ describe('controlled accounting freeze is not a historical certification', () =>
   after(async () => {await admin.app().delete();});
   it('blocks journal, inventory and chart writes immediately upon freeze', async () => {
     const store = await fixture('period-freeze-blocks-writes');
-    const begun = await call(api.beginAccountingClose, {storeId: store.id});
+    const begun = await call(api.beginAccountingClose, {storeId: store.id, throughDate: '2026-10-23'});
     assert.equal(begun.status, 'locked');
     assert.equal(begun.certified, false);
     await assert.rejects(
@@ -146,7 +146,7 @@ describe('controlled accounting freeze is not a historical certification', () =>
 
   it('finalizes only clean four-scan evidence gathered after freeze', async () => {
     const store = await fixture('period-freeze-finalization');
-    await call(api.beginAccountingClose, {storeId: store.id});
+    await call(api.beginAccountingClose, {storeId: store.id, throughDate: '2026-10-23'});
     const runs = await audits(store.id);
     const closed = await call(api.finalizeAccountingClose,
       {storeId: store.id, ...runs});
@@ -160,7 +160,7 @@ describe('controlled accounting freeze is not a historical certification', () =>
       call(api.postJournalEntry, manual(store.id)),
       (e) => e.code === 'failed-precondition');
     await assert.rejects(
-      call(api.beginAccountingClose, {storeId: store.id}),
+      call(api.beginAccountingClose, {storeId: store.id, throughDate: '2026-10-23'}),
       (e) => e.code === 'failed-precondition');
     const control = (await store.collection('accounting_period_control')
       .doc('current').get()).data();
@@ -171,7 +171,7 @@ describe('controlled accounting freeze is not a historical certification', () =>
 
   it('rejects finalization with incomplete or changed evidence', async () => {
     const store = await fixture('period-close-no-false-completion');
-    await call(api.beginAccountingClose, {storeId: store.id});
+    await call(api.beginAccountingClose, {storeId: store.id, throughDate: '2026-10-23'});
     const result = await call(api.startAccountingLedgerReconciliation,
       {storeId: store.id});
     await assert.rejects(call(api.finalizeAccountingClose, {
@@ -184,6 +184,47 @@ describe('controlled accounting freeze is not a historical certification', () =>
     await db.recursiveDelete(store);
   });
 
+
+  it('preserves the closed-through date after reopen and rejects backdated journals', async () => {
+    const store = await fixture('period-close-immutable-business-date');
+    await call(api.beginAccountingClose, {
+      storeId: store.id, throughDate: '2026-10-23',
+    });
+    const runs = await audits(store.id);
+    const closed = await call(api.finalizeAccountingClose,
+      {storeId: store.id, ...runs});
+    assert.equal(closed.closedThroughDate, '2026-10-23');
+    const reopened = await call(api.reopenAccountingClose, {
+      storeId: store.id,
+      reason: 'Prior period approved; future period operations resume.',
+    });
+    assert.equal(reopened.closedThroughDate, '2026-10-23');
+    const backdated = manual(store.id, 'backdated-not-allowed');
+    backdated.entry.postedAt = '2026-10-23T23:59:59.000Z';
+    await assert.rejects(call(api.postJournalEntry, backdated),
+      (e) => e.code === 'failed-precondition');
+    const after = await call(api.postJournalEntry,
+      manual(store.id, 'future-period-allowed'));
+    assert.equal(after.status, 'posted');
+    const control = (await store.collection('accounting_period_control')
+      .doc('current').get()).data();
+    assert.equal(control.closedThroughDate, '2026-10-23');
+    await assert.rejects(call(api.beginAccountingClose, {
+      storeId: store.id, throughDate: '2026-10-22',
+    }), (e) => e.code === 'failed-precondition');
+    await db.recursiveDelete(store);
+  });
+
+  it('rejects malformed Gregorian close dates before writing lock state', async () => {
+    const store = await fixture('period-close-invalid-calendar-date');
+    await assert.rejects(call(api.beginAccountingClose, {
+      storeId: store.id, throughDate: '2026-02-30',
+    }), (e) => e.code === 'invalid-argument');
+    assert.equal((await store.collection('accounting_period_control')
+      .get()).empty, true);
+    await db.recursiveDelete(store);
+  });
+
   it('requires owner/admin privileges and a detailed reopen reason', async () => {
     const store = await fixture('period-close-role-reopen');
     await assert.rejects(
@@ -192,7 +233,7 @@ describe('controlled accounting freeze is not a historical certification', () =>
     await assert.rejects(
       call(api.beginAccountingClose, {storeId: store.id}, null),
       (e) => e.code === 'unauthenticated');
-    await call(api.beginAccountingClose, {storeId: store.id});
+    await call(api.beginAccountingClose, {storeId: store.id, throughDate: '2026-10-23'});
     await assert.rejects(
       call(api.reopenAccountingClose, {
         storeId: store.id, reason: 'short',
