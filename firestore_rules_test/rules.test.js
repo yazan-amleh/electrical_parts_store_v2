@@ -932,4 +932,29 @@ describe('Firestore security rules', function () {
   });
 
 
+  it('keeps accounting inventory checkpoints server-only', async () => {
+    const runRef = storeDoc(ownerDb, 'accounting_audit_runs', 'run-1');
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(storeDoc(context.firestore(), 'accounting_audit_runs',
+        'run-1'), {
+        storeId: STORE_ID,
+        createdBy: 'owner-1',
+        phaseIndex: 0,
+        cursor: null,
+        certified: false,
+      });
+    });
+    await assertFails(getDoc(runRef));
+    await assertFails(getDoc(storeDoc(accountantDb,
+      'accounting_audit_runs', 'run-1')));
+    await assertFails(getDoc(storeDoc(outsiderDb,
+      'accounting_audit_runs', 'run-1')));
+    await assertFails(setDoc(storeDoc(ownerDb,
+      'accounting_audit_runs', 'fake'), {
+      storeId: STORE_ID, status: 'enumeration_complete', certified: true,
+    }));
+    await assertFails(updateDoc(runRef, {certified: true}));
+  });
+
+
 });
