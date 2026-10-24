@@ -988,6 +988,24 @@ describe('Firestore security rules', function () {
     }));
   });
 
+  it('denies clients reading or forging sharded posting epochs', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(storeDoc(context.firestore(),
+        'accounting_posting_epochs', '00'), {
+        version: 1, sequence: 1,
+      });
+    });
+    const epoch = storeDoc(ownerDb, 'accounting_posting_epochs', '00');
+    await assertFails(getDoc(epoch));
+    await assertFails(getDoc(storeDoc(accountantDb,
+      'accounting_posting_epochs', '00')));
+    await assertFails(setDoc(storeDoc(ownerDb,
+      'accounting_posting_epochs', '01'), {
+      version: 1, sequence: 999,
+    }));
+    await assertFails(updateDoc(epoch, {sequence: 0}));
+  });
+
   it('denies all client access to reverse balance census checkpoints', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
