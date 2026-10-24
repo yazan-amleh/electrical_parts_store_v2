@@ -988,6 +988,27 @@ describe('Firestore security rules', function () {
     }));
   });
 
+  it('blocks client reads and forgery of path-based orphan scan results', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(storeDoc(context.firestore(), 'accounting_orphan_path_runs',
+        'orphan-run'), {
+        storeId: STORE_ID, createdBy: 'owner-1',
+        status: 'running', certified: false,
+      });
+    });
+    const checkpoint = storeDoc(ownerDb, 'accounting_orphan_path_runs',
+      'orphan-run');
+    await assertFails(getDoc(checkpoint));
+    await assertFails(getDoc(storeDoc(accountantDb,
+      'accounting_orphan_path_runs', 'orphan-run')));
+    await assertFails(setDoc(storeDoc(ownerDb,
+      'accounting_orphan_path_runs', 'forged'), {
+      storeId: STORE_ID, status: 'enumeration_complete',
+      certified: true,
+    }));
+    await assertFails(updateDoc(checkpoint, {certified: true}));
+  });
+
   it('keeps accounting inventory checkpoints server-only', async () => {
     const runRef = storeDoc(ownerDb, 'accounting_audit_runs', 'run-1');
     await testEnv.withSecurityRulesDisabled(async (context) => {
