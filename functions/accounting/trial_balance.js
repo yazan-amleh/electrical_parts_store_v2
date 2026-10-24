@@ -53,9 +53,7 @@ function validateTrialBalance(state, HttpsError) {
         fail(HttpsError, 'Trial balance totals are invalid.');
       }
     }
-    if (value.mismatchedAccounts > value.postingAccounts ||
-        value.creditClosingMinorUnits > value.creditTurnoverMinorUnits +
-          value.debitTurnoverMinorUnits) {
+    if (value.mismatchedAccounts > value.postingAccounts) {
       fail(HttpsError, 'Trial balance counts are inconsistent.');
     }
     accounted = safeAdd(accounted, value.postingAccounts, HttpsError);
