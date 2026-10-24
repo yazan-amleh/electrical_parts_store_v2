@@ -988,6 +988,26 @@ describe('Firestore security rules', function () {
     }));
   });
 
+  it('denies all client access to reverse balance census checkpoints', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(storeDoc(db, 'accounting_balance_path_runs', 'reverse-1'), {
+        storeId: STORE_ID, createdBy: 'owner-1', certified: false,
+      });
+    });
+    const doc = storeDoc(ownerDb, 'accounting_balance_path_runs',
+      'reverse-1');
+    await assertFails(getDoc(doc));
+    await assertFails(getDoc(storeDoc(accountantDb,
+      'accounting_balance_path_runs', 'reverse-1')));
+    await assertFails(setDoc(storeDoc(ownerDb,
+      'accounting_balance_path_runs', 'forgery'), {
+      storeId: STORE_ID, status: 'enumeration_complete',
+      certified: true,
+    }));
+    await assertFails(updateDoc(doc, {certified: true}));
+  });
+
   it('blocks client reads and forgery of path-based orphan scan results', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(storeDoc(context.firestore(), 'accounting_orphan_path_runs',
