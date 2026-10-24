@@ -134,7 +134,8 @@ function trialBalanceSummary(state) {
       closingBalanced: values.debitClosingMinorUnits ===
         values.creditClosingMinorUnits,
     }));
-  let verdict = 'incomplete';
+  let verdict = state.status === 'source_changed'
+    ? 'source_changed' : 'incomplete';
   if (state.status === 'reconciliation_complete') {
     if (state.mismatchCount > 0 ||
         state.unclassifiedPostingAccounts > 0) {
