@@ -10,6 +10,7 @@ const {verifyOrphanRun, verifyBalanceRun,
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const CLOSED_STATUSES = new Set(['locked', 'closed']);
 const MAX_REASON = 400;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 function fail(HttpsError, code, message) {
   throw new HttpsError(code, message);
@@ -18,7 +19,14 @@ function controlRef(store) {
   return store.collection('accounting_period_control').doc('current');
 }
 
-async function assertAccountingWritesOpen(tx, store, HttpsError) {
+function validCutoff(day) {
+  if (typeof day !== 'string' || !DAY.test(day)) return false;
+  const date = new Date(day + 'T00:00:00.000Z');
+  return !Number.isNaN(date.getTime()) &&
+    date.toISOString().slice(0, 10) === day;
+}
+async function assertAccountingWritesOpen(tx, store, HttpsError,
+    postingDate = null) {
   const state = await tx.get(controlRef(store));
   if (!state.exists) return;
   const data = state.data();
@@ -31,6 +39,23 @@ async function assertAccountingWritesOpen(tx, store, HttpsError) {
     fail(HttpsError, 'failed-precondition',
       'Accounting close is active; financial writes are blocked.');
   }
+  if (data.closedThroughDate != null) {
+    if (!validCutoff(data.closedThroughDate)) {
+      fail(HttpsError, 'failed-precondition',
+        'Stored accounting cutoff date is invalid.');
+    }
+    if (postingDate != null) {
+      if (!(postingDate instanceof Date) ||
+          Number.isNaN(postingDate.getTime())) {
+        fail(HttpsError, 'failed-precondition',
+          'Posting date cannot be validated against the closed period.');
+      }
+      if (postingDate.toISOString().slice(0, 10) <= data.closedThroughDate) {
+        fail(HttpsError, 'failed-precondition',
+          'Posting date falls inside a previously closed accounting period.');
+      }
+    }
+  }
 }
 
 function parseIds(data, HttpsError) {
@@ -40,8 +65,12 @@ function parseIds(data, HttpsError) {
   return data.storeId;
 }
 async function beginAccountingClose({
-  db, FieldValue, HttpsError, storeId, uid, assertAccess,
+  db, FieldValue, HttpsError, storeId, uid, throughDate, assertAccess,
 }) {
+  if (!validCutoff(throughDate)) {
+    fail(HttpsError, 'invalid-argument',
+      'throughDate must be a valid UTC YYYY-MM-DD accounting date.');
+  }
   const store = db.collection('stores').doc(storeId);
   const ref = controlRef(store);
   return db.runTransaction(async (tx) => {
@@ -54,23 +83,30 @@ async function beginAccountingClose({
     if (old.exists && old.data().storeId !== storeId) {
       fail(HttpsError, 'failed-precondition', 'Invalid close control tenant.');
     }
+    const previousCutoff = old.exists ? old.data().closedThroughDate : null;
+    if (previousCutoff != null &&
+        (!validCutoff(previousCutoff) || throughDate <= previousCutoff)) {
+      fail(HttpsError, 'failed-precondition',
+        'The new cutoff must be after the previously closed period.');
+    }
     // Read all epoch shards inside the *same* transaction as the freeze.
     const frozenEpoch = await readPostingEpoch(tx, store, HttpsError);
     const closeId = store.collection('accounting_close_events').doc().id;
     tx.set(ref, {
-      storeId, status: 'locked', closeId,
+      storeId, status: 'locked', closeId, throughDate,
+      closedThroughDate: previousCutoff,
       requestedBy: uid, frozenEpoch,
       frozenAt: FieldValue.serverTimestamp(),
       lastChangedAt: FieldValue.serverTimestamp(),
     });
     tx.create(store.collection('accounting_close_events').doc(closeId), {
-      storeId, kind: 'began', by: uid,
+      storeId, kind: 'began', by: uid, throughDate,
       postingEpoch: frozenEpoch,
       at: FieldValue.serverTimestamp(),
       certified: false,
     });
     return {
-      storeId, closeId, status: 'locked',
+      storeId, closeId, status: 'locked', throughDate,
       postingWritesBlocked: true, certified: false,
       immutableHistoricalSnapshot: false,
     };
@@ -131,6 +167,7 @@ async function finalizeAccountingClose({
     // balances. The write lock remains active after finalization.
     tx.update(controlRef(store), {
       status: 'closed',
+      closedThroughDate: state.throughDate,
       evidence: {ledgerRunId, journalRunId, orphanRunId, balanceRunId},
       closedAt: FieldValue.serverTimestamp(),
       closedBy: uid,
@@ -139,12 +176,14 @@ async function finalizeAccountingClose({
     tx.create(store.collection('accounting_close_events')
       .doc(state.closeId + '-finalized'), {
       storeId, kind: 'finalized', closeId: state.closeId, by: uid,
+      throughDate: state.throughDate,
       evidence: {ledgerRunId, journalRunId, orphanRunId, balanceRunId},
       postingEpoch: currentEpoch, certified: false,
       at: FieldValue.serverTimestamp(),
     });
     return {
       storeId, closeId: state.closeId, status: 'closed',
+      closedThroughDate: state.throughDate,
       postingWritesBlocked: true,
       reportVerdict: report.verdict,
       certified: false, immutableHistoricalSnapshot: false,
@@ -179,12 +218,14 @@ async function reopenAccountingClose({
     });
     tx.set(controlRef(store), {
       storeId, status: 'open',
+      closedThroughDate: previous.closedThroughDate || null,
       reopenedFromCloseId: previous.closeId,
       reopenedBy: uid,
       reason: reason.trim(),
       lastChangedAt: FieldValue.serverTimestamp(),
     });
     return {storeId, status: 'open', postingWritesBlocked: false,
+      closedThroughDate: previous.closedThroughDate || null,
       previousCloseId: previous.closeId, certified: false};
   });
 }
