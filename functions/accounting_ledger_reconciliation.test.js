@@ -320,6 +320,62 @@ describe('ledger reconciliation checkpointed per account', () => {
     await db.recursiveDelete(store);
   });
 
+  it('stops when account definition changes between paged reads', async () => {
+    const store = await seed('ledger-trial-source-account-drift');
+    const batch = db.batch();
+    for (let i = 0; i < 42; i++) {
+      batch.set(store.collection('journal_entries').doc('manual-1')
+        .collection('lines').doc('debit-' + String(i).padStart(3, '0')), {
+        storeId: store.id, entryId: 'manual-1', accountId: '1110',
+        currency: 'ILS', debitMinorUnits: 1, creditMinorUnits: 0,
+      });
+    }
+    await batch.commit();
+    const started = await start(store.id);
+    const first = await advance(store.id, started.runId);
+    assert.equal(first.activeAccountId, '1110');
+    assert.equal(first.status, 'running');
+    await store.collection('accounts').doc('1110').update({
+      auditTestMarker: 'changed',
+    });
+    const changed = await advance(store.id, started.runId);
+    assert.equal(changed.status, 'source_changed');
+    assert.equal(changed.trialBalance.verdict, 'source_changed');
+    assert.equal(changed.certified, false);
+    assert.equal(changed.accountsCompared, 0);
+    assert.equal((await store.collection('accounting_ledger_runs')
+      .doc(started.runId).collection('account_results').get()).empty, true);
+    assert.deepEqual(await advance(store.id, started.runId), changed);
+    await db.recursiveDelete(store);
+  });
+
+  it('stops when the account balance projection changes between pages', async () => {
+    const store = await seed('ledger-trial-source-balance-drift');
+    const batch = db.batch();
+    for (let i = 0; i < 42; i++) {
+      batch.set(store.collection('journal_entries').doc('manual-1')
+        .collection('lines').doc('debit-' + String(i).padStart(3, '0')), {
+        storeId: store.id, entryId: 'manual-1', accountId: '1110',
+        currency: 'ILS', debitMinorUnits: 1, creditMinorUnits: 0,
+      });
+    }
+    await batch.commit();
+    const started = await start(store.id);
+    const first = await advance(store.id, started.runId);
+    assert.equal(first.activeAccountId, '1110');
+    await store.collection('account_balances').doc('1110').update({
+      balanceMinorUnits: 242,
+    });
+    const changed = await advance(store.id, started.runId);
+    assert.equal(changed.status, 'source_changed');
+    assert.equal(changed.trialBalance.certified, false);
+    assert.equal((await store.collection('accounting_ledger_runs')
+      .doc(started.runId).collection('account_results').get()).empty, true);
+    assert.equal((await store.collection('account_balances').doc('1110')
+      .get()).data().balanceMinorUnits, 242);
+    await db.recursiveDelete(store);
+  });
+
   it('rejects missing membership, revoked access and forged checkpoint state', async () => {
     const store = await seed('ledger-auth-a');
     await assert.rejects(
