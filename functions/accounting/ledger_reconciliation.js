@@ -5,9 +5,17 @@
 // No per-call limit on history: one bounded page per invocation, with progress
 // stored transactionally. Non-atomic across invocations: never certify balances.
 
+const {
+  validateTrialBalance,
+  appendAccountToTrialBalance,
+  trialBalanceSummary,
+} = require('./trial_balance');
+
 const PAGE_SIZE = 40;
 const ISSUE_SAMPLE_LIMIT = 20;
-const SCHEMA_VERSION = 1;
+// Reject checkpoints from the pre-trial-balance format rather than derive
+// false aggregates from an already partially scanned history.
+const SCHEMA_VERSION = 2;
 
 function fail(HttpsError, message) {
   throw new HttpsError('failed-precondition', message);
@@ -54,6 +62,7 @@ function validateState(state, storeId, uid, HttpsError) {
        state.activeAccountId !== null)) {
     fail(HttpsError, 'Invalid accounting ledger reconciliation checkpoint.');
   }
+  validateTrialBalance(state, HttpsError);
 }
 
 function status(runId, state) {
@@ -70,6 +79,7 @@ function status(runId, state) {
     mismatchedAccounts: state.mismatchCount,
     activeAccountId: state.activeAccountId,
     accountingCutoffApplied: false,
+    trialBalance: trialBalanceSummary(state),
   };
 }
 
@@ -105,6 +115,9 @@ async function startLedgerReconciliation({
     linesScanned: 0,
     pagesScanned: 0,
     mismatchCount: 0,
+    postingAccountsCompared: 0,
+    unclassifiedPostingAccounts: 0,
+    trialBalanceByCurrency: {},
     scope: 'known_chart_accounts_indexed_ledger_lines',
     consistency: 'non_atomic',
     certified: false,
@@ -266,9 +279,19 @@ async function advanceLedgerReconciliation({
     // Final page of this account: only numeric evidence is compared.
     // Invalid metadata or journal lines always prevents 'matched'.
     const balance = balanceSnapshot.exists ? balanceSnapshot.data() : null;
-    if (account.storeId !== storeId || account.isHeader === true ||
+    if (account.storeId !== storeId ||
         typeof account.currency !== 'string' || !account.currency.trim()) {
       addIssue('LEDGER_ACCOUNT_INVALID', accountId);
+    }
+    // Header accounts are non-posting chart nodes: no projection or lines
+    // is the expected healthy state. Direct postings to headers are errors.
+    if (account.isHeader === true) {
+      if (acceptedLines > 0) {
+        addIssue('LEDGER_HEADER_ACCOUNT_HAS_LINES', accountId);
+      }
+      if (balance) {
+        addIssue('LEDGER_HEADER_ACCOUNT_HAS_BALANCE', accountId);
+      }
     }
     if (!balance) {
       if (debit !== 0 || credit !== 0) {
@@ -294,6 +317,9 @@ async function advanceLedgerReconciliation({
     }
 
     const matches = issueCount === 0;
+    const trialBalance = appendAccountToTrialBalance(
+      state, {storeId, account, debit, credit, matched: matches}, HttpsError,
+    );
     const resultRef = runRef.collection('account_results').doc(accountId);
     tx.create(resultRef, {
       storeId, accountId, currency: account.currency || null,
@@ -318,6 +344,7 @@ async function advanceLedgerReconciliation({
       activeIssueSamples: [],
       accountsCompared: checkedAdd(state.accountsCompared, 1, HttpsError),
       mismatchCount: checkedAdd(state.mismatchCount, matches ? 0 : 1, HttpsError),
+      ...trialBalance,
       linesScanned: scanned,
       pagesScanned: pages,
       updatedAt: FieldValue.serverTimestamp(),
