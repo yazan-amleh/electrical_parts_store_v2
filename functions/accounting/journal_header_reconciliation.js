@@ -4,11 +4,16 @@
 // This evidence is non-atomic across pages, is NOT a historical cutoff,
 // and must never certify a complete ledger or balance sheet.
 
+const {
+  validateJournalCoverage,
+  appendJournalCoverage,
+} = require('./audit_coverage');
+
 const PAGE_SIZE = 40;
 const MAX_SAMPLE_ISSUES = 20;
-// Version 2 adds durable account-reference and index-coverage counters.
+// Version 3 adds per-currency evidence to durable account-reference/index counters.
 // Older partially scanned checkpoints cannot safely be upgraded mid-run.
-const VERSION = 2;
+const VERSION = 3;
 
 function validAccountId(value) {
   return typeof value === 'string' &&
@@ -77,6 +82,7 @@ function validateState(state, storeId, uid, HttpsError) {
        state.activeEntryId !== null)) {
     fail(HttpsError, 'Invalid persisted journal audit checkpoint.');
   }
+  validateJournalCoverage(state, HttpsError);
 }
 
 function publicStatus(runId, state) {
@@ -94,6 +100,8 @@ function publicStatus(runId, state) {
     failedEntries: state.failedEntries,
     invalidAccountReferenceLines: state.invalidAccountReferenceLines,
     potentiallyUnindexedLines: state.potentiallyUnindexedLines,
+    unclassifiedJournalEntries: state.unclassifiedJournalEntries,
+    journalCurrencyTotals: {...state.journalCurrencyTotals},
     activeEntryId: state.activeEntryId,
   };
 }
@@ -125,6 +133,8 @@ async function startJournalHeaderReconciliation({
     failedEntries: 0,
     invalidAccountReferenceLines: 0,
     potentiallyUnindexedLines: 0,
+    unclassifiedJournalEntries: 0,
+    journalCurrencyTotals: {},
     scope: 'existing_journal_headers_and_direct_lines',
     consistency: 'non_atomic',
     certified: false,
@@ -346,6 +356,10 @@ async function advanceJournalHeaderReconciliation({
       issue('JOURNAL_ENTRY_NOT_BALANCED', entryId);
     }
     const matched = issueCount === 0;
+    const coverage = appendJournalCoverage(
+      state, {currency: data.currency, lineCount, debit, credit, matched},
+      HttpsError,
+    );
     tx.create(runRef.collection('entry_results').doc(entryId), {
       storeId, entryId,
       currency: data.currency || null,
@@ -377,6 +391,7 @@ async function advanceJournalHeaderReconciliation({
       linesChecked, pagesChecked,
       invalidAccountReferenceLines: accountReferenceCount,
       potentiallyUnindexedLines: indexCoverageCount,
+      ...coverage,
       updatedAt: FieldValue.serverTimestamp(),
     };
     tx.update(runRef, progress);
