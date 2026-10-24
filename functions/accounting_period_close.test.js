@@ -228,10 +228,14 @@ describe('controlled accounting freeze is not a historical certification', () =>
   it('requires owner/admin privileges and a detailed reopen reason', async () => {
     const store = await fixture('period-close-role-reopen');
     await assert.rejects(
-      call(api.beginAccountingClose, {storeId: store.id}, CLERK),
+      call(api.beginAccountingClose, {
+        storeId: store.id, throughDate: '2026-10-23',
+      }, CLERK),
       (e) => e.code === 'permission-denied');
     await assert.rejects(
-      call(api.beginAccountingClose, {storeId: store.id}, null),
+      call(api.beginAccountingClose, {
+        storeId: store.id, throughDate: '2026-10-23',
+      }, null),
       (e) => e.code === 'unauthenticated');
     await call(api.beginAccountingClose, {storeId: store.id, throughDate: '2026-10-23'});
     await assert.rejects(
