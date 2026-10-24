@@ -6,7 +6,7 @@ no merge, no V1 write or migration.**
 ## Closure protocol
 
 1. The active store **owner/admin** invokes
-   `beginAccountingClose({storeId})`. An atomic Firestore transaction reads
+   `beginAccountingClose({storeId,throughDate:'YYYY-MM-DD'})`. A validated UTC business cutoff is required. An atomic Firestore transaction reads
    membership and sixteen mutation-epoch shards, changes the
    `accounting_period_control/current` document to `status:locked`,
    and creates a separately retained `accounting_close_events/{closeId}`
@@ -32,7 +32,7 @@ no merge, no V1 write or migration.**
    all four immutable run-checkpoint results and current revision shards.
    It rejects incomplete, contradictory or stale evidence. The result
    stores the run identifiers, the close event and a retained `closed`
-   write block. Financial posting does **not** resume automatically.
+   write block. Financial posting does **not** resume automatically. After reopening, the closed-through UTC date is retained and posting commands with dates on or before it remain prohibited.
 5. To resume posting, owner/admin must explicitly invoke
    `reopenAccountingClose({storeId,reason})` with a 12–400 character
    explanation. An immutable activity event records who reopened, why,
@@ -41,10 +41,7 @@ no merge, no V1 write or migration.**
 
 ## What has NOT been certified
 
-- This is a **global operational posting freeze**, **not** an
-  end-of-day/month date-scoped close; no end-date or posting-period cutoff
-  is enforced independently. This is safer than a pretend historical
-  close and gives stable evidence under the enforced write paths.
+- This is a **global operational posting freeze** during the audit, followed by a monotonic UTC closed-through business-date guard after reopening. It is **not** an immutable Firestore historical snapshot nor a regulator-certified close.
 - Firebase Admin SDK and other privileged service identities bypass
   Firestore rules, so unauthorized imports/scripts/console edits are
   outside the lock. Production IAM must restrict edit permissions,
