@@ -9,6 +9,12 @@ const {
   comparison,
 } = require('./audit_coverage');
 const {trialBalanceSummary} = require('./trial_balance');
+const {
+  validateEpoch,
+  epochsMatch,
+  readPostingEpoch,
+  SHARD_COUNT,
+} = require('./posting_epoch');
 const {validatePathRun} = require('./orphan_path_scan');
 const {validateBalanceProjectionRun} = require('./balance_projection_scan');
 const {
@@ -50,9 +56,20 @@ function verifyBalanceRun(state, storeId, uid, HttpsError) {
 
 function buildUnifiedAuditReport({
   storeId, ledgerRunId, journalRunId, orphanRunId, balanceRunId,
-  ledger, journal, orphan, balance,
+  ledger, journal, orphan, balance, currentPostingEpoch,
 }, HttpsError) {
-  // All three sources must be fully validated before computing the verdict.
+  // All four checkpoint sources have been validated by the caller.
+  // A posting across any two runs, or after a run but before the readout,
+  // must never be represented as a clean financial aggregate.
+  const epochs = [
+    ledger.postingEpoch, journal.postingEpoch,
+    orphan.postingEpoch, balance.postingEpoch,
+  ];
+  const acrossRunsMatch = epochs.every(
+    (epoch) => epochsMatch(epoch, epochs[0]));
+  const currentMatchesRuns = epochs.every(
+    (epoch) => epochsMatch(epoch, currentPostingEpoch));
+  const postingEpochChanged = !acrossRunsMatch || !currentMatchesRuns;
   // This function is exported for deterministic unit-test scenarios only.
   const trialBalance = trialBalanceSummary(ledger);
   const crossRun = comparison(ledger, journal);
@@ -71,7 +88,9 @@ function buildUnifiedAuditReport({
     orphan.status === 'enumeration_complete' &&
     balance.status === 'enumeration_complete';
   const sourceChanged = ledger.status === 'source_changed' ||
-    journal.status === 'source_changed';
+    journal.status === 'source_changed' ||
+    orphan.status === 'source_changed' ||
+    balance.status === 'source_changed' || postingEpochChanged;
   // Compare ONLY after both independent scans have completed. A partial
   // count can coincidentally equal another partial or complete count.
   const directPathLinesAgree = finish
@@ -81,6 +100,9 @@ function buildUnifiedAuditReport({
   const addFinding = (code, count = null) => {
     findings.push({code, count});
   };
+  if (postingEpochChanged) {
+    addFinding('BACKEND_FINANCIAL_POSTING_EPOCH_CHANGED');
+  }
   if (ledger.status !== 'reconciliation_complete') {
     addFinding('LEDGER_SCAN_NOT_COMPLETE');
   }
@@ -172,7 +194,7 @@ function buildUnifiedAuditReport({
   }
 
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     storeId,
     runIds: {ledgerRunId, journalRunId, orphanRunId, balanceRunId},
     verdict,
@@ -181,7 +203,16 @@ function buildUnifiedAuditReport({
     accountingCutoffApplied: false,
     consistency: 'non_atomic',
     sourceSnapshotGuaranteed: false,
+    postingEpochGuardApplied: true,
     checks: {
+      postingEpoch: {
+        shardCount: SHARD_COUNT,
+        acrossRunsMatch,
+        currentMatchesRuns,
+        postingChangesObserved: postingEpochChanged,
+        scope: 'v2_server_journal_posting_transactions_only',
+        sourceSnapshotGuaranteed: false,
+      },
       ledger: {
         status: ledger.status,
         accountsCompared: ledger.accountsCompared,
@@ -262,12 +293,18 @@ async function getUnifiedAuditReport({
     checkComparable(ledger, journal, storeId, uid, HttpsError);
     verifyOrphanRun(orphan, storeId, uid, HttpsError);
     verifyBalanceRun(balance, storeId, uid, HttpsError);
+    for (const state of [ledger, journal, orphan, balance]) {
+      validateEpoch(state.postingEpoch, HttpsError);
+    }
+    const currentPostingEpoch = await readPostingEpoch(
+      tx, store, HttpsError,
+    );
 
     // Keep the checkpoint metadata bound to its own read-only scan; the
     // server never changes accounting postings, projections or audit runs.
     return buildUnifiedAuditReport({
       storeId, ledgerRunId, journalRunId, orphanRunId, balanceRunId,
-      ledger, journal, orphan, balance,
+      ledger, journal, orphan, balance, currentPostingEpoch,
     }, HttpsError);
   });
 }
