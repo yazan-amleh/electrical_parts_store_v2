@@ -3,6 +3,7 @@
 // Tenant-scoped server-only chart changes, serialized with the same financial
 // source epoch as journal postings. Never edit posted journals or balances.
 const {markJournalPosting} = require('./posting_epoch');
+const {assertAccountingWritesOpen} = require('./period_close');
 
 const TYPES = new Set(['asset', 'liability', 'equity', 'revenue', 'expense']);
 const SIDES = new Set(['debit', 'credit']);
@@ -95,6 +96,7 @@ async function mutateChartAccount({
   return db.runTransaction(async (tx) => {
     const member = await tx.get(store.collection('members').doc(userId));
     assertAccess(member, storeId);
+    await assertAccountingWritesOpen(tx, store, HttpsError);
     const current = await tx.get(target);
     if (kind === 'create' && current.exists) {
       error(HttpsError, 'already-exists', 'Chart account already exists.');
