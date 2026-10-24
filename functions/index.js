@@ -70,6 +70,10 @@ const {
   auditInteger,
   auditSum,
 } = require('./accounting/audit_integrity');
+const {
+  createHistoryScan,
+  advanceHistoryScan,
+} = require('./accounting/history_scan');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -5991,6 +5995,42 @@ async function settleChequeInTransaction(transaction, userId, command) {
   };
 }
 
+
+// Persistent, read-only source-enumeration checkpoints. This is deliberately
+// NOT an accounting reconciliation, certified audit or production migration.
+const HISTORY_SCAN_ROLES = new Set(['owner', 'admin', 'accountant']);
+
+exports.startAccountingHistoryScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return createHistoryScan({
+    db, FieldValue, storeId, userId: request.auth.uid,
+    assertAccess: (membership, tenantId) => assertMembership(
+      membership, tenantId, 'start accounting history inventory',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingHistoryScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advanceHistoryScan({
+    db, FieldValue, HttpsError, storeId, runId,
+    userId: request.auth.uid,
+    assertAccess: (membership, tenantId) => assertMembership(
+      membership, tenantId, 'continue accounting history inventory',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
 
 exports.auditAccountingIntegrity = onCall(async (request) => {
   if (!request.auth) {
