@@ -430,6 +430,16 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      // Only server-side owner/admin callables can freeze/reopen accounting.
+      // No client may forge the current financial close or its evidence.
+      match /accounting_period_control/{controlId} {
+        allow read, write: if false;
+      }
+
+      match /accounting_close_events/{eventId} {
+        allow read, write: if false;
+      }
+
       match /idempotency_keys/{key} {
         allow read, write: if false;
       }
