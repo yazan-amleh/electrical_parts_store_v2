@@ -89,6 +89,7 @@ const {
   startPathOrphanScan,
   advancePathOrphanScan,
 } = require('./accounting/orphan_path_scan');
+const {getUnifiedAuditReport} = require('./accounting/unified_audit_report');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -6157,6 +6158,27 @@ exports.advanceAccountingOrphanPathScan = onCall(async (request) => {
     uid: request.auth.uid,
     assertAccess: (member, tenantId) => assertMembership(
       member, tenantId, 'advance orphan path scan', HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Consolidated, read-only evidence from three independently completed or
+// in-progress audits. It never certifies a historical accounting snapshot.
+exports.getUnifiedAccountingAuditReport = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const ledgerRunId = safeId(input.ledgerRunId, 'ledgerRunId');
+  const journalRunId = safeId(input.journalRunId, 'journalRunId');
+  const orphanRunId = safeId(input.orphanRunId, 'orphanRunId');
+  return getUnifiedAuditReport({
+    db, HttpsError, storeId, ledgerRunId, journalRunId, orphanRunId,
+    uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'get unified accounting audit report',
+      HISTORY_SCAN_ROLES,
     ),
   });
 });
