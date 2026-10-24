@@ -8,6 +8,7 @@ import '../core/config/app_runtime_config.dart';
 import '../core/config/firebase_project_guard.dart';
 import '../firebase_options.dart';
 import '../features/accounting/data/repositories/firestore_accounting_query_repository.dart';
+import '../features/accounting/data/repositories/firestore_chart_mutation_repository.dart';
 import '../features/accounting/data/repositories/firestore_accounting_repository.dart';
 import '../features/accounting_audit/data/repositories/firestore_accounting_audit_repository.dart';
 import '../features/activity_log/data/repositories/firestore_activity_log_repository.dart';
@@ -98,6 +99,7 @@ abstract final class AppBootstrap {
         functions: functions,
         commandQueue: commandQueue,
       ),
+      chartMutationRepository: FirestoreChartMutationRepository(functions: functions),
       accountingQueryRepository: FirestoreAccountingQueryRepository(
         firestore: firestore,
       ),
