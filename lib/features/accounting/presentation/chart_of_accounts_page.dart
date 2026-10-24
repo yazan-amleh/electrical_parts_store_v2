@@ -277,7 +277,42 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
     if (!mounted || input == null || !_mayChangeChart) return;
     final id = input[0].trim();
     final name = input[1].trim();
-    if (!RegExp(r'^[A-Za-z0-9_-]{1,128}
+    if (!RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) ||
+        name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('رقم الحساب أو اسمه غير صالح')),
+      );
+      return;
+    }
+    setState(() => _isSaving = true);
+    final result = await widget.mutationRepository!.createAccount(
+      context: _storeContext,
+      account: Account(
+        id: id,
+        storeId: widget.membership.storeId,
+        code: id,
+        name: name,
+        type: parent.type,
+        normalSide: parent.normalSide,
+        controlType: ControlType.none,
+        statementSection: parent.statementSection,
+        parentId: parent.id,
+        currency: parent.currency,
+        sortOrder: parent.sortOrder + 1,
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    if (result is FailureResult<Account>) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.failure.message)),
+      );
+      return;
+    }
+    await _loadAccounts();
+  }
+
+  List<Account> _orderedAccounts(List<Account> accounts) {
     final byParent = <String?, List<Account>>{};
     for (final account in accounts) {
       byParent.putIfAbsent(account.parentId, () => <Account>[]).add(account);
