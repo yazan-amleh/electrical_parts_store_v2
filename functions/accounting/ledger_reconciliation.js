@@ -57,10 +57,10 @@ function validateState(state, storeId, uid, HttpsError) {
       (state.activeAccountId !== null &&
        (state.lastAccountId === state.activeAccountId ||
         typeof state.activeAccountRevision !== 'string' ||
-        !/^\\d+:\\d+$/.test(state.activeAccountRevision))) ||
+        !/^\d+:\d+$/.test(state.activeAccountRevision))) ||
       (state.activeBalanceRevision !== null &&
        (typeof state.activeBalanceRevision !== 'string' ||
-        !/^\\d+:\\d+$/.test(state.activeBalanceRevision))) ||
+        !/^\d+:\d+$/.test(state.activeBalanceRevision))) ||
       !Number.isSafeInteger(state.accountsCompared) ||
       state.accountsCompared < 0 ||
       !Number.isSafeInteger(state.linesScanned) || state.linesScanned < 0 ||
