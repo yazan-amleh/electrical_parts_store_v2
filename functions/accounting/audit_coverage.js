@@ -171,8 +171,8 @@ function comparison(ledger, journal) {
     journalRunStatus: journal.status,
     accountsCompared: ledger.accountsCompared,
     entriesChecked: journal.entriesChecked,
-    indexedJournalLines: currencies.reduce(
-      (n, c) => n + c.indexedJournalLines, 0),
+    // By-currency counters are kept separate to avoid unsafe overflow
+    // when large tenants have many currencies.
     directJournalLines: journal.linesChecked,
     currencies,
   };
@@ -185,7 +185,7 @@ function checkComparable(ledger, journal, storeId, uid, HttpsError) {
     throw new HttpsError('permission-denied',
       'Audit runs must belong to the current store and requester.');
   }
-  if (ledger.schemaVersion !== 3 || journal.schemaVersion !== 2) {
+  if (ledger.schemaVersion !== 3 || journal.schemaVersion !== 3) {
     fail(HttpsError, 'Audits must use compatible evidence schema versions.');
   }
   if (!['running', 'reconciliation_complete', 'source_changed']
@@ -198,6 +198,7 @@ function checkComparable(ledger, journal, storeId, uid, HttpsError) {
       !Number.isSafeInteger(ledger.accountsCompared) ||
       !Number.isSafeInteger(ledger.mismatchCount) ||
       ledger.mismatchCount < 0 ||
+      ledger.mismatchCount > ledger.accountsCompared ||
       !Number.isSafeInteger(ledger.unclassifiedPostingAccounts) ||
       ledger.unclassifiedPostingAccounts < 0 ||
       !Number.isSafeInteger(ledger.postingAccountsCompared)) {
