@@ -5,6 +5,12 @@
 // Non-atomic across pages; NEVER certify an accounting cutoff.
 
 const {
+  readPostingEpoch,
+  validateEpoch,
+  epochsMatch,
+} = require('./posting_epoch');
+
+const {
   validateBalanceTotals,
   addStoredBalance,
 } = require('./balance_currency_coverage');
@@ -13,7 +19,7 @@ const PAGE_SIZE = 40;
 const MAX_ISSUE_SAMPLES = 20;
 // Older partial checkpoints lack totals: reject instead of silently
 // reconstructing misleading evidence after some pages were already read.
-const VERSION = 2;
+const VERSION = 3;
 
 function fail(HttpsError, message) {
   throw new HttpsError('failed-precondition', message);
@@ -28,7 +34,7 @@ function add(a, b, HttpsError) {
 function validState(state, storeId, uid, HttpsError) {
   if (!state || state.schemaVersion !== VERSION ||
       state.storeId !== storeId || state.createdBy !== uid ||
-      !['running', 'enumeration_complete'].includes(state.status) ||
+      !['running', 'enumeration_complete', 'source_changed'].includes(state.status) ||
       (state.cursorId !== null &&
        (typeof state.cursorId !== 'string' ||
         !/^[^/]+$/.test(state.cursorId))) ||
@@ -61,6 +67,7 @@ function validState(state, storeId, uid, HttpsError) {
     fail(HttpsError, 'Invalid reverse balance projection checkpoint.');
   }
   validateBalanceTotals(state, HttpsError);
+  validateEpoch(state.postingEpoch, HttpsError);
 }
 function present(runId, state) {
   return {
@@ -81,14 +88,16 @@ function present(runId, state) {
   };
 }
 async function startBalanceProjectionScan({
-  db, FieldValue, storeId, uid, assertAccess,
+  db, FieldValue, HttpsError, storeId, uid, assertAccess,
 }) {
   const store = db.collection('stores').doc(storeId);
   const member = await store.collection('members').doc(uid).get();
   assertAccess(member, storeId);
+  const postingEpoch = await readPostingEpoch(db, store, HttpsError);
   const runRef = store.collection('accounting_balance_path_runs').doc();
   const state = {
     schemaVersion: VERSION,
+    postingEpoch,
     storeId, createdBy: uid,
     status: 'running', cursorId: null,
     balancesChecked: 0, pagesChecked: 0,
@@ -127,6 +136,17 @@ async function advanceBalanceProjectionScan({
     validState(state, storeId, uid, HttpsError);
     if (state.status === 'enumeration_complete') {
       return present(runId, state);
+    }
+    const currentPostingEpoch = await readPostingEpoch(
+      tx, store, HttpsError,
+    );
+    if (!epochsMatch(currentPostingEpoch, state.postingEpoch)) {
+      const changed = {
+        ...state, status: 'source_changed',
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      tx.update(runRef, changed);
+      return present(runId, changed);
     }
     let query = store.collection('account_balances')
       .orderBy('__name__').limit(PAGE_SIZE + 1);
