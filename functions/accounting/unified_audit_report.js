@@ -10,6 +10,7 @@ const {
 } = require('./audit_coverage');
 const {trialBalanceSummary} = require('./trial_balance');
 const {validatePathRun} = require('./orphan_path_scan');
+const {validateBalanceProjectionRun} = require('./balance_projection_scan');
 
 function fail(HttpsError, message) {
   throw new HttpsError('failed-precondition', message);
@@ -36,9 +37,17 @@ function verifyOrphanRun(state, storeId, uid, HttpsError) {
   }
 }
 
+function verifyBalanceRun(state, storeId, uid, HttpsError) {
+  if (!state || state.storeId !== storeId || state.createdBy !== uid) {
+    throw new HttpsError('permission-denied',
+      'The reverse balance scan belongs to another user or store.');
+  }
+  validateBalanceProjectionRun(state, storeId, uid, HttpsError);
+}
+
 function buildUnifiedAuditReport({
-  storeId, ledgerRunId, journalRunId, orphanRunId,
-  ledger, journal, orphan,
+  storeId, ledgerRunId, journalRunId, orphanRunId, balanceRunId,
+  ledger, journal, orphan, balance,
 }, HttpsError) {
   // All three sources must be fully validated before computing the verdict.
   // This function is exported for deterministic unit-test scenarios only.
@@ -54,7 +63,8 @@ function buildUnifiedAuditReport({
 
   const finish = ledger.status === 'reconciliation_complete' &&
     journal.status === 'reconciliation_complete' &&
-    orphan.status === 'enumeration_complete';
+    orphan.status === 'enumeration_complete' &&
+    balance.status === 'enumeration_complete';
   const sourceChanged = ledger.status === 'source_changed' ||
     journal.status === 'source_changed';
   // Compare ONLY after both independent scans have completed. A partial
@@ -99,6 +109,29 @@ function buildUnifiedAuditReport({
     addFinding('UNCLASSIFIED_JOURNAL_ENTRIES',
       journal.unclassifiedJournalEntries);
   }
+  if (balance.status !== 'enumeration_complete') {
+    addFinding('REVERSE_BALANCE_SCAN_NOT_COMPLETE');
+  }
+  if (balance.invalidBalanceDocuments > 0) {
+    addFinding('INVALID_STORED_ACCOUNT_BALANCES',
+      balance.invalidBalanceDocuments);
+  }
+  if (balance.missingChartAccounts > 0) {
+    addFinding('BALANCES_WITHOUT_CHART_ACCOUNTS',
+      balance.missingChartAccounts);
+  }
+  if (balance.headerAccountsWithBalance > 0) {
+    addFinding('NON_POSTING_HEADERS_WITH_BALANCE',
+      balance.headerAccountsWithBalance);
+  }
+  if (balance.currencyMismatchBalances > 0) {
+    addFinding('BALANCE_CURRENCY_MISMATCHES',
+      balance.currencyMismatchBalances);
+  }
+  if (balance.invalidMoneyBalances > 0) {
+    addFinding('INVALID_BALANCE_MONEY',
+      balance.invalidMoneyBalances);
+  }
   if (orphan.orphanLines > 0) {
     addFinding('ORPHAN_JOURNAL_LINES', orphan.orphanLines);
   }
@@ -131,9 +164,9 @@ function buildUnifiedAuditReport({
   }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     storeId,
-    runIds: {ledgerRunId, journalRunId, orphanRunId},
+    runIds: {ledgerRunId, journalRunId, orphanRunId, balanceRunId},
     verdict,
     complete: finish,
     certified: false,
@@ -156,6 +189,16 @@ function buildUnifiedAuditReport({
           journal.invalidAccountReferenceLines,
         potentiallyUnindexedLines: journal.potentiallyUnindexedLines,
         unclassifiedJournalEntries: journal.unclassifiedJournalEntries,
+      },
+      storedBalances: {
+        status: balance.status,
+        balancesChecked: balance.balancesChecked,
+        invalidBalanceDocuments: balance.invalidBalanceDocuments,
+        missingChartAccounts: balance.missingChartAccounts,
+        headerAccountsWithBalance: balance.headerAccountsWithBalance,
+        currencyMismatchBalances: balance.currencyMismatchBalances,
+        invalidMoneyBalances: balance.invalidMoneyBalances,
+        issueSamples: [...balance.issueSamples],
       },
       orphanPaths: {
         status: orphan.status,
@@ -180,7 +223,7 @@ function buildUnifiedAuditReport({
 
 async function getUnifiedAuditReport({
   db, HttpsError, storeId, uid,
-  ledgerRunId, journalRunId, orphanRunId, assertAccess,
+  ledgerRunId, journalRunId, orphanRunId, balanceRunId, assertAccess,
 }) {
   const store = db.collection('stores').doc(storeId);
   // This Firestore transaction ensures checkpoint reads are simultaneous.
@@ -193,25 +236,29 @@ async function getUnifiedAuditReport({
       store.collection('accounting_ledger_runs').doc(ledgerRunId),
       store.collection('accounting_journal_runs').doc(journalRunId),
       store.collection('accounting_orphan_path_runs').doc(orphanRunId),
+      store.collection('accounting_balance_path_runs').doc(balanceRunId),
     ];
-    const [ledgerSnap, journalSnap, orphanSnap] = await Promise.all(
+    const [ledgerSnap, journalSnap, orphanSnap, balanceSnap] = await Promise.all(
       refs.map((ref) => tx.get(ref)),
     );
-    if (!ledgerSnap.exists || !journalSnap.exists || !orphanSnap.exists) {
+    if (!ledgerSnap.exists || !journalSnap.exists ||
+        !orphanSnap.exists || !balanceSnap.exists) {
       throw new HttpsError('not-found',
-        'All three existing audit runs must be supplied.');
+        'All four existing audit runs must be supplied.');
     }
     const ledger = ledgerSnap.data();
     const journal = journalSnap.data();
     const orphan = orphanSnap.data();
+    const balance = balanceSnap.data();
     checkComparable(ledger, journal, storeId, uid, HttpsError);
     verifyOrphanRun(orphan, storeId, uid, HttpsError);
+    verifyBalanceRun(balance, storeId, uid, HttpsError);
 
     // Keep the checkpoint metadata bound to its own read-only scan; the
     // server never changes accounting postings, projections or audit runs.
     return buildUnifiedAuditReport({
-      storeId, ledgerRunId, journalRunId, orphanRunId,
-      ledger, journal, orphan,
+      storeId, ledgerRunId, journalRunId, orphanRunId, balanceRunId,
+      ledger, journal, orphan, balance,
     }, HttpsError);
   });
 }
@@ -219,6 +266,7 @@ async function getUnifiedAuditReport({
 module.exports = {
   safeAdd,
   verifyOrphanRun,
+  verifyBalanceRun,
   buildUnifiedAuditReport,
   getUnifiedAuditReport,
 };
