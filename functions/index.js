@@ -5673,19 +5673,33 @@ function parseChequeSettlementCommand(rawCommand) {
   };
 }
 
+// A competing cheque settlement can close one Firestore transaction before
+// the contender observes its durable idempotency marker. Only retry this
+// specific transient error in a FRESH transaction. The settlement fingerprint
+// and unique journal identity are checked again on every retry.
+async function runChequeTransactionWithClosedRetry(userId, command) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await db.runTransaction((transaction) =>
+        settleChequeInTransaction(transaction, userId, command),
+      );
+    } catch (error) {
+      const closedTransaction = !(error instanceof HttpsError) &&
+        /Transaction is invalid or closed/i.test(error?.message || '');
+      if (!closedTransaction || attempt === 2) throw error;
+    }
+  }
+}
+
 exports.settleCheque = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
   }
   const command = parseChequeSettlementCommand(request.data);
   try {
-    return await db.runTransaction(async (transaction) => {
-      return settleChequeInTransaction(
-        transaction,
-        request.auth.uid,
-        command,
-      );
-    });
+    return await runChequeTransactionWithClosedRetry(
+      request.auth.uid, command,
+    );
   } catch (error) {
     if (error instanceof HttpsError) {
       throw error;
