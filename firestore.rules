@@ -390,6 +390,12 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
+      // Checkpoint state is Cloud Functions-owned, not client-editable.
+      // A forged cursor/phase could otherwise falsely claim complete history.
+      match /accounting_audit_runs/{runId} {
+        allow read, write: if false;
+      }
+
       match /idempotency_keys/{key} {
         allow read, write: if false;
       }
