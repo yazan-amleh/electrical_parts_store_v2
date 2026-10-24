@@ -172,7 +172,7 @@ function buildUnifiedAuditReport({
   }
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     storeId,
     runIds: {ledgerRunId, journalRunId, orphanRunId, balanceRunId},
     verdict,
