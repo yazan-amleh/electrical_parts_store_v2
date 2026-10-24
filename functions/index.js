@@ -82,6 +82,9 @@ const {
   startJournalHeaderReconciliation,
   advanceJournalHeaderReconciliation,
 } = require('./accounting/journal_header_reconciliation');
+const {
+  compareAuditRunCoverage,
+} = require('./accounting/audit_coverage');
 
 exports.createStore = onCall((request) =>
   createStoreHandler({ db, FieldValue, HttpsError, request }),
@@ -6115,6 +6118,26 @@ exports.advanceAccountingJournalReconciliation = onCall(async (request) => {
     db, FieldValue, HttpsError, storeId, runId, uid: request.auth.uid,
     assertAccess: (member, tenantId) => assertMembership(
       member, tenantId, 'continue journal header reconciliation',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Cross-compare complete server-owned ledger and direct-journal evidence.
+// It is non-atomic and can NEVER certify a financial posting cutoff.
+exports.compareAccountingAuditCoverage = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const ledgerRunId = safeId(input.ledgerRunId, 'ledgerRunId');
+  const journalRunId = safeId(input.journalRunId, 'journalRunId');
+  return compareAuditRunCoverage({
+    db, HttpsError, storeId, ledgerRunId, journalRunId,
+    uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'compare accounting audit evidence',
       HISTORY_SCAN_ROLES,
     ),
   });
