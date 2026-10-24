@@ -412,6 +412,11 @@ service cloud.firestore {
         }
       }
 
+      // Path-based census state is trusted audit evidence, server-owned.
+      match /accounting_orphan_path_runs/{runId} {
+        allow read, write: if false;
+      }
+
       match /idempotency_keys/{key} {
         allow read, write: if false;
       }
