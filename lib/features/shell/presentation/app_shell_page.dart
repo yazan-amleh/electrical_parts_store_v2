@@ -457,6 +457,7 @@ class _AppShellPageState extends State<AppShellPage> {
               widget.dependencies.accountTransferRepository,
           accountingQueryRepository:
               widget.dependencies.accountingQueryRepository,
+          chartMutationRepository: widget.dependencies.chartMutationRepository,
           repairRepository: widget.dependencies.repairRepository,
           repairDocumentBuilder: widget.dependencies.repairDocumentBuilder,
           reportsRepository: widget.dependencies.reportsRepository,
