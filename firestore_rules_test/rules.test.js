@@ -932,6 +932,34 @@ describe('Firestore security rules', function () {
   });
 
 
+  it('blocks client forgery of GL reconciliation runs and results', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(storeDoc(context.firestore(), 'accounting_ledger_runs',
+        'verified-run'), {
+        storeId: STORE_ID, createdBy: 'owner-1',
+        status: 'running', certified: false,
+      });
+      await setDoc(storeDoc(context.firestore(), 'accounting_ledger_runs',
+        'verified-run', 'account_results', '1110'), {
+        storeId: STORE_ID, accountId: '1110', matched: false,
+      });
+    });
+    const run = storeDoc(ownerDb, 'accounting_ledger_runs',
+      'verified-run');
+    const result = storeDoc(accountantDb, 'accounting_ledger_runs',
+      'verified-run', 'account_results', '1110');
+    await assertFails(getDoc(run));
+    await assertFails(getDoc(result));
+    await assertFails(setDoc(storeDoc(ownerDb, 'accounting_ledger_runs',
+      'fake-run'), {storeId: STORE_ID, certified: true}));
+    await assertFails(updateDoc(run, {certified: true}));
+    await assertFails(setDoc(storeDoc(accountantDb,
+      'accounting_ledger_runs', 'verified-run',
+      'account_results', 'forge'), {
+      accountId: '1110', matched: true,
+    }));
+  });
+
   it('keeps accounting inventory checkpoints server-only', async () => {
     const runRef = storeDoc(ownerDb, 'accounting_audit_runs', 'run-1');
     await testEnv.withSecurityRulesDisabled(async (context) => {
