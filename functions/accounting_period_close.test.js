@@ -169,6 +169,64 @@ describe('controlled accounting freeze is not a historical certification', () =>
     await db.recursiveDelete(store);
   });
 
+  it('resumes four close audits from stored run IDs and finalizes only at completion', async () => {
+    const store = await fixture('close-resumable-audit-workflow');
+    const before = await call(api.getAccountingCloseStatus, {
+      storeId: store.id,
+    });
+    assert.equal(before.status, 'not_started');
+    await call(api.beginAccountingClose, {
+      storeId: store.id, throughDate: '2026-10-23',
+    });
+    await assert.rejects(
+      call(api.advanceAccountingCloseAudits, {storeId: store.id}),
+      (e) => e.code === 'failed-precondition');
+    const started = await call(api.startAccountingCloseAudits, {
+      storeId: store.id,
+    });
+    assert.equal(started.status, 'locked');
+    assert.equal(Object.keys(started.auditRuns).length, 4);
+    const repeated = await call(api.startAccountingCloseAudits, {
+      storeId: store.id,
+    });
+    assert.deepEqual(repeated.auditRuns, started.auditRuns);
+    const resumed = await call(api.getAccountingCloseStatus, {
+      storeId: store.id,
+    });
+    assert.deepEqual(resumed.auditRuns, started.auditRuns);
+    let progress;
+    for (let step = 0; step < 12; step++) {
+      progress = await call(api.advanceAccountingCloseAudits, {
+        storeId: store.id,
+      });
+      if (progress.complete || progress.hasFailures) break;
+    }
+    assert.equal(progress.complete, true);
+    assert.equal(progress.hasFailures, false);
+    const final = await call(api.finalizeAccountingClose, {
+      storeId: store.id, ...progress.runIds,
+    });
+    assert.equal(final.status, 'closed');
+    const state = await call(api.getAccountingCloseStatus, {
+      storeId: store.id,
+    });
+    assert.equal(state.status, 'closed');
+    assert.deepEqual(state.auditRuns, progress.runIds);
+    assert.equal(state.certified, false);
+    await db.recursiveDelete(store);
+  });
+
+  it('does not expose the operational close or run state to accountants', async () => {
+    const store = await fixture('close-audits-role-bound');
+    await assert.rejects(
+      call(api.getAccountingCloseStatus, {storeId: store.id}, CLERK),
+      (e) => e.code === 'permission-denied');
+    await assert.rejects(
+      call(api.startAccountingCloseAudits, {storeId: store.id}, CLERK),
+      (e) => e.code === 'permission-denied');
+    await db.recursiveDelete(store);
+  });
+
   it('rejects four otherwise clean scans created before the freeze', async () => {
     const store = await fixture('period-freeze-reject-old-audits');
     const oldRuns = await audits(store.id);
