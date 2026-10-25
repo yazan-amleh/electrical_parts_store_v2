@@ -405,6 +405,71 @@ class _AppShellPageState extends State<AppShellPage> {
     }
   }
 
+  Future<void> _searchModules() async {
+    var filter = '';
+    final modules = _modules;
+    final chosen = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, updateDialog) {
+          final matches = [
+            for (var i = 0; i < modules.length; i++)
+              if (modules[i].label.contains(filter) ||
+                  modules[i].description.contains(filter))
+                i,
+          ];
+          return AlertDialog(
+            title: const Text('الانتقال إلى وحدة'),
+            content: SizedBox(
+              width: 480,
+              height: 420,
+              child: Column(
+                children: [
+                  TextField(
+                    autofocus: true,
+                    textDirection: TextDirection.rtl,
+                    decoration: const InputDecoration(
+                      hintText: 'ابحث عن الوحدة',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (value) =>
+                        updateDialog(() => filter = value.trim()),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: matches.isEmpty
+                        ? const Center(child: Text('لا توجد نتائج مطابقة'))
+                        : ListView.builder(
+                            itemCount: matches.length,
+                            itemBuilder: (context, index) {
+                              final moduleIndex = matches[index];
+                              final module = modules[moduleIndex];
+                              return ListTile(
+                                leading: Icon(module.icon),
+                                title: Text(module.label),
+                                onTap: () => Navigator.of(dialogContext)
+                                    .pop(moduleIndex),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('إغلاق'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (!mounted || chosen == null) return;
+    setState(() => selectedIndex = chosen);
+  }
+
   Future<void> _signOut() async {
     await _unregisterNotifications();
     await widget.onSignOut();
@@ -426,6 +491,11 @@ class _AppShellPageState extends State<AppShellPage> {
         appBar: AppBar(
           title: Text(selected.label),
           actions: [
+            IconButton(
+              tooltip: 'البحث في الوحدات',
+              onPressed: _searchModules,
+              icon: const Icon(Icons.search),
+            ),
             Chip(
               avatar: const Icon(Icons.verified_user_outlined, size: 18),
               label: Text(widget.membership.role.arabicLabel),
