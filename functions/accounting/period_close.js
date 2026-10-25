@@ -158,6 +158,13 @@ async function finalizeAccountingClose({
         'An active accounting freeze must precede finalization.');
     }
     const state = control.data();
+    if (state.auditRuns && (state.auditRuns.ledgerRunId !== ledgerRunId ||
+        state.auditRuns.journalRunId !== journalRunId ||
+        state.auditRuns.orphanRunId !== orphanRunId ||
+        state.auditRuns.balanceRunId !== balanceRunId)) {
+      fail(HttpsError, 'failed-precondition',
+        'Close audit evidence does not belong to the registered close workflow.');
+    }
     const refs = [
       store.collection('accounting_ledger_runs').doc(ledgerRunId),
       store.collection('accounting_journal_runs').doc(journalRunId),
