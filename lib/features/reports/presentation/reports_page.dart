@@ -37,6 +37,7 @@ class _ReportsPageState extends State<ReportsPage> {
   late DateTime _from;
   late DateTime _to;
   OperationalReport? _report;
+  bool _periodChanged = false;
   List<Product> _products = const <Product>[];
   bool _isLoading = true;
   bool _isExporting = false;
@@ -153,12 +154,13 @@ class _ReportsPageState extends State<ReportsPage> {
                   label: const Text('تطبيق الفترة'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _report == null ? null : _copyCsv,
+                  onPressed: _report == null || _periodChanged ? null : _copyCsv,
                   icon: const Icon(Icons.content_copy_outlined),
                   label: const Text('نسخ CSV'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _report == null ||
+                          _periodChanged ||
                           widget.documentBuilder == null ||
                           _isExporting
                       ? null
@@ -170,6 +172,7 @@ class _ReportsPageState extends State<ReportsPage> {
                 ),
                 OutlinedButton.icon(
                   onPressed: _report == null ||
+                          _periodChanged ||
                           widget.documentBuilder == null ||
                           _isExporting
                       ? null
@@ -514,6 +517,8 @@ class _ReportsPageState extends State<ReportsPage> {
 
     setState(() {
       _isLoading = true;
+      _periodChanged = false;
+      _report = null;
       _errorMessage = null;
     });
 
@@ -637,6 +642,7 @@ class _ReportsPageState extends State<ReportsPage> {
       if (_from.isAfter(_to)) {
         _to = DateTime(selected.year, selected.month, selected.day, 23, 59, 59);
       }
+      _periodChanged = true;
     });
   }
 
@@ -644,7 +650,7 @@ class _ReportsPageState extends State<ReportsPage> {
     final selected = await showDatePicker(
       context: context,
       initialDate: _to,
-      firstDate: DateTime(2020),
+      firstDate: DateTime(_from.year, _from.month, _from.day),
       lastDate: DateTime(2100),
     );
     if (selected == null || !mounted) {
@@ -652,14 +658,14 @@ class _ReportsPageState extends State<ReportsPage> {
     }
     setState(() {
       _to = DateTime(selected.year, selected.month, selected.day, 23, 59, 59);
+      _periodChanged = true;
     });
   }
 
   String _formatDate(DateTime date) {
-    final utc = date.toUtc();
-    return '${utc.year.toString().padLeft(4, '0')}-'
-        '${utc.month.toString().padLeft(2, '0')}-'
-        '${utc.day.toString().padLeft(2, '0')}';
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
   }
 
   String _sourceLabel(String source) {
