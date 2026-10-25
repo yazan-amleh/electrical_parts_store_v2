@@ -11,6 +11,7 @@ import '../../accounting/data/repositories/firestore_chart_mutation_repository.d
 import '../../accounting/domain/repositories/accounting_repository.dart';
 import '../../accounting/presentation/financial_statements_page.dart';
 import '../../accounting_audit/domain/repositories/accounting_audit_repository.dart';
+import '../../accounting_audit/data/repositories/firestore_accounting_close_repository.dart';
 import '../../accounting_audit/presentation/accounting_audit_page.dart';
 import '../../activity_log/domain/repositories/activity_log_repository.dart';
 import '../../activity_log/presentation/activity_log_page.dart';
@@ -449,6 +450,7 @@ class _AppShellPageState extends State<AppShellPage> {
           accountingRepository: widget.dependencies.accountingRepository,
           accountingAuditRepository:
               widget.dependencies.accountingAuditRepository,
+          accountingCloseRepository: widget.dependencies.accountingCloseRepository,
           partyPaymentRepository: widget.dependencies.partyPaymentRepository,
           chequeRepository: widget.dependencies.chequeRepository,
           partyRepository: widget.dependencies.partyRepository,
@@ -582,6 +584,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.expenseRepository,
     required this.accountingRepository,
     required this.accountingAuditRepository,
+    this.accountingCloseRepository,
     required this.partyPaymentRepository,
     required this.chequeRepository,
     required this.partyRepository,
@@ -614,6 +617,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final ExpenseRepository? expenseRepository;
   final AccountingRepository? accountingRepository;
   final AccountingAuditRepository? accountingAuditRepository;
+  final FirestoreAccountingCloseRepository? accountingCloseRepository;
   final PartyPaymentRepository? partyPaymentRepository;
   final ChequeRepository? chequeRepository;
   final PartyRepository? partyRepository;
@@ -725,6 +729,7 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'accounting-audit') {
       return AccountingAuditPage(
         repository: accountingAuditRepository,
+        closeRepository: accountingCloseRepository,
         user: user,
         membership: membership,
       );
