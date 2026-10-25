@@ -6,17 +6,22 @@ import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../domain/entities/accounting_audit_report.dart';
+import '../data/repositories/firestore_accounting_close_repository.dart';
+import '../../auth/domain/enums/store_role.dart';
+import 'accounting_close_panel.dart';
 import '../domain/repositories/accounting_audit_repository.dart';
 
 class AccountingAuditPage extends StatefulWidget {
   const AccountingAuditPage({
     required this.repository,
+    this.closeRepository,
     required this.user,
     required this.membership,
     super.key,
   });
 
   final AccountingAuditRepository? repository;
+  final FirestoreAccountingCloseRepository? closeRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -39,7 +44,19 @@ class _AccountingAuditPageState extends State<AccountingAuditPage> {
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: _buildBody(context),
+      child: Column(
+        children: [
+          if (widget.closeRepository != null &&
+              widget.membership.isActive &&
+              widget.membership.role.canManageStore)
+            AccountingClosePanel(
+              repository: widget.closeRepository!,
+              membership: widget.membership,
+              userId: widget.user.id,
+            ),
+          Expanded(child: _buildBody(context)),
+        ],
+      ),
     );
   }
 
