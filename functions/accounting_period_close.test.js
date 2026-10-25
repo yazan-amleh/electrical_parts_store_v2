@@ -203,6 +203,10 @@ describe('controlled accounting freeze is not a historical certification', () =>
     }
     assert.equal(progress.complete, true);
     assert.equal(progress.hasFailures, false);
+    await assert.rejects(call(api.finalizeAccountingClose, {
+      storeId: store.id, ...progress.runIds,
+      ledgerRunId: 'wrong-ledger-evidence',
+    }), (e) => e.code === 'failed-precondition');
     const final = await call(api.finalizeAccountingClose, {
       storeId: store.id, ...progress.runIds,
     });
