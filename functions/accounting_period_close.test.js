@@ -169,6 +169,53 @@ describe('controlled accounting freeze is not a historical certification', () =>
     await db.recursiveDelete(store);
   });
 
+  it('rejects four otherwise clean scans created before the freeze', async () => {
+    const store = await fixture('period-freeze-reject-old-audits');
+    const oldRuns = await audits(store.id);
+    const oldReport = await call(api.getUnifiedAccountingAuditReport,
+      {storeId: store.id, ...oldRuns});
+    assert.equal(oldReport.verdict, 'observed_aggregates_agree_non_atomic');
+    await call(api.beginAccountingClose, {
+      storeId: store.id, throughDate: '2026-10-23',
+    });
+    await assert.rejects(call(api.finalizeAccountingClose, {
+      storeId: store.id, ...oldRuns,
+    }), (e) => e.code === 'failed-precondition' &&
+      /must start after/.test(e.message));
+    assert.equal((await store.collection('accounting_period_control')
+      .doc('current').get()).data().status, 'locked');
+    const newRuns = await audits(store.id);
+    const closed = await call(api.finalizeAccountingClose, {
+      storeId: store.id, ...newRuns,
+    });
+    assert.equal(closed.status, 'closed');
+    await db.recursiveDelete(store);
+  });
+
+  it('rejects evidence from a preceding lock even when no posting happened', async () => {
+    const store = await fixture('period-freeze-reject-previous-lock');
+    await call(api.beginAccountingClose, {
+      storeId: store.id, throughDate: '2026-10-23',
+    });
+    const firstLockRuns = await audits(store.id);
+    await call(api.reopenAccountingClose, {
+      storeId: store.id,
+      reason: 'Restart closing workflow after reviewing previous evidence.',
+    });
+    await call(api.beginAccountingClose, {
+      storeId: store.id, throughDate: '2026-10-24',
+    });
+    await assert.rejects(call(api.finalizeAccountingClose, {
+      storeId: store.id, ...firstLockRuns,
+    }), (e) => e.code === 'failed-precondition' &&
+      /must start after/.test(e.message));
+    const secondLockRuns = await audits(store.id);
+    assert.equal((await call(api.finalizeAccountingClose, {
+      storeId: store.id, ...secondLockRuns,
+    })).closedThroughDate, '2026-10-24');
+    await db.recursiveDelete(store);
+  });
+
   it('rejects finalization with incomplete or changed evidence', async () => {
     const store = await fixture('period-close-no-false-completion');
     await call(api.beginAccountingClose, {storeId: store.id, throughDate: '2026-10-23'});
