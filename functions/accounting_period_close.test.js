@@ -317,6 +317,12 @@ describe('controlled accounting freeze is not a historical certification', () =>
     await assert.rejects(call(api.postInventoryMovement, backdatedInventory),
       (e) => e.code === 'failed-precondition');
     assert.equal((await store.collection('inventory_movements').get()).size, 0);
+    const futureInventory = inventory(store.id, 'future-stock-allowed');
+    futureInventory.movement.occurredAt = '2026-10-24T12:00:00.000Z';
+    const acceptedInventory = await call(api.postInventoryMovement,
+      futureInventory);
+    assert.equal(acceptedInventory.status, 'posted');
+    assert.equal((await store.collection('inventory_movements').get()).size, 1);
     const after = await call(api.postJournalEntry,
       manual(store.id, 'future-period-allowed'));
     assert.equal(after.status, 'posted');
