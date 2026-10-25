@@ -224,8 +224,7 @@ class _AccountingClosePanelState extends State<AccountingClosePanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.membership.isActive ||
-        !widget.membership.role.canManageStore) {
+    if (!widget.membership.isActive || !widget.membership.role.canManageStore) {
       return const SizedBox.shrink();
     }
     final status = _state?['status'] as String? ?? 'not_started';
