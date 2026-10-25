@@ -54,8 +54,8 @@ class FirestoreAccountingCloseRepository {
       );
     }
     try {
-      final response = await _functions.httpsCallable(name).call<
-          Map<String, dynamic>>({
+      final response =
+          await _functions.httpsCallable(name).call<Map<String, dynamic>>({
         'storeId': context.storeId,
         ...parameters,
       });
