@@ -11,6 +11,7 @@ import '../features/accounting/data/repositories/firestore_accounting_query_repo
 import '../features/accounting/data/repositories/firestore_chart_mutation_repository.dart';
 import '../features/accounting/data/repositories/firestore_accounting_repository.dart';
 import '../features/accounting_audit/data/repositories/firestore_accounting_audit_repository.dart';
+import '../features/accounting_audit/data/repositories/firestore_accounting_close_repository.dart';
 import '../features/activity_log/data/repositories/firestore_activity_log_repository.dart';
 import '../features/categories/data/repositories/firestore_category_repository.dart';
 import '../features/categories/data/exporters/pdf_category_inventory_document_builder.dart';
@@ -86,6 +87,9 @@ abstract final class AppBootstrap {
       runtime: runtime,
       authSession: session,
       accountingAuditRepository: FirestoreAccountingAuditRepository(
+        functions: functions,
+      ),
+      accountingCloseRepository: FirestoreAccountingCloseRepository(
         functions: functions,
       ),
       accountingRepository: FirestoreAccountingRepository(
