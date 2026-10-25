@@ -4,6 +4,7 @@ import '../features/accounting/data/repositories/firestore_chart_mutation_reposi
 import '../features/offers/domain/repositories/offer_repository.dart';
 import '../features/accounting/domain/repositories/accounting_repository.dart';
 import '../features/accounting_audit/domain/repositories/accounting_audit_repository.dart';
+import '../features/accounting_audit/data/repositories/firestore_accounting_close_repository.dart';
 import '../features/activity_log/domain/repositories/activity_log_repository.dart';
 import '../features/categories/domain/repositories/category_repository.dart';
 import '../features/notes/domain/repositories/note_repository.dart';
@@ -35,6 +36,7 @@ class AppDependencies {
     this.authSession,
     this.accountingRepository,
     this.accountingAuditRepository,
+    this.accountingCloseRepository,
     this.categoryRepository,
     this.categoryInventoryDocumentBuilder,
     this.chequeRepository,
@@ -67,6 +69,7 @@ class AppDependencies {
   final AuthSessionController? authSession;
   final AccountingRepository? accountingRepository;
   final AccountingAuditRepository? accountingAuditRepository;
+  final FirestoreAccountingCloseRepository? accountingCloseRepository;
   final CategoryRepository? categoryRepository;
   final CategoryInventoryDocumentBuilder? categoryInventoryDocumentBuilder;
   final ChequeRepository? chequeRepository;
