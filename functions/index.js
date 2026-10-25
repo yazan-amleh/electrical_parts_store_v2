@@ -100,6 +100,11 @@ const {
   reopenAccountingClose,
 } = require('./accounting/period_close');
 const {
+  getCloseState,
+  startCloseAudits,
+  advanceCloseAudits,
+} = require('./accounting/close_workflow');
+const {
   startBalanceProjectionScan, advanceBalanceProjectionScan,
 } = require('./accounting/balance_projection_scan');
 
@@ -114,6 +119,49 @@ exports.mutateChartAccount = onCall(async (request) => {
     data: request.data,
     assertAccess: (member, storeId) => assertMembership(
       member, storeId, 'modify chart of accounts', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+// Read-only status for a resumable close. Control documents remain private
+// to server functions and cannot be fetched directly from the client.
+exports.getAccountingCloseStatus = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  return getCloseState({
+    db, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'view accounting close', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.startAccountingCloseAudits = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  return startCloseAudits({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start accounting close checks',
+      new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.advanceAccountingCloseAudits = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  return advanceCloseAudits({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'advance accounting close checks',
+      new Set(['owner', 'admin']),
     ),
   });
 });
