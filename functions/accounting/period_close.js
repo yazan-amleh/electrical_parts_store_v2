@@ -58,6 +58,31 @@ async function assertAccountingWritesOpen(tx, store, HttpsError,
   }
 }
 
+// A posting epoch alone is insufficient proof that a scan was performed
+// under this lock: an earlier full scan can have identical counters.
+function compareTimestamps(left, right, HttpsError) {
+  const valid = (value) => value &&
+    Number.isSafeInteger(value.seconds) &&
+    Number.isInteger(value.nanoseconds) &&
+    value.nanoseconds >= 0 && value.nanoseconds < 1000000000;
+  if (!valid(left) || !valid(right)) {
+    fail(HttpsError, 'failed-precondition',
+      'Missing or corrupt accounting freeze/audit timestamp.');
+  }
+  return left.seconds === right.seconds
+    ? left.nanoseconds - right.nanoseconds
+    : left.seconds - right.seconds;
+}
+
+function assertAuditsStartedAfterFreeze(runs, frozenAt, HttpsError) {
+  for (const run of runs) {
+    if (compareTimestamps(run.createdAt, frozenAt, HttpsError) <= 0) {
+      fail(HttpsError, 'failed-precondition',
+        'All four audit runs must start after the current accounting freeze.');
+    }
+  }
+}
+
 function parseIds(data, HttpsError) {
   if (!data || !ID.test(data.storeId || '')) {
     fail(HttpsError, 'invalid-argument', 'Invalid store ID.');
@@ -145,6 +170,8 @@ async function finalizeAccountingClose({
     }
     const [ledger, journal, orphan, balance] =
       snapshots.map((snapshot) => snapshot.data());
+    assertAuditsStartedAfterFreeze(
+      [ledger, journal, orphan, balance], state.frozenAt, HttpsError);
     checkComparable(ledger, journal, storeId, uid, HttpsError);
     verifyOrphanRun(orphan, storeId, uid, HttpsError);
     verifyBalanceRun(balance, storeId, uid, HttpsError);
@@ -231,6 +258,7 @@ async function reopenAccountingClose({
 }
 
 module.exports = {
+  compareTimestamps, assertAuditsStartedAfterFreeze,
   controlRef, assertAccountingWritesOpen, parseIds,
   beginAccountingClose, finalizeAccountingClose, reopenAccountingClose,
 };
