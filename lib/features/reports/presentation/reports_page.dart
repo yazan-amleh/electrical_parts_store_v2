@@ -154,7 +154,8 @@ class _ReportsPageState extends State<ReportsPage> {
                   label: const Text('تطبيق الفترة'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _report == null || _periodChanged ? null : _copyCsv,
+                  onPressed:
+                      _report == null || _periodChanged ? null : _copyCsv,
                   icon: const Icon(Icons.content_copy_outlined),
                   label: const Text('نسخ CSV'),
                 ),
