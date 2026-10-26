@@ -58,6 +58,34 @@ class FirestoreVoucherDraftRepository implements VoucherDraftRepository {
   }
 
   @override
+  Future<Result<void>> updateDraft({
+    required StoreContext context,
+    required String draftId,
+    required int expectedRevision,
+    required int amountMinorUnits,
+    required String? description,
+  }) {
+    if (expectedRevision < 1 || amountMinorUnits <= 0 ||
+        (description?.length ?? 0) > 500) {
+      return Future.value(
+        const FailureResult<void>(
+          ValidationFailure('Invalid draft revision, amount, or description.'),
+        ),
+      );
+    }
+    return _action(
+      'updateVoucherDraft',
+      context,
+      draftId,
+      extra: {
+        'expectedRevision': expectedRevision,
+        'amountMinorUnits': amountMinorUnits,
+        'description': description,
+      },
+    );
+  }
+
+  @override
   Future<Result<void>> submit({
     required StoreContext context,
     required String draftId,
@@ -89,6 +117,7 @@ class FirestoreVoucherDraftRepository implements VoucherDraftRepository {
     StoreContext context,
     String draftId, {
     String? reason,
+    Map<String, dynamic>? extra,
   }) async {
     if (context.storeId.trim().isEmpty ||
         context.userId.trim().isEmpty ||
@@ -104,6 +133,7 @@ class FirestoreVoucherDraftRepository implements VoucherDraftRepository {
         'storeId': context.storeId,
         'draftId': draftId,
         if (reason != null) 'reason': reason,
+        if (extra != null) ...extra,
       });
       if (result.data['draftId'] != draftId) {
         return const FailureResult<void>(
@@ -174,6 +204,7 @@ class FirestoreVoucherDraftRepository implements VoucherDraftRepository {
           VoucherDraft(
             id: document.id,
             storeId: context.storeId,
+            revision: data['revision'] is int ? data['revision'] as int : 1,
             createdBy: data['createdBy'] as String,
             status: data['status'] as String,
             partyId: payment['partyId'] as String,
