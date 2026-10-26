@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/money/money.dart';
 import '../../../core/result/result.dart';
@@ -46,6 +47,8 @@ class _DashboardPageState extends State<DashboardPage> {
   OperationalReport? _operationalReport;
   String? _operationalError;
   bool _isLoading = true;
+  bool _shortcutsOnly = false;
+  int _preferenceEpoch = 0;
   String? _errorMessage;
 
   StoreContext get _storeContext {
@@ -55,14 +58,58 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  String get _viewPreferenceKey =>
+      'v2:dashboard-cards-only:${widget.membership.storeId}:${widget.user.id}';
+
   @override
   void initState() {
     super.initState();
+    _loadViewPreference();
     _load();
   }
 
   @override
+  void didUpdateWidget(covariant DashboardPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId) {
+      _loadViewPreference();
+      _load();
+    }
+  }
+
+  Future<void> _loadViewPreference() async {
+    final epoch = ++_preferenceEpoch;
+    bool onlyCards = false;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      onlyCards = preferences.getBool(_viewPreferenceKey) ?? false;
+    } catch (_) {
+      // Local storage is optional; default to the full dashboard.
+    }
+    if (!mounted || epoch != _preferenceEpoch) return;
+    setState(() => _shortcutsOnly = onlyCards);
+  }
+
+  Future<void> _setShortcutsOnly(bool selected) async {
+    ++_preferenceEpoch;
+    setState(() => _shortcutsOnly = selected);
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (!await preferences.setBool(_viewPreferenceKey, selected)) {
+        throw StateError('Dashboard preference could not be saved');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر حفظ تفضيل عرض لوحة التحكم.')),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_shortcutsOnly) return _buildNavigationHome();
     if (widget.accountingQueryRepository == null ||
         widget.productRepository == null) {
       return _buildNavigationHome(
@@ -96,6 +143,7 @@ class _DashboardPageState extends State<DashboardPage> {
           padding: const EdgeInsets.all(24),
           children: [
             _buildHeader(context),
+            _buildViewModeSwitch(),
             if (widget.onOpenModule != null) ...[
               const SizedBox(height: 18),
               DashboardQuickAccess(
@@ -134,13 +182,14 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildNavigationHome(Widget status) {
+  Widget _buildNavigationHome([Widget? status]) {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
           _buildHeader(context),
+          _buildViewModeSwitch(),
           if (widget.onOpenModule != null) ...[
             const SizedBox(height: 18),
             DashboardQuickAccess(
@@ -150,10 +199,24 @@ class _DashboardPageState extends State<DashboardPage> {
               onOpenModule: widget.onOpenModule!,
             ),
           ],
-          const SizedBox(height: 24),
-          Center(child: status),
+          if (status != null) ...[
+            const SizedBox(height: 24),
+            Center(child: status),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildViewModeSwitch() {
+    return SwitchListTile.adaptive(
+      key: const ValueKey('dashboard-shortcuts-only'),
+      contentPadding: EdgeInsets.zero,
+      title: const Text('عرض الاختصارات فقط'),
+      subtitle: const Text('إخفاء المؤشرات المالية والتركيز على بطاقات العمل'),
+      secondary: const Icon(Icons.grid_view_rounded),
+      value: _shortcutsOnly,
+      onChanged: _setShortcutsOnly,
     );
   }
 
