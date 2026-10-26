@@ -29,6 +29,7 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
   VoucherCursor? _nextCursor;
   bool _hasMore = false;
   bool _loading = false;
+  int _requestEpoch = 0;
   String? _error;
   String _direction = 'all';
   String _status = 'all';
@@ -50,7 +51,8 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
 
   Future<void> _loadPage({bool reset = false}) async {
     final repository = widget.repository;
-    if (repository == null || _loading) return;
+    if (repository == null || (_loading && !reset)) return;
+    final epoch = ++_requestEpoch;
     final requestedStoreId = widget.membership.storeId;
     final requestedUserId = widget.user.id;
     final cursor = reset ? null : _nextCursor;
@@ -72,6 +74,7 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
         after: cursor,
       );
       if (!mounted ||
+          epoch != _requestEpoch ||
           requestedStoreId != widget.membership.storeId ||
           requestedUserId != widget.user.id) {
         return;
@@ -90,9 +93,13 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
         });
       }
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted && epoch == _requestEpoch) {
+        setState(() => _error = error.toString());
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && epoch == _requestEpoch) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -204,7 +211,7 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
                                   : Icons.north_east_rounded,
                             ),
                             title: Text(
-                              '${item.isReceipt ? 'قبض' : 'دفع'} · ${item.amount.formatted} ${item.amount.currency}',
+                              '${item.typeLabel} · ${item.amount.formatted} ${item.amount.currency}',
                             ),
                             subtitle: Text(
                               'المرجع: ${item.id}\n'
@@ -222,7 +229,7 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
           Padding(
             padding: const EdgeInsets.all(8),
             child: OutlinedButton.icon(
-              onPressed: _loading ? null : _loadPage,
+              onPressed: _loading ? null : () => _loadPage(),
               icon: _loading
                   ? const SizedBox(
                       height: 16,
