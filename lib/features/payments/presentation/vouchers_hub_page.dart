@@ -191,7 +191,8 @@ class _RecentPaymentActivity extends StatelessWidget {
             if (entries.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(24),
-                child: Center(child: Text('لا توجد حركات قبض أو دفع في السجل المتاح.')),
+                child: Center(
+                    child: Text('لا توجد حركات قبض أو دفع في السجل المتاح.')),
               )
             else
               for (final entry in entries)
