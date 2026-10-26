@@ -2392,9 +2392,11 @@ async function postPartyPaymentInTransaction(
   // Retried idempotent commands return before this read and never increment it.
   const isCustomerPayment = command.payment.partyType === 'customer';
   const voucherYear = command.payment.postedAt.getUTCFullYear();
+  const voucherPeriod = String(voucherYear) +
+    String(command.payment.postedAt.getUTCMonth() + 1).padStart(2, '0');
   const voucherKind = isCustomerPayment ? 'receipt' : 'payment';
   const voucherSequenceRef = storeRef.collection('voucher_sequences')
-    .doc(voucherKind + '-' + voucherYear);
+    .doc(voucherKind + '-' + voucherPeriod);
   const voucherSequenceSnapshot = await transaction.get(voucherSequenceRef);
   let voucherSequence;
   try {
@@ -2515,6 +2517,7 @@ async function postPartyPaymentInTransaction(
     storeId: command.storeId,
     kind: voucherKind,
     year: voucherYear,
+    period: voucherPeriod,
     lastNumber: nextVoucherSerial,
     updatedAt: FieldValue.serverTimestamp(),
   });
