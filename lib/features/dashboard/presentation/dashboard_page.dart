@@ -13,12 +13,14 @@ import '../../inventory/domain/entities/product.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
 import '../../reports/domain/repositories/reports_repository.dart';
 import '../../reports/domain/entities/operational_report.dart';
+import 'dashboard_quick_access.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({
     required this.accountingQueryRepository,
     required this.productRepository,
     this.reportsRepository,
+    this.onOpenModule,
     required this.user,
     required this.membership,
     super.key,
@@ -27,6 +29,7 @@ class DashboardPage extends StatefulWidget {
   final AccountingQueryRepository? accountingQueryRepository;
   final ProductRepository? productRepository;
   final ReportsRepository? reportsRepository;
+  final ValueChanged<String>? onOpenModule;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -91,6 +94,15 @@ class _DashboardPageState extends State<DashboardPage> {
           padding: const EdgeInsets.all(24),
           children: [
             _buildHeader(context),
+            if (widget.onOpenModule != null) ...[
+              const SizedBox(height: 18),
+              DashboardQuickAccess(
+                storeId: widget.membership.storeId,
+                userId: widget.user.id,
+                role: widget.membership.role,
+                onOpenModule: widget.onOpenModule!,
+              ),
+            ],
             const SizedBox(height: 12),
             _buildCurrencySelector(),
             const SizedBox(height: 12),
