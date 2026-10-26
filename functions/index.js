@@ -806,6 +806,7 @@ const voucherDraftWorkflow = createVoucherDraftHandlers({
   postPartyPaymentInTransaction,
 });
 exports.saveVoucherDraft = onCall(voucherDraftWorkflow.save);
+exports.updateVoucherDraft = onCall(voucherDraftWorkflow.update);
 exports.submitVoucherDraft = onCall(voucherDraftWorkflow.submit);
 exports.approveVoucherDraft = onCall(voucherDraftWorkflow.approve);
 exports.rejectVoucherDraft = onCall(voucherDraftWorkflow.reject);
