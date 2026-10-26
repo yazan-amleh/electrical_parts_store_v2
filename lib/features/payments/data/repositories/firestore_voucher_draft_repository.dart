@@ -65,7 +65,8 @@ class FirestoreVoucherDraftRepository implements VoucherDraftRepository {
     required int amountMinorUnits,
     required String? description,
   }) {
-    if (expectedRevision < 1 || amountMinorUnits <= 0 ||
+    if (expectedRevision < 1 ||
+        amountMinorUnits <= 0 ||
         (description?.length ?? 0) > 500) {
       return Future.value(
         const FailureResult<void>(
