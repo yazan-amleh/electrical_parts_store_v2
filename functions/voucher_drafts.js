@@ -111,10 +111,72 @@ function createVoucherDraftHandlers({
         status: 'draft',
         financialRequest,
         requestFingerprint,
+        revision: 1,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
       return {draftId, status: 'draft'};
+    });
+  }
+
+  async function update(request) {
+    const {storeId, draftId, userId} = validatedIdentity(request);
+    const raw = request.data;
+    if (!Number.isSafeInteger(raw.expectedRevision) ||
+        raw.expectedRevision < 1) {
+      throw new HttpsError('invalid-argument', 'Expected revision is invalid.');
+    }
+    const amount = raw.amountMinorUnits;
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      throw new HttpsError('invalid-argument', 'Voucher amount must be positive.');
+    }
+    if (raw.description != null &&
+        (typeof raw.description !== 'string' ||
+          raw.description.length > 500)) {
+      throw new HttpsError('invalid-argument', 'Description is too long.');
+    }
+    const {draft, member} = refs(storeId, draftId, userId);
+    return db.runTransaction(async (tx) => {
+      const [membership, snapshot] = await Promise.all([
+        tx.get(member),
+        tx.get(draft),
+      ]);
+      authorize(membership, storeId, authorRoles);
+      if (!snapshot.exists) conflict('Voucher draft was not found.');
+      const data = snapshot.data();
+      if (data.storeId !== storeId || data.createdBy !== userId) {
+        throw new HttpsError('permission-denied', 'Only the creator can edit.');
+      }
+      if (data.status !== 'draft') {
+        conflict('Only unsent voucher drafts can be edited.');
+      }
+      const revision = data.revision || 1;
+      if (revision !== raw.expectedRevision) {
+        conflict('Voucher draft was changed by another session.');
+      }
+      if (!data.financialRequest ||
+          data.financialRequest.payment?.id !== draftId ||
+          data.financialRequest.storeId !== storeId ||
+          fingerprint(data.financialRequest) !== data.requestFingerprint) {
+        conflict('Stored financial command is not valid.');
+      }
+      const candidate = {
+        ...data.financialRequest,
+        payment: {
+          ...data.financialRequest.payment,
+          amountMinorUnits: amount,
+          description: raw.description?.trim() || null,
+        },
+      };
+      const parsed = parsePartyPaymentCommand(candidate);
+      const financialRequest = canonicalRequest(parsed);
+      tx.update(draft, {
+        financialRequest,
+        requestFingerprint: fingerprint(financialRequest),
+        revision: revision + 1,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return {draftId, status: 'draft', revision: revision + 1};
     });
   }
 
@@ -232,7 +294,7 @@ function createVoucherDraftHandlers({
     });
   }
 
-  return {save, submit, approve, reject};
+  return {save, update, submit, approve, reject};
 }
 
 module.exports = {createVoucherDraftHandlers};
