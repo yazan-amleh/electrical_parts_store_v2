@@ -42,12 +42,10 @@ void main() {
 
     await tester.tap(find.text('حركات'));
     await tester.pumpAndSettle();
-    expect(find.text('سجل حركات الدفع غير موصول بهذه البيئة.'),
-        findsOneWidget);
+    expect(find.text('سجل حركات الدفع غير موصول بهذه البيئة.'), findsOneWidget);
   });
 
-  testWidgets('sales role cannot access supplier payment tab',
-      (tester) async {
+  testWidgets('sales role cannot access supplier payment tab', (tester) async {
     await tester.pumpWidget(screen(StoreRole.sales));
     await tester.pumpAndSettle();
 
