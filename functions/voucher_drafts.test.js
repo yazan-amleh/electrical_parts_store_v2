@@ -68,6 +68,7 @@ function setup() {
     storeId: 'store-a', role: 'sales', isActive: true,
   });
   let postCount = 0;
+  let lastPostedAmount = null;
   let shouldFailPosting = false;
   const handlers = createVoucherDraftHandlers({
     db,
@@ -92,6 +93,7 @@ function setup() {
       if (shouldFailPosting) throw new HttpsError('failed-precondition', 'Closed period');
       assert.equal(userId, 'approver');
       postCount++;
+      lastPostedAmount = command.payment.amountMinorUnits;
       return {
         status: 'posted',
         paymentId: command.payment.id,
@@ -124,6 +126,7 @@ function setup() {
   return {
     handlers, request, command, documents, key,
     get postCount() {return postCount;},
+    get lastPostedAmount() {return lastPostedAmount;},
     set shouldFailPosting(value) {shouldFailPosting = value;},
   };
 }
@@ -230,4 +233,7 @@ test('editing an unsent draft increments revision without posting', async () => 
     })),
     (error) => error.code === 'failed-precondition',
   );
+  await t.handlers.approve(t.request('approver', identity));
+  assert.equal(t.lastPostedAmount, 2750);
+  assert.equal(t.postCount, 1);
 });
