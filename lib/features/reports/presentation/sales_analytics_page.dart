@@ -9,6 +9,7 @@ import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../domain/entities/sales_analytics.dart';
+import '../domain/entities/sales_invoice_report.dart';
 import '../domain/repositories/reports_repository.dart';
 import '../domain/services/report_document_builder.dart';
 
@@ -34,6 +35,11 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
   late DateTime _from;
   late DateTime _to;
   SalesAnalytics? _analytics;
+  SalesInvoiceReport? _invoices;
+  String? _invoiceError;
+  final _searchController = TextEditingController();
+  int _selectedTab = 0;
+  int _reportEpoch = 0;
   bool _isLoading = true;
   bool _isExporting = false;
   String? _errorMessage;
@@ -52,6 +58,25 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     _from = DateTime(now.year, now.month, 1);
     _to = DateTime(now.year, now.month, now.day, 23, 59, 59);
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant SalesAnalyticsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId) {
+      _analytics = null;
+      _invoices = null;
+      _searchController.clear();
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    ++_reportEpoch;
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -85,28 +110,56 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
             const SizedBox(height: 12),
             _buildMetrics(context, analytics),
             const SizedBox(height: 12),
-            _buildPaymentMethods(context, analytics),
-            const SizedBox(height: 12),
-            _buildRanking(
-              context,
-              title: 'الأصناف الأكثر مبيعاً',
-              rows: analytics.productRows,
-              showQuantity: true,
+            DefaultTabController(
+              length: 3,
+              initialIndex: _selectedTab,
+              child: TabBar(
+                isScrollable: true,
+                onTap: (tab) => setState(() => _selectedTab = tab),
+                tabs: const [
+                  Tab(text: 'تفاصيل المبيعات', icon: Icon(Icons.receipt_long)),
+                  Tab(text: 'الأصناف الأكثر مبيعاً', icon: Icon(Icons.inventory_2)),
+                  Tab(text: 'ملخص العملاء', icon: Icon(Icons.groups_outlined)),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
-            _buildRanking(
-              context,
-              title: 'المبيعات حسب التصنيف',
-              rows: analytics.categoryRows,
-              showQuantity: true,
+            TextField(
+              controller: _searchController,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: 'بحث في التبويب الحالي',
+                hintText: 'رقم الفاتورة، العميل أو الصنف',
+                prefixIcon: Icon(Icons.search),
+              ),
             ),
             const SizedBox(height: 12),
-            _buildRanking(
-              context,
-              title: 'المبيعات حسب العميل',
-              rows: analytics.customerRows,
-              showQuantity: false,
-            ),
+            if (_selectedTab == 0)
+              _buildInvoiceDetails(context, analytics)
+            else if (_selectedTab == 1) ...[
+              _buildRanking(
+                context,
+                title: 'الأصناف الأكثر مبيعاً',
+                rows: analytics.productRows,
+                showQuantity: true,
+              ),
+              const SizedBox(height: 12),
+              _buildRanking(
+                context,
+                title: 'المبيعات حسب التصنيف',
+                rows: analytics.categoryRows,
+                showQuantity: true,
+              ),
+            ] else ...[
+              _buildRanking(
+                context,
+                title: 'ملخص العملاء',
+                rows: analytics.customerRows,
+                showQuantity: false,
+              ),
+              const SizedBox(height: 12),
+              _buildPaymentMethods(context, analytics),
+            ],
           ],
         ),
       ),
@@ -368,7 +421,10 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                     const DataColumn(label: Text('مجمل الربح')),
                   ],
                   rows: [
-                    for (final row in rows.take(25))
+                    for (final row in rows.where((row) =>
+                        row.label.toLowerCase().contains(
+                          _searchController.text.trim().toLowerCase(),
+                        )).take(25))
                       DataRow(
                         cells: [
                           DataCell(
@@ -436,17 +492,35 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       return;
     }
 
+    final epoch = ++_reportEpoch;
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _invoiceError = null;
+      _invoices = null;
     });
+    final invoiceFuture = repository.getSalesInvoices(
+      context: _context,
+      from: _from,
+      to: _to,
+    );
     final result = await repository.getSalesAnalytics(
       context: _context,
       from: _from,
       to: _to,
     );
-    if (!mounted) {
+    final invoicesResult = await invoiceFuture;
+    if (!mounted || epoch != _reportEpoch ||
+        requestedStore != widget.membership.storeId ||
+        requestedUser != widget.user.id) {
       return;
+    }
+    if (invoicesResult is Success<SalesInvoiceReport>) {
+      _invoices = invoicesResult.value;
+    } else if (invoicesResult is FailureResult<SalesInvoiceReport>) {
+      _invoiceError = invoicesResult.failure.message;
     }
     if (result is FailureResult<SalesAnalytics>) {
       setState(() {
