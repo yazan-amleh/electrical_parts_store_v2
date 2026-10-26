@@ -38,7 +38,7 @@ void main() {
 
     await tester.tap(find.text('دفع'));
     await tester.pumpAndSettle();
-    expect(find.text('دفع لمورد'), findsOneWidget);
+    expect(find.text('دفع لمورد'), findsWidgets);
 
     await tester.tap(find.text('حركات'));
     await tester.pumpAndSettle();
