@@ -71,7 +71,8 @@ void main() {
 
     expect(find.byKey(const ValueKey('shortcut-sales')), findsNothing);
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getStringList('v2:dashboard-shortcuts:store-one:user-one');
+    final saved =
+        prefs.getStringList('v2:dashboard-shortcuts:store-one:user-one');
     expect(saved, isNotNull);
     expect(saved, isNot(contains('sales')));
 
