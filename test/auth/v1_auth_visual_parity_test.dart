@@ -42,16 +42,16 @@ void main() {
         .pumpWidget(MaterialApp(home: LoginPage(controller: controller)));
     await tester.pumpAndSettle();
 
-    expect(find.text('مرحباً بك في متجر القطع الكهربائية'), findsOneWidget);
+    expect(find.text('مرحباً بك مجدداً'), findsOneWidget);
     expect(find.text('تسجيل الدخول'), findsWidgets);
     expect(find.text('تذكرني'), findsOneWidget);
     expect(find.text('نسيت كلمة المرور؟'), findsOneWidget);
-    expect(find.text('إنشاء حساب جديد'), findsOneWidget);
+    expect(find.text('ليس لديك حساب؟ إنشاء حساب جديد'), findsOneWidget);
     expect(find.byType(Checkbox), findsOneWidget);
     expect(find.byType(TextFormField), findsNWidgets(2));
 
-    await tester.ensureVisible(find.text('إنشاء حساب جديد'));
-    await tester.tap(find.text('إنشاء حساب جديد'));
+    await tester.ensureVisible(find.text('ليس لديك حساب؟ إنشاء حساب جديد'));
+    await tester.tap(find.text('ليس لديك حساب؟ إنشاء حساب جديد'));
     await tester.pumpAndSettle();
     expect(find.text('تأكيد كلمة المرور'), findsOneWidget);
     expect(find.text('الاسم'), findsOneWidget);
@@ -69,7 +69,7 @@ void main() {
     await tester.tap(find.text('نسيت كلمة المرور؟'));
     await tester.pumpAndSettle();
 
-    expect(find.text('إعادة تعيين كلمة المرور'), findsOneWidget);
+    expect(find.text('نسيت كلمة المرور؟'), findsOneWidget);
     await tester.ensureVisible(find.text('إرسال رابط إعادة التعيين'));
     await tester.tap(find.text('إرسال رابط إعادة التعيين'));
     await tester.pump();
