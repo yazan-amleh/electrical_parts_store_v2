@@ -27,8 +27,7 @@ class VouchersHubPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canReceive =
-        membership.role.canManageSales || membership.role.canPostAccounting;
+    final canReceive = membership.role.canPostAccounting;
     final canPay = membership.role.canPostAccounting;
     final tabs = <_HubSection>[
       if (canReceive)
