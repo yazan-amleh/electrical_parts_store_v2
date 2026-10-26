@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/app_dependencies.dart';
 import 'shell_bottom_navigation.dart';
@@ -85,6 +86,12 @@ class AppShellPage extends StatefulWidget {
 
 class _AppShellPageState extends State<AppShellPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  List<String>? _bottomNavIds;
+  bool _savingBottomNavigation = false;
+  int _bottomNavEpoch = 0;
+
+  String get _bottomNavPreferenceKey =>
+      'v2:bottom-navigation:${widget.membership.storeId}:${widget.user.id}';
   static const _sections = <_NavigationSection>[
     _NavigationSection(
       title: 'عام',
@@ -379,7 +386,151 @@ class _AppShellPageState extends State<AppShellPage> {
   @override
   void initState() {
     super.initState();
+    _loadBottomNavigation();
     _registerNotifications();
+  }
+
+  @override
+  void didUpdateWidget(covariant AppShellPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.user.id != oldWidget.user.id ||
+        widget.membership.storeId != oldWidget.membership.storeId ||
+        widget.membership.role != oldWidget.membership.role) {
+      _loadBottomNavigation();
+    }
+  }
+
+  Future<void> _loadBottomNavigation() async {
+    final epoch = ++_bottomNavEpoch;
+    final key = _bottomNavPreferenceKey;
+    List<String>? saved;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      saved = preferences.getStringList(key);
+    } catch (_) {
+      // A missing local preference should never block store navigation.
+    }
+    if (!mounted || epoch != _bottomNavEpoch) return;
+    setState(() => _bottomNavIds = saved);
+  }
+
+  Future<void> _customizeBottomNavigation() async {
+    if (_savingBottomNavigation) return;
+    final key = _bottomNavPreferenceKey;
+    final options = ShellBottomNavigation.optionsForRole(
+      widget.membership.role,
+    );
+    final allowedIds = options.map((item) => item.id).toSet();
+    final order = [
+      for (final id in _bottomNavIds ??
+          const ['dashboard', 'sales', 'party-payments', 'customers'])
+        if (allowedIds.contains(id)) id,
+    ];
+    if (order.isEmpty) order.add('dashboard');
+
+    final chosen = await showDialog<List<String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, updateDialog) => AlertDialog(
+          title: const Text('تخصيص الشريط السفلي'),
+          content: SizedBox(
+            width: 490,
+            height: 390,
+            child: ListView(
+              children: [
+                const Text('اختر حتى أربع وحدات، ورتبها بالسهمين.'),
+                const SizedBox(height: 8),
+                for (final option in options)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CheckboxListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(option.title),
+                          secondary: Icon(option.icon),
+                          value: order.contains(option.id),
+                          onChanged: (checked) {
+                            updateDialog(() {
+                              if (checked == true &&
+                                  order.length < 4 &&
+                                  !order.contains(option.id)) {
+                                order.add(option.id);
+                              } else if (checked == false &&
+                                  order.length > 1) {
+                                order.remove(option.id);
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                      if (order.contains(option.id)) ...[
+                        IconButton(
+                          tooltip: 'للأعلى: ${option.title}',
+                          onPressed: order.indexOf(option.id) == 0
+                              ? null
+                              : () => updateDialog(() {
+                                    final index = order.indexOf(option.id);
+                                    order.removeAt(index);
+                                    order.insert(index - 1, option.id);
+                                  }),
+                          icon: const Icon(Icons.arrow_upward, size: 18),
+                        ),
+                        IconButton(
+                          tooltip: 'للأسفل: ${option.title}',
+                          onPressed:
+                              order.indexOf(option.id) == order.length - 1
+                                  ? null
+                                  : () => updateDialog(() {
+                                        final index = order.indexOf(option.id);
+                                        order.removeAt(index);
+                                        order.insert(index + 1, option.id);
+                                      }),
+                          icon: const Icon(Icons.arrow_downward, size: 18),
+                        ),
+                      ],
+                    ],
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: order.isEmpty
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(order),
+              child: const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted || chosen == null || key != _bottomNavPreferenceKey) {
+      return;
+    }
+    setState(() => _savingBottomNavigation = true);
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (!await preferences.setStringList(key, chosen)) {
+        throw StateError('Could not save navigation preference');
+      }
+      if (mounted && key == _bottomNavPreferenceKey) {
+        setState(() => _bottomNavIds = chosen);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذر حفظ إعدادات التنقل.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingBottomNavigation = false);
+    }
   }
 
   Future<void> _registerNotifications() async {
@@ -518,6 +669,7 @@ class _AppShellPageState extends State<AppShellPage> {
             ? ShellBottomNavigation(
                 activeModuleId: selected.id,
                 role: widget.membership.role,
+                tabIds: _bottomNavIds,
                 onOpenModule: _openModule,
                 onMore: () => _scaffoldKey.currentState?.openDrawer(),
               )
@@ -713,6 +865,14 @@ class _AppShellPageState extends State<AppShellPage> {
                         ),
                 ),
                 const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.tune_outlined),
+                  title: const Text('تخصيص شريط التنقل'),
+                  onTap: () {
+                    Navigator.of(drawerContext).pop();
+                    _customizeBottomNavigation();
+                  },
+                ),
                 ListTile(
                   leading: const Icon(Icons.storefront_outlined),
                   title: const Text('تغيير المتجر'),
