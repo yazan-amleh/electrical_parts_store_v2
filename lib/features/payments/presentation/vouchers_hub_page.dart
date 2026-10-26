@@ -6,15 +6,18 @@ import '../../auth/domain/enums/store_role.dart';
 import '../../parties/domain/enums/party_type.dart';
 import '../domain/repositories/party_payment_repository.dart';
 import '../domain/repositories/voucher_query_repository.dart';
+import '../domain/repositories/voucher_draft_repository.dart';
+import 'voucher_drafts_page.dart';
 import 'voucher_register_page.dart';
 import 'party_payments_page.dart';
 
 /// Receipt/payment entry and paginated register for existing posted V2 payments.
-/// Draft voucher workflows and sequential numbering are not implemented yet.
+/// Draft approval is separate from posted financial transactions.
 class VouchersHubPage extends StatelessWidget {
   const VouchersHubPage({
     required this.paymentRepository,
     required this.voucherQueryRepository,
+    this.draftRepository,
     required this.user,
     required this.membership,
     super.key,
@@ -22,6 +25,7 @@ class VouchersHubPage extends StatelessWidget {
 
   final PartyPaymentRepository? paymentRepository;
   final VoucherQueryRepository? voucherQueryRepository;
+  final VoucherDraftRepository? draftRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -37,6 +41,7 @@ class VouchersHubPage extends StatelessWidget {
           child: PartyPaymentsPage(
             key: ValueKey('receipt-${membership.storeId}'),
             repository: paymentRepository,
+            draftRepository: draftRepository,
             user: user,
             membership: membership,
             initialPartyType: PartyType.customer,
@@ -49,9 +54,20 @@ class VouchersHubPage extends StatelessWidget {
           child: PartyPaymentsPage(
             key: ValueKey('payment-${membership.storeId}'),
             repository: paymentRepository,
+            draftRepository: draftRepository,
             user: user,
             membership: membership,
             initialPartyType: PartyType.supplier,
+          ),
+        ),
+      if (canPay && draftRepository != null)
+        _HubSection(
+          label: 'المسودات',
+          icon: Icons.pending_actions_outlined,
+          child: VoucherDraftsPage(
+            repository: draftRepository,
+            user: user,
+            membership: membership,
           ),
         ),
       if (canPay)
