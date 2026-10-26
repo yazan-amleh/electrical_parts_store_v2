@@ -73,23 +73,13 @@ class _LoginPageState extends State<LoginPage> {
         final busy = widget.controller.isBusy;
         return V1AuthLayout(
           variant: AuthDecorationVariant.login,
-          title: 'مرحباً بك في متجر القطع الكهربائية',
-          subtitle: 'سجّل دخولك الآن لإدارة المتجر والحسابات والمخزون بسهولة',
+          title: 'مرحباً بك مجدداً',
+          subtitle: 'سجّل دخولك لإدارة المتجر والحسابات والمخزون',
           content: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'تسجيل الدخول',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade900,
-                  ),
-                ),
-                const SizedBox(height: 24),
                 TextFormField(
                   controller: _emailController,
                   textDirection: TextDirection.ltr,
@@ -223,29 +213,44 @@ class _LoginPageState extends State<LoginPage> {
                   onPressed: _submit,
                 ),
                 V1AuthControls.errorBanner(widget.controller.errorMessage),
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: busy
-                      ? null
-                      : () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => RegisterPage(
-                                controller: widget.controller,
-                              ),
-                            ),
-                          ),
-                  child: const Text('إنشاء حساب جديد'),
-                ),
               ],
             ),
           ),
-          footer: Text(
-            'للمساعدة أو الاستفسار، يرجى التواصل مع مدير النظام',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.8),
-              fontSize: 14,
-            ),
+          footer: Column(
+            children: [
+              Text(
+                'للمساعدة أو الاستفسار، يرجى التواصل مع مدير النظام',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: busy
+                    ? null
+                    : () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => RegisterPage(
+                              controller: widget.controller,
+                            ),
+                          ),
+                        ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.3),
+                  ),
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                label: const Text('ليس لديك حساب؟ إنشاء حساب جديد'),
+              ),
+            ],
           ),
         );
       },
