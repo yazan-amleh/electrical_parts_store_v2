@@ -206,6 +206,16 @@ class _DashboardPageState extends State<DashboardPage> {
         icon: Icons.receipt_long_outlined,
       ),
       _DashboardMetric(
+        title: 'الأصناف الفعالة',
+        subtitle: 'عدد الأصناف المتاحة',
+        value: Money(
+          minorUnits: _products.where((product) => product.isActive).length,
+          currency: _currency,
+        ),
+        icon: Icons.inventory_2_outlined,
+        displayAsCount: true,
+      ),
+      _DashboardMetric(
         title: 'أصناف منخفضة',
         subtitle: 'تحت حد إعادة الطلب',
         value: Money(
@@ -262,8 +272,16 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildIntegrityCard(BuildContext context) {
-    final trialBalance = _trialBalance!;
-    final isBalanced = trialBalance.isBalanced;
+    final lines = _trialBalance!.lines.where(
+      (line) => line.account.currency == _currency,
+    );
+    var debit = Money.zero(currency: _currency);
+    var credit = Money.zero(currency: _currency);
+    for (final line in lines) {
+      debit += line.debit;
+      credit += line.credit;
+    }
+    final isBalanced = debit == credit;
     final color =
         isBalanced ? Colors.green : Theme.of(context).colorScheme.error;
     return Card(
@@ -281,18 +299,25 @@ class _DashboardPageState extends State<DashboardPage> {
                   color: color,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  isBalanced
-                      ? 'ميزان المراجعة متوازن'
-                      : 'تنبيه: ميزان المراجعة غير متوازن',
-                  style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                Expanded(
+                  child: Text(
+                    isBalanced
+                        ? 'ميزان المراجعة متوازن — $_currency'
+                        : 'تنبيه: ميزان المراجعة غير متوازن — $_currency',
+                    style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
             Text(
-              'إجمالي المدين: ${trialBalance.totalDebit.formatted} • '
-              'إجمالي الدائن: ${trialBalance.totalCredit.formatted}',
+              'إجمالي المدين: ${debit.formatted} • '
+              'إجمالي الدائن: ${credit.formatted}',
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'مؤشر عرض سريع من الأرصدة الحالية؛ لا يغني عن المطابقة المحاسبية.',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),
