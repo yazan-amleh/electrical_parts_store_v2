@@ -124,6 +124,7 @@ class _DashboardQuickAccessState extends State<DashboardQuickAccess> {
 
   Future<void> _customize() async {
     if (_loading || _saving) return;
+    final preferenceKey = _preferenceKey;
     final available = _available;
     final order = List<String>.from(_visibleIds);
     final selected = await showDialog<List<String>>(
@@ -205,15 +206,19 @@ class _DashboardQuickAccessState extends State<DashboardQuickAccess> {
         ),
       ),
     );
-    if (!mounted || selected == null) return;
+    if (!mounted || selected == null || preferenceKey != _preferenceKey) {
+      return;
+    }
     setState(() => _saving = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final saved = await prefs.setStringList(_preferenceKey, selected);
+      final saved = await prefs.setStringList(preferenceKey, selected);
       if (!saved) {
         throw StateError('Unable to save shortcuts');
       }
-      if (mounted) setState(() => _visibleIds = selected);
+      if (mounted && preferenceKey == _preferenceKey) {
+        setState(() => _visibleIds = selected);
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
