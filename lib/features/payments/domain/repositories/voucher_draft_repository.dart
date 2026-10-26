@@ -11,6 +11,14 @@ abstract interface class VoucherDraftRepository {
     required PartyPaymentPostingAccounts accounts,
   });
 
+  Future<Result<void>> updateDraft({
+    required StoreContext context,
+    required String draftId,
+    required int expectedRevision,
+    required int amountMinorUnits,
+    required String? description,
+  });
+
   Future<Result<void>> submit({
     required StoreContext context,
     required String draftId,
