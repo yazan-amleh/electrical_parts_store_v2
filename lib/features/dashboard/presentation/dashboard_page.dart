@@ -31,7 +31,8 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  static const _currency = 'ILS';
+  String _selectedCurrency = 'ILS';
+  String get _currency => _selectedCurrency;
 
   TrialBalance? _trialBalance;
   List<Product> _products = const <Product>[];
@@ -84,6 +85,8 @@ class _DashboardPageState extends State<DashboardPage> {
           padding: const EdgeInsets.all(24),
           children: [
             _buildHeader(context),
+            const SizedBox(height: 12),
+            _buildCurrencySelector(),
             const SizedBox(height: 20),
             GridView.builder(
               shrinkWrap: true,
@@ -131,7 +134,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'المتجر: ${widget.membership.storeId} • الأرقام الحالية من الإسقاطات المحاسبية',
+                    'المتجر: ${widget.membership.storeId} • المبالغ حسب العملة المختارة من الإسقاطات المحاسبية',
                   ),
                 ],
               ),
@@ -144,6 +147,21 @@ class _DashboardPageState extends State<DashboardPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildCurrencySelector() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final currency in const ['ILS', 'USD', 'JOD'])
+          ChoiceChip(
+            label: Text(currency),
+            selected: _selectedCurrency == currency,
+            onSelected: (_) => setState(() => _selectedCurrency = currency),
+          ),
+      ],
     );
   }
 
