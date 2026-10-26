@@ -63,7 +63,9 @@ class _VoucherDraftsPageState extends State<VoucherDraftsPage> {
     });
     try {
       final result = await repository.getRecentDrafts(context: context);
-      if (!mounted || epoch != _epoch) return;
+      if (!mounted || epoch != _epoch) {
+        return;
+      }
       if (result is Success<List<VoucherDraft>>) {
         setState(() => _drafts = result.value);
       } else if (result is FailureResult<List<VoucherDraft>>) {
@@ -74,7 +76,9 @@ class _VoucherDraftsPageState extends State<VoucherDraftsPage> {
         setState(() => _error = error.toString());
       }
     } finally {
-      if (mounted && epoch == _epoch) setState(() => _loading = false);
+      if (mounted && epoch == _epoch) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -90,7 +94,9 @@ class _VoucherDraftsPageState extends State<VoucherDraftsPage> {
       final result = await action(repository, context);
       if (!mounted ||
           _context.storeId != context.storeId ||
-          _context.userId != context.userId) return;
+          _context.userId != context.userId) {
+        return;
+      }
       if (result is FailureResult<void>) {
         ScaffoldMessenger.of(this.context).showSnackBar(
           SnackBar(content: Text(result.failure.message)),
@@ -130,7 +136,9 @@ class _VoucherDraftsPageState extends State<VoucherDraftsPage> {
       ),
     );
     controller.dispose();
-    if (!mounted || reason == null || reason.trim().isEmpty) return;
+    if (!mounted || reason == null || reason.trim().isEmpty) {
+      return;
+    }
     await _act(
       draft,
       (repository, store) => repository.reject(
