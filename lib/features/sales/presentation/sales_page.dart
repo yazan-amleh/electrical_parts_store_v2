@@ -482,6 +482,9 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   Future<void> _loadProducts() async {
+    final epoch = ++_productsRequest;
+    final storeId = widget.membership.storeId;
+    final userId = widget.user.id;
     final repository = widget.productRepository;
     if (repository == null) {
       setState(() {
@@ -498,11 +501,14 @@ class _SalesPageState extends State<SalesPage> {
 
     final result = await repository.getProducts(
       context: StoreContext(
-        storeId: widget.membership.storeId,
-        userId: widget.user.id,
+        storeId: storeId,
+        userId: userId,
       ),
     );
-    if (!mounted) {
+    if (!mounted ||
+        epoch != _productsRequest ||
+        storeId != widget.membership.storeId ||
+        userId != widget.user.id) {
       return;
     }
 
@@ -614,6 +620,9 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   Future<void> _loadCustomers() async {
+    final epoch = ++_customersRequest;
+    final storeId = widget.membership.storeId;
+    final userId = widget.user.id;
     final repository = widget.partyRepository;
     if (repository == null) {
       return;
@@ -624,12 +633,15 @@ class _SalesPageState extends State<SalesPage> {
     });
     final result = await repository.getParties(
       context: StoreContext(
-        storeId: widget.membership.storeId,
-        userId: widget.user.id,
+        storeId: storeId,
+        userId: userId,
       ),
       type: PartyType.customer,
     );
-    if (!mounted) {
+    if (!mounted ||
+        epoch != _customersRequest ||
+        storeId != widget.membership.storeId ||
+        userId != widget.user.id) {
       return;
     }
     if (result is FailureResult<List<Party>>) {
