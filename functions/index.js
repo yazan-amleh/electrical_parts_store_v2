@@ -2391,10 +2391,15 @@ async function postPartyPaymentInTransaction(
   // Allocate a receipt/payment serial in the same transaction as its journal.
   // Retried idempotent commands return before this read and never increment it.
   const isCustomerPayment = command.payment.partyType === 'customer';
-  const voucherYear = command.payment.postedAt.getUTCFullYear();
-  const voucherPeriod = String(voucherYear) +
-    String(command.payment.postedAt.getUTCMonth() + 1).padStart(2, '0');
-  const voucherKind = isCustomerPayment ? 'receipt' : 'payment';
+  const voucherScope = nextVoucherNumber({
+    storeId: command.storeId,
+    partyType: command.payment.partyType,
+    postedAt: command.payment.postedAt,
+    sequence: null,
+  });
+  const voucherYear = voucherScope.year;
+  const voucherPeriod = voucherScope.period;
+  const voucherKind = voucherScope.kind;
   const voucherSequenceRef = storeRef.collection('voucher_sequences')
     .doc(voucherKind + '-' + voucherPeriod);
   const voucherSequenceSnapshot = await transaction.get(voucherSequenceRef);
