@@ -54,6 +54,7 @@ class _DashboardQuickAccessState extends State<DashboardQuickAccess> {
   List<String> _visibleIds = const [];
   bool _loading = true;
   bool _saving = false;
+  int _selectionEpoch = 0;
 
   String get _preferenceKey =>
       'v2:dashboard-shortcuts:${widget.storeId}:${widget.userId}';
@@ -98,16 +99,18 @@ class _DashboardQuickAccessState extends State<DashboardQuickAccess> {
   }
 
   Future<void> _loadSelection() async {
+    final epoch = ++_selectionEpoch;
+    final preferenceKey = _preferenceKey;
     setState(() => _loading = true);
     final defaults = _available.take(8).map((item) => item.id).toList();
     List<String>? saved;
     try {
       final prefs = await SharedPreferences.getInstance();
-      saved = prefs.getStringList(_preferenceKey);
+      saved = prefs.getStringList(preferenceKey);
     } catch (_) {
       // Shortcuts remain usable if local preferences cannot be read.
     }
-    if (!mounted) return;
+    if (!mounted || epoch != _selectionEpoch) return;
     final allowedIds = _available.map((item) => item.id).toSet();
     final selected = (saved ?? defaults)
         .where(allowedIds.contains)
