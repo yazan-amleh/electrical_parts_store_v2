@@ -332,7 +332,8 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
                             isThreeLine: true,
                             trailing: IconButton(
                               tooltip: 'طباعة هذا السند',
-                              onPressed: _exporting ? null : () => _printSingle(item),
+                              onPressed:
+                                  _exporting ? null : () => _printSingle(item),
                               icon: const Icon(Icons.print_outlined),
                             ),
                           ),
