@@ -37,6 +37,7 @@ import '../features/notifications/data/repositories/firebase_notification_reposi
 import '../features/notes/data/repositories/firestore_note_repository.dart';
 import '../features/expenses/data/repositories/firestore_expense_repository.dart';
 import '../features/payments/data/repositories/firestore_party_payment_repository.dart';
+import '../features/payments/data/repositories/firestore_voucher_query_repository.dart';
 import '../features/parties/data/repositories/firestore_party_ledger_repository.dart';
 import '../features/parties/data/repositories/firestore_party_repository.dart';
 import '../features/transfers/data/repositories/firestore_account_transfer_repository.dart';
@@ -140,6 +141,9 @@ abstract final class AppBootstrap {
       partyPaymentRepository: FirestorePartyPaymentRepository(
         functions: functions,
         commandQueue: commandQueue,
+      ),
+      voucherQueryRepository: FirestoreVoucherQueryRepository(
+        firestore: firestore,
       ),
       partyRepository: FirestorePartyRepository(firestore: firestore),
       partyLedgerRepository: FirestorePartyLedgerRepository(
