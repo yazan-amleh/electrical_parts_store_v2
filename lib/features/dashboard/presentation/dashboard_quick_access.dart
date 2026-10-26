@@ -38,11 +38,14 @@ class _DashboardQuickAccessState extends State<DashboardQuickAccess> {
     _DashboardShortcut('customers', 'العملاء', Icons.people_outline),
     _DashboardShortcut('suppliers', 'الموردون', Icons.local_shipping_outlined),
     _DashboardShortcut('offers', 'العروض', Icons.local_offer_outlined),
-    _DashboardShortcut('cash-banks', 'الصناديق والبنوك', Icons.savings_outlined),
+    _DashboardShortcut(
+        'cash-banks', 'الصناديق والبنوك', Icons.savings_outlined),
     _DashboardShortcut('checks', 'الشيكات', Icons.payments_outlined),
-    _DashboardShortcut('chart-of-accounts', 'شجرة الحسابات', Icons.account_tree),
+    _DashboardShortcut(
+        'chart-of-accounts', 'شجرة الحسابات', Icons.account_tree),
     _DashboardShortcut('journal', 'قيود اليومية', Icons.menu_book_outlined),
-    _DashboardShortcut('trial-balance', 'ميزان المراجعة', Icons.balance_outlined),
+    _DashboardShortcut(
+        'trial-balance', 'ميزان المراجعة', Icons.balance_outlined),
     _DashboardShortcut('reports', 'التقارير', Icons.assessment_outlined),
     _DashboardShortcut('notes', 'الملاحظات', Icons.note_alt_outlined),
     _DashboardShortcut('settings', 'إعدادات المتجر', Icons.settings_outlined),
