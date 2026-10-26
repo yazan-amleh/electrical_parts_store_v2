@@ -12,10 +12,12 @@ import '../domain/entities/party_payment.dart';
 import '../domain/entities/party_payment_posting_plan.dart';
 import '../domain/enums/party_payment_method.dart';
 import '../domain/repositories/party_payment_repository.dart';
+import '../domain/repositories/voucher_draft_repository.dart';
 
 class PartyPaymentsPage extends StatefulWidget {
   const PartyPaymentsPage({
     required this.repository,
+    this.draftRepository,
     required this.user,
     required this.membership,
     this.initialPartyType = PartyType.customer,
@@ -24,6 +26,7 @@ class PartyPaymentsPage extends StatefulWidget {
   });
 
   final PartyPaymentRepository? repository;
+  final VoucherDraftRepository? draftRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
   final PartyType initialPartyType;
@@ -238,6 +241,16 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    if (widget.draftRepository != null) ...[
+                      OutlinedButton.icon(
+                        onPressed: _isPosting
+                            ? null
+                            : () => _postPayment(saveDraft: true),
+                        icon: const Icon(Icons.save_outlined),
+                        label: const Text('حفظ كمسودة دون ترحيل'),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     FilledButton.icon(
                       onPressed: _isPosting ? null : _postPayment,
                       icon: _isPosting
@@ -282,9 +295,9 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
     return Money(minorUnits: major * 100 + fraction, currency: _currency);
   }
 
-  Future<void> _postPayment() async {
+  Future<void> _postPayment({bool saveDraft = false}) async {
     final repository = widget.repository;
-    if (repository == null) {
+    if (!saveDraft && repository == null) {
       _showMessage('مستودع المقبوضات والمدفوعات غير موصول بهذه البيئة.');
       return;
     }
@@ -338,8 +351,34 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       dueDate: _dueDate,
     );
 
+    if (saveDraft) {
+      final draftRepository = widget.draftRepository;
+      if (draftRepository == null) return;
+      setState(() => _isPosting = true);
+      final draftResult = await draftRepository.saveDraft(
+        context: payment.contextFor(widget.user.id),
+        payment: payment,
+        accounts: PartyPaymentPostingAccounts(
+          settlementAccountId: _settlementAccountId,
+          partyAccountId: _partyAccountId,
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _isPosting = false);
+      if (draftResult is FailureResult<String>) {
+        _showMessage(draftResult.failure.message);
+      } else {
+        _showMessage('تم حفظ المسودة دون ترحيل. أرسلها للاعتماد من تبويب المسودات.');
+        _amountController.clear();
+        _descriptionController.clear();
+        _chequeNumberController.clear();
+        _bankNameController.clear();
+      }
+      return;
+    }
+
     setState(() => _isPosting = true);
-    final result = await repository.postPartyPayment(
+    final result = await repository!.postPartyPayment(
       context: payment.contextFor(widget.user.id),
       payment: payment,
       accounts: PartyPaymentPostingAccounts(
