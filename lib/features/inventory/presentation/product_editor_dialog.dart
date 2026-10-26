@@ -36,6 +36,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
 
   late bool _isService;
   late bool _isActive;
+  late String _currency;
   String? _selectedCategoryId;
   String? _errorMessage;
 
@@ -49,7 +50,9 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
     _categoryController = TextEditingController(
       text: product?.categoryId ?? 'general',
     );
-    _selectedCategoryId = product?.categoryId;
+    _selectedCategoryId = product?.categoryId ??
+        (widget.categories.isEmpty ? null : widget.categories.first.id);
+    _currency = product?.purchasePrice.currency ?? 'ILS';
     _purchasePriceController = TextEditingController(
       text: product?.purchasePrice.formatted.split(' ').first ?? '',
     );
@@ -96,6 +99,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
                 Icons.inventory_2_outlined,
               ),
               _buildCategoryField(),
+              _buildCurrencyField(),
               Row(
                 children: [
                   Expanded(
@@ -195,6 +199,38 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
     );
   }
 
+  Widget _buildCurrencyField() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DropdownButtonFormField<String>(
+        value: _currency,
+        decoration: const InputDecoration(
+          labelText: 'عملة الصنف',
+          prefixIcon: Icon(Icons.currency_exchange_outlined),
+        ),
+        items: [
+          for (final currency in {
+            'ILS',
+            'USD',
+            'JOD',
+            _currency,
+          })
+            DropdownMenuItem<String>(
+              value: currency,
+              child: Text(currency),
+            ),
+        ],
+        onChanged: _initialProduct == null
+            ? (value) {
+                if (value != null) {
+                  setState(() => _currency = value);
+                }
+              }
+            : null,
+      ),
+    );
+  }
+
   Widget _buildCategoryField() {
     if (widget.categories.isEmpty) {
       return _textField(
@@ -277,7 +313,7 @@ class _ProductEditorDialogState extends State<ProductEditorDialog> {
         : int.parse(parts[1].padRight(2, '0'));
     return Money(
       minorUnits: int.parse(parts.first) * 100 + fraction,
-      currency: 'ILS',
+      currency: _currency,
     );
   }
 
