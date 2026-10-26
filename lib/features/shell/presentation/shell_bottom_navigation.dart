@@ -62,8 +62,8 @@ class ShellBottomNavigation extends StatelessWidget {
     final available = {
       for (final option in optionsForRole(role)) option.id: option,
     };
-    final requested = tabIds ??
-        const ['dashboard', 'sales', 'party-payments', 'customers'];
+    final requested =
+        tabIds ?? const ['dashboard', 'sales', 'party-payments', 'customers'];
     final displayedIds = <String>[];
     for (final id in requested) {
       if (available.containsKey(id) && !displayedIds.contains(id)) {
