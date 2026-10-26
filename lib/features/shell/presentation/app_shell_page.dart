@@ -456,8 +456,7 @@ class _AppShellPageState extends State<AppShellPage> {
                                   order.length < 4 &&
                                   !order.contains(option.id)) {
                                 order.add(option.id);
-                              } else if (checked == false &&
-                                  order.length > 1) {
+                              } else if (checked == false && order.length > 1) {
                                 order.remove(option.id);
                               }
                             });
