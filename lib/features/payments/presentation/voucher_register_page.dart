@@ -114,26 +114,29 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
       if (_status != 'all' && record.status != _status) return false;
       return search.isEmpty ||
           record.id.toLowerCase().contains(search) ||
+          (record.voucherNumber?.toLowerCase().contains(search) ?? false) ||
           record.partyId.toLowerCase().contains(search) ||
           record.journalEntryId.toLowerCase().contains(search) ||
           (record.description?.toLowerCase().contains(search) ?? false);
     }).toList(growable: false);
   }
 
-  Future<void> _export(
+  Future<bool> _export(
     Future<void> Function(List<VoucherRecord>) action,
   ) async {
     final records = _visibleRecords;
-    if (_exporting || records.isEmpty) return;
+    if (_exporting || records.isEmpty) return false;
     setState(() => _exporting = true);
     try {
       await action(records);
+      return true;
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('تعذر إعداد ملف السندات.')),
         );
       }
+      return false;
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
@@ -210,8 +213,8 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
                 onPressed: _exporting || records.isEmpty
                     ? null
                     : () async {
-                        await _export(_exportService.copyCsv);
-                        if (context.mounted) {
+                        final success = await _export(_exportService.copyCsv);
+                        if (success && context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
