@@ -159,7 +159,8 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.blue.withValues(alpha: 0.5),
+                                        color:
+                                            Colors.blue.withValues(alpha: 0.5),
                                         blurRadius: 20,
                                         spreadRadius: 2,
                                       ),
