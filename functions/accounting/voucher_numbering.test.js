@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {nextVoucherNumber} = require('./voucher_numbering');
 
-const date = new Date('2026-12-31T23:59:59Z');
+const date = new Date('2026-12-31T20:59:59Z');
 test('first receipt and payment have separately scoped serials', () => {
   const first = nextVoucherNumber({
     storeId: 'store-a',
@@ -57,4 +57,19 @@ test('rejects wrong store, wrong year, wrong direction and exhausted counter', (
       sequence,
     }));
   }
+});
+
+test('voucher period follows the Hebron business calendar at UTC month end', () => {
+  const before = nextVoucherNumber({
+    storeId: 'store-a',
+    partyType: 'customer',
+    postedAt: new Date('2026-10-31T21:59:59Z'),
+  });
+  const after = nextVoucherNumber({
+    storeId: 'store-a',
+    partyType: 'customer',
+    postedAt: new Date('2026-10-31T22:00:00Z'),
+  });
+  assert.equal(before.voucherNumber, 'RV-202610-0001');
+  assert.equal(after.voucherNumber, 'RV-202611-0001');
 });
