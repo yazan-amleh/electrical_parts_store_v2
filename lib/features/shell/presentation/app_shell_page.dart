@@ -463,7 +463,7 @@ class _AppShellPageState extends State<AppShellPage> {
     final allowedIds = options.map((item) => item.id).toSet();
     final order = [
       for (final id in _bottomNavIds ??
-          const ['dashboard', 'sales', 'party-payments', 'customers'])
+          const ['dashboard', 'sales', 'vouchers-hub', 'customers'])
         if (allowedIds.contains(id)) id,
     ];
     if (order.isEmpty) order.add('dashboard');
