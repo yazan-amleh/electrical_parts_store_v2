@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -53,9 +50,9 @@ class VoucherExportService {
               value.startsWith('@') ||
               value.startsWith('\t') ||
               value.startsWith('\r')
-          ? "'" + value
+          ? "'$value"
           : value;
-      return '"' + safe.replaceAll('"', '""') + '"';
+      return '"${safe.replaceAll('"', '""')}"';
     }
 
     return rows.map((row) => row.map(escape).join(',')).join('\r\n');
