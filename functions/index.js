@@ -17,6 +17,7 @@ const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
 const { createStoreHandler, selectStoreHandler } = require('./store_onboarding');
 const {createVoucherDraftHandlers} = require('./voucher_drafts');
+const {nextVoucherNumber} = require('./accounting/voucher_numbering');
 const {
   checkedMinorAdd,
   readBalanceForPosting,
@@ -2395,19 +2396,20 @@ async function postPartyPaymentInTransaction(
   const voucherSequenceRef = storeRef.collection('voucher_sequences')
     .doc(voucherKind + '-' + voucherYear);
   const voucherSequenceSnapshot = await transaction.get(voucherSequenceRef);
-  const previousVoucherSerial = voucherSequenceSnapshot.exists
-    ? voucherSequenceSnapshot.data().lastNumber
-    : 0;
-  if (!Number.isSafeInteger(previousVoucherSerial) ||
-      previousVoucherSerial < 0 ||
-      previousVoucherSerial >= 999999 ||
-      (voucherSequenceSnapshot.exists &&
-        voucherSequenceSnapshot.data().storeId !== command.storeId)) {
-    conflict('Voucher sequence is invalid or exhausted.');
+  let voucherSequence;
+  try {
+    voucherSequence = nextVoucherNumber({
+      storeId: command.storeId,
+      partyType: command.payment.partyType,
+      postedAt: command.payment.postedAt,
+      sequence: voucherSequenceSnapshot.exists
+        ? voucherSequenceSnapshot.data() : null,
+    });
+  } catch (error) {
+    conflict(error.message);
   }
-  const nextVoucherSerial = previousVoucherSerial + 1;
-  const voucherNumber = (isCustomerPayment ? 'RC-' : 'PV-') +
-    voucherYear + '-' + String(nextVoucherSerial).padStart(6, '0');
+  const voucherNumber = voucherSequence.voucherNumber;
+  const nextVoucherSerial = voucherSequence.serial;
   const settlementAccountType =
     !isCustomerPayment && command.payment.paymentMethod === 'cheque'
       ? 'liability'
