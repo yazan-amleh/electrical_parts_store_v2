@@ -6,6 +6,7 @@ import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
 import '../../accounting/domain/entities/account.dart';
 import '../../accounting/domain/entities/trial_balance.dart';
 import '../../accounting/domain/enums/accounting_enums.dart';
@@ -126,8 +127,12 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     final metrics = _buildMetrics();
-    final lowStockProducts =
-        _products.where((product) => product.isLowStock).toList()
+    final lowStockProducts = _products
+        .where(
+          (product) =>
+              product.isActive && !product.isService && product.isLowStock,
+        )
+        .toList()
           ..sort(
             (left, right) => left.quantityOnHand.milliUnits.compareTo(
               right.quantityOnHand.milliUnits,
@@ -382,7 +387,12 @@ class _DashboardPageState extends State<DashboardPage> {
         title: 'أصناف منخفضة',
         subtitle: 'تحت حد إعادة الطلب',
         value: Money(
-          minorUnits: _products.where((product) => product.isLowStock).length,
+          minorUnits: _products
+              .where(
+                (product) =>
+                    product.isActive && !product.isService && product.isLowStock,
+              )
+              .length,
           currency: _currency,
         ),
         icon: Icons.warning_amber_outlined,
@@ -521,7 +531,14 @@ class _DashboardPageState extends State<DashboardPage> {
                     'المتاح: ${product.quantityOnHand.formatted} • '
                     'الحد: ${product.minimumQuantity.formatted}',
                   ),
-                  trailing: const Icon(Icons.chevron_left),
+                  onTap: widget.onOpenModule != null &&
+                          widget.membership.role.canManageInventory
+                      ? () => widget.onOpenModule!('inventory')
+                      : null,
+                  trailing: widget.onOpenModule != null &&
+                          widget.membership.role.canManageInventory
+                      ? const Icon(Icons.chevron_left)
+                      : null,
                 ),
             if (products.length > 8)
               Text(
