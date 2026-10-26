@@ -362,22 +362,23 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
     final previous = _pendingSignature == signature ? _pendingPayment : null;
     final paymentId = previous?.id ??
         'party-payment-${DateTime.now().microsecondsSinceEpoch}';
-    final payment = previous ?? PartyPayment(
-      id: paymentId,
-      storeId: widget.membership.storeId,
-      idempotencyKey: IdempotencyKey(paymentId),
-      postedAt: DateTime.now().toUtc(),
-      partyType: _partyType,
-      partyId: partyId,
-      paymentMethod: _paymentMethod,
-      amount: amount,
-      description: _descriptionController.text.trim().isEmpty
-          ? null
-          : _descriptionController.text.trim(),
-      chequeNumber: chequeNumber,
-      bankName: bankName,
-      dueDate: _dueDate,
-    );
+    final payment = previous ??
+        PartyPayment(
+          id: paymentId,
+          storeId: widget.membership.storeId,
+          idempotencyKey: IdempotencyKey(paymentId),
+          postedAt: DateTime.now().toUtc(),
+          partyType: _partyType,
+          partyId: partyId,
+          paymentMethod: _paymentMethod,
+          amount: amount,
+          description: _descriptionController.text.trim().isEmpty
+              ? null
+              : _descriptionController.text.trim(),
+          chequeNumber: chequeNumber,
+          bankName: bankName,
+          dueDate: _dueDate,
+        );
 
     _pendingSignature = signature;
     _pendingPayment = payment;
@@ -429,7 +430,8 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       final failure = result.failure;
       if (failure is QueuedFailure) {
         _pendingQueued = true;
-        _showMessage('تم حفظ الحركة للطابور. لا تعِد إرسالها قبل التحقق من حالتها.');
+        _showMessage(
+            'تم حفظ الحركة للطابور. لا تعِد إرسالها قبل التحقق من حالتها.');
       } else {
         _showMessage(failure.message);
       }
