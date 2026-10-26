@@ -191,9 +191,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
             ),
             const SizedBox(width: 4),
             FilledButton.icon(
-              onPressed: _canManage && !_isSaving
-                  ? () => _openEditor()
-                  : null,
+              onPressed: _canManage && !_isSaving ? () => _openEditor() : null,
               icon: const Icon(Icons.add),
               label: const Text('إضافة'),
             ),
@@ -217,9 +215,8 @@ class _CategoriesPageState extends State<CategoriesPage> {
         subtitle: Text(category.isActive ? 'نشط' : 'غير نشط'),
         trailing: IconButton(
           tooltip: 'تعديل',
-          onPressed: _canManage && !_isSaving
-              ? () => _openEditor(category)
-              : null,
+          onPressed:
+              _canManage && !_isSaving ? () => _openEditor(category) : null,
           icon: const Icon(Icons.edit_outlined),
         ),
       ),
