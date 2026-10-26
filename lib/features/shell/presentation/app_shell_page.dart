@@ -45,6 +45,7 @@ import '../../expenses/domain/repositories/expense_repository.dart';
 import '../../expenses/presentation/expenses_page.dart';
 import '../../payments/domain/repositories/party_payment_repository.dart';
 import '../../payments/presentation/party_payments_page.dart';
+import '../../payments/presentation/vouchers_hub_page.dart';
 import '../../cheques/domain/repositories/cheque_repository.dart';
 import '../../cheques/presentation/cheques_page.dart';
 import '../../transfers/domain/repositories/account_transfer_repository.dart';
@@ -289,6 +290,14 @@ class _AppShellPageState extends State<AppShellPage> {
           icon: Icons.local_shipping_outlined,
           description: 'بيانات الموردين والالتزامات والمدفوعات.',
           capabilities: ['بيانات', 'كشف حساب', 'دفع'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'vouchers-hub',
+          label: 'مركز السندات المالية',
+          icon: Icons.receipt_long_outlined,
+          description: 'تبويبات القبض والدفع وعرض أحداث الحركات المسجلة.',
+          capabilities: ['قبض من عميل', 'دفع لمورد', 'آخر أحداث الدفع'],
           foundationReady: true,
         ),
         _Module(
@@ -1097,6 +1106,14 @@ class _ModuleLandingPage extends StatelessWidget {
         documentBuilder: repairDocumentBuilder,
         productRepository: productRepository,
         partyRepository: partyRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'vouchers-hub') {
+      return VouchersHubPage(
+        paymentRepository: partyPaymentRepository,
+        activityLogRepository: activityLogRepository,
         user: user,
         membership: membership,
       );
