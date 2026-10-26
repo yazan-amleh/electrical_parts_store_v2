@@ -368,7 +368,8 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       if (draftResult is FailureResult<String>) {
         _showMessage(draftResult.failure.message);
       } else {
-        _showMessage('تم حفظ المسودة دون ترحيل. أرسلها للاعتماد من تبويب المسودات.');
+        _showMessage(
+            'تم حفظ المسودة دون ترحيل. أرسلها للاعتماد من تبويب المسودات.');
         _amountController.clear();
         _descriptionController.clear();
         _chequeNumberController.clear();
