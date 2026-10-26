@@ -6,6 +6,7 @@ import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../domain/entities/voucher_record.dart';
 import '../domain/repositories/voucher_query_repository.dart';
+import 'voucher_export_service.dart';
 
 class VoucherRegisterPage extends StatefulWidget {
   const VoucherRegisterPage({
@@ -25,6 +26,8 @@ class VoucherRegisterPage extends StatefulWidget {
 
 class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
   final _searchController = TextEditingController();
+  final _exportService = const VoucherExportService();
+  bool _exporting = false;
   List<VoucherRecord> _records = const [];
   VoucherCursor? _nextCursor;
   bool _hasMore = false;
@@ -117,6 +120,25 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
     }).toList(growable: false);
   }
 
+  Future<void> _export(
+    Future<void> Function(List<VoucherRecord>) action,
+  ) async {
+    final records = _visibleRecords;
+    if (_exporting || records.isEmpty) return;
+    setState(() => _exporting = true);
+    try {
+      await action(records);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذر إعداد ملف السندات.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.repository == null) {
@@ -169,6 +191,38 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
                 onChanged: (value) {
                   if (value != null) setState(() => _status = value);
                 },
+              ),
+              OutlinedButton.icon(
+                onPressed: _exporting || records.isEmpty
+                    ? null
+                    : () => _export(_exportService.sharePdf),
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                label: const Text('تصدير PDF'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _exporting || records.isEmpty
+                    ? null
+                    : () => _export(_exportService.printPdf),
+                icon: const Icon(Icons.print_outlined),
+                label: const Text('طباعة'),
+              ),
+              TextButton.icon(
+                onPressed: _exporting || records.isEmpty
+                    ? null
+                    : () async {
+                        await _export(_exportService.copyCsv);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'تم نسخ CSV للصفحات المحمّلة؛ ألصقه في Excel.',
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                icon: const Icon(Icons.copy_all_outlined),
+                label: const Text('نسخ CSV'),
               ),
               IconButton(
                 tooltip: 'تحديث السندات',
