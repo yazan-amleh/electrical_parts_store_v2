@@ -131,4 +131,3 @@ class _HubSection {
   final IconData icon;
   final Widget child;
 }
-
