@@ -65,11 +65,11 @@ class VouchersHubPage extends StatelessWidget {
           label: 'حركات',
           icon: Icons.history_rounded,
           child: _RecentPaymentActivity(
-          repository: activityLogRepository,
-          user: user,
-          membership: membership,
+            repository: activityLogRepository,
+            user: user,
+            membership: membership,
+          ),
         ),
-      ),
     ];
 
     if (tabs.isEmpty) {
