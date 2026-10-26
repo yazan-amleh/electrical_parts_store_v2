@@ -88,7 +88,8 @@ class _VoucherDraftsPageState extends State<VoucherDraftsPage> {
     setState(() => _busyId = draft.id);
     try {
       final result = await action(repository, context);
-      if (!mounted || _context.storeId != context.storeId ||
+      if (!mounted ||
+          _context.storeId != context.storeId ||
           _context.userId != context.userId) return;
       if (result is FailureResult<void>) {
         ScaffoldMessenger.of(this.context).showSnackBar(
@@ -143,7 +144,8 @@ class _VoucherDraftsPageState extends State<VoucherDraftsPage> {
   @override
   Widget build(BuildContext context) {
     if (widget.repository == null) {
-      return const Center(child: Text('مستودع المسودات غير موصول بهذه البيئة.'));
+      return const Center(
+          child: Text('مستودع المسودات غير موصول بهذه البيئة.'));
     }
     final canApprove = widget.membership.role.canManageStore;
     return Directionality(
