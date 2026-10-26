@@ -51,15 +51,17 @@ void main() {
 
     expect(find.text('قبض'), findsOneWidget);
     expect(find.text('دفع'), findsNothing);
-    expect(find.text('حركات'), findsOneWidget);
+    expect(find.text('حركات'), findsNothing);
   });
 
-  testWidgets('viewer sees only activity tab', (tester) async {
+  testWidgets('viewer cannot see financial voucher content', (tester) async {
     await tester.pumpWidget(screen(StoreRole.viewer));
     await tester.pumpAndSettle();
 
     expect(find.text('قبض'), findsNothing);
     expect(find.text('دفع'), findsNothing);
-    expect(find.text('حركات'), findsOneWidget);
+    expect(find.text('حركات'), findsNothing);
+    expect(find.text('لا تملك صلاحية الوصول إلى مركز السندات.'),
+        findsOneWidget);
   });
 }
