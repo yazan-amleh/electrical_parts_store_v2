@@ -10,7 +10,7 @@ void main() {
         home: Scaffold(
           body: VouchersHubPage(
             paymentRepository: null,
-            activityLogRepository: null,
+            voucherQueryRepository: null,
             user: const AuthenticatedUser(
               id: 'test-user',
               email: 'test@example.com',
@@ -42,7 +42,7 @@ void main() {
 
     await tester.tap(find.text('حركات'));
     await tester.pumpAndSettle();
-    expect(find.text('سجل حركات الدفع غير موصول بهذه البيئة.'), findsOneWidget);
+    expect(find.text('مستودع سجل السندات غير موصول بهذه البيئة.'), findsOneWidget);
   });
 
   testWidgets('sales role cannot access supplier payment tab', (tester) async {
