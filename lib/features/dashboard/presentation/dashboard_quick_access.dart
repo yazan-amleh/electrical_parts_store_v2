@@ -27,6 +27,11 @@ class _DashboardQuickAccessState extends State<DashboardQuickAccess> {
   static const _shortcuts = <_DashboardShortcut>[
     _DashboardShortcut('sales', 'المبيعات', Icons.point_of_sale_outlined),
     _DashboardShortcut(
+      'vouchers-hub',
+      'السندات المالية',
+      Icons.receipt_long_outlined,
+    ),
+    _DashboardShortcut(
       'purchase-orders',
       'طلبيات الشراء',
       Icons.shopping_cart_outlined,
