@@ -14,6 +14,7 @@ class VoucherRecord {
     required this.journalEntryId,
     required this.status,
     this.description,
+    this.voucherNumber,
     this.repairId,
     this.paymentKind,
   });
