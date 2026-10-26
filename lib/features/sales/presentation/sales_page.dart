@@ -66,6 +66,7 @@ class _SalesPageState extends State<SalesPage> {
   Sale? _pendingSale;
   String? _pendingSignature;
   bool _pendingQueued = false;
+  int _postingEpoch = 0;
   int _productsRequest = 0;
   int _customersRequest = 0;
   String? _errorMessage;
@@ -125,7 +126,10 @@ class _SalesPageState extends State<SalesPage> {
   void didUpdateWidget(covariant SalesPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.user.id != oldWidget.user.id ||
-        widget.membership.storeId != oldWidget.membership.storeId) {
+        widget.membership.storeId != oldWidget.membership.storeId ||
+        widget.membership.role != oldWidget.membership.role) {
+      ++_postingEpoch;
+      _isPosting = false;
       _clearCart();
       _products = const [];
       _customers = const [];
@@ -906,6 +910,8 @@ class _SalesPageState extends State<SalesPage> {
           description: 'بيع من نقطة البيع',
         );
 
+    final epoch = ++_postingEpoch;
+    final postingUserId = widget.user.id;
     setState(() {
       _pendingSignature = signature;
       _pendingSale = sale;
@@ -919,13 +925,17 @@ class _SalesPageState extends State<SalesPage> {
         accounts: _postingAccounts,
       );
     } catch (_) {
-      if (mounted) {
+      if (mounted && epoch == _postingEpoch &&
+          postingUserId == widget.user.id &&
+          sale.storeId == widget.membership.storeId) {
         setState(() => _isPosting = false);
         _showMessage('تعذر التأكد من نتيجة البيع؛ أعد المحاولة بنفس الفاتورة.');
       }
       return;
     }
-    if (!mounted) {
+    if (!mounted || epoch != _postingEpoch ||
+        postingUserId != widget.user.id ||
+        sale.storeId != widget.membership.storeId) {
       return;
     }
     setState(() => _isPosting = false);
