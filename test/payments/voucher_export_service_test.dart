@@ -24,7 +24,7 @@ void main() {
         postedAt: DateTime.utc(2026, 10, 26),
         journalEntryId: 'payment-1-journal',
         status: 'posted',
-        voucherNumber: 'RC-2026-000001',
+        voucherNumber: 'RV-202610-0001',
         description: 'Test export',
       );
 
@@ -34,7 +34,7 @@ void main() {
     final csv = service.csvFor([
       voucher(id: '=HYPERLINK("bad")', partyId: '+SUM(1,1)'),
     ]);
-    expect(csv, contains('RC-2026-000001'));
+    expect(csv, contains('RV-202610-0001'));
     expect(csv, contains("'=HYPERLINK"));
     expect(csv, contains("'+SUM"));
     expect(csv, contains('"14375"'));
