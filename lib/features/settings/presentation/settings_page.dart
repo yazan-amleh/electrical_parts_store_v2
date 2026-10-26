@@ -497,7 +497,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _addMember() async {
     final repository = widget.repository;
-    if (repository == null || !_canManage) {
+    if (repository == null || !_canManage || _isAddingMember) {
       return;
     }
 
@@ -505,31 +505,39 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (context) => const _AddMemberDialog(),
     );
-    if (draft == null || !mounted) {
+    if (draft == null || !mounted || _isAddingMember) {
+      return;
+    }
+
+    if (_members.any((member) => member.userId == draft.userId)) {
+      _showMessage('هذا المستخدم مرتبط بالفعل بالمتجر.');
       return;
     }
 
     setState(() => _isAddingMember = true);
-    final result = await repository.addMember(
-      context: _context,
-      member: StoreMember(
-        userId: draft.userId,
-        role: draft.role,
-        isActive: true,
-        displayName: draft.displayName,
-        email: draft.email,
-      ),
-    );
-    if (!mounted) {
-      return;
+    try {
+      final result = await repository.addMember(
+        context: _context,
+        member: StoreMember(
+          userId: draft.userId,
+          role: draft.role,
+          isActive: true,
+          displayName: draft.displayName,
+          email: draft.email,
+        ),
+      );
+      if (!mounted) return;
+      if (result is FailureResult<void>) {
+        _showMessage(result.failure.message);
+        return;
+      }
+      await _load();
+      if (mounted) _showMessage('تمت إضافة المستخدم إلى المتجر.');
+    } catch (error) {
+      if (mounted) _showMessage('تعذر إضافة المستخدم: $error');
+    } finally {
+      if (mounted) setState(() => _isAddingMember = false);
     }
-    setState(() => _isAddingMember = false);
-    if (result is FailureResult<void>) {
-      _showMessage(result.failure.message);
-      return;
-    }
-    _showMessage('تمت إضافة المستخدم إلى المتجر.');
-    await _load();
   }
 
   Future<void> _saveMember(StoreMember member) async {
