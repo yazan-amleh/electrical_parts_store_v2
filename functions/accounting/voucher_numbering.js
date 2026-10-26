@@ -15,26 +15,29 @@ function nextVoucherNumber({
     throw Error('Invalid voucher posting date.');
   }
   const year = postedAt.getUTCFullYear();
+  const month = String(postedAt.getUTCMonth() + 1).padStart(2, '0');
+  const period = String(year) + month;
   const kind = partyType === 'customer' ? 'receipt' : 'payment';
   const previous = sequence || null;
   if (previous &&
       (previous.storeId !== storeId ||
         previous.kind !== kind ||
-        previous.year !== year)) {
+        previous.period !== period)) {
     throw Error('Voucher sequence ownership or scope mismatch.');
   }
   const last = previous ? previous.lastNumber : 0;
-  if (!Number.isSafeInteger(last) || last < 0 || last >= 999999) {
+  if (!Number.isSafeInteger(last) || last < 0 || last >= 999999999) {
     throw Error('Voucher sequence invalid or exhausted.');
   }
   const number = last + 1;
-  const prefix = kind === 'receipt' ? 'RC' : 'PV';
+  const prefix = kind === 'receipt' ? 'RV' : 'PV';
   return {
     kind,
     year,
+    period,
     serial: number,
-    voucherNumber: prefix + '-' + year + '-' +
-      String(number).padStart(6, '0'),
+    voucherNumber: prefix + '-' + period + '-' +
+      String(number).padStart(4, '0'),
   };
 }
 
