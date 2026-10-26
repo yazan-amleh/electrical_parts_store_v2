@@ -27,6 +27,7 @@ import '../features/purchase_orders/domain/repositories/purchase_order_repositor
 import '../features/expenses/domain/repositories/expense_repository.dart';
 import '../features/payments/domain/repositories/party_payment_repository.dart';
 import '../features/payments/domain/repositories/voucher_query_repository.dart';
+import '../features/payments/domain/repositories/voucher_draft_repository.dart';
 import '../features/parties/domain/repositories/party_ledger_repository.dart';
 import '../features/parties/domain/repositories/party_repository.dart';
 import '../features/transfers/domain/repositories/account_transfer_repository.dart';
@@ -52,6 +53,7 @@ class AppDependencies {
     this.expenseRepository,
     this.partyPaymentRepository,
     this.voucherQueryRepository,
+    this.voucherDraftRepository,
     this.partyRepository,
     this.partyLedgerRepository,
     this.accountTransferRepository,
@@ -86,6 +88,7 @@ class AppDependencies {
   final ExpenseRepository? expenseRepository;
   final PartyPaymentRepository? partyPaymentRepository;
   final VoucherQueryRepository? voucherQueryRepository;
+  final VoucherDraftRepository? voucherDraftRepository;
   final PartyRepository? partyRepository;
   final PartyLedgerRepository? partyLedgerRepository;
   final AccountTransferRepository? accountTransferRepository;
