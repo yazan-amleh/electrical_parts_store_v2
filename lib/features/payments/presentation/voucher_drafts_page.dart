@@ -131,7 +131,7 @@ class _VoucherDraftsPageState extends State<VoucherDraftsPage> {
                   decimal: true,
                 ),
                 decoration: InputDecoration(
-                  labelText: 'المبلغ (${draft.amount.currency})',
+                  labelText: 'المبلغ (' + draft.amount.currency + ')',
                   helperText: 'لا تؤثر التعديلات على الأرصدة.',
                 ),
               ),
@@ -152,201 +152,35 @@ class _VoucherDraftsPageState extends State<VoucherDraftsPage> {
           FilledButton(
             onPressed: () {
               final value = amountController.text.trim().replaceAll(',', '.');
-              if (!RegExp(r'^\\d+(\\.\\d{1,2})?
-    final controller = TextEditingController();
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('رفض السند'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 500,
-          decoration: const InputDecoration(
-            labelText: 'سبب الرفض (إلزامي)',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('إلغاء'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('تأكيد الرفض'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (!mounted || reason == null || reason.trim().isEmpty) {
-      return;
-    }
-    await _act(
-      draft,
-      (repository, store) => repository.reject(
-        context: store,
-        draftId: draft.id,
-        reason: reason.trim(),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.repository == null) {
-      return const Center(
-          child: Text('مستودع المسودات غير موصول بهذه البيئة.'));
-    }
-    final canApprove = widget.membership.role.canManageStore;
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'المسودات لا تغير الأرصدة حتى اعتمادها وترحيلها.',
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'تحديث المسودات',
-                  onPressed: _loading ? null : _load,
-                  icon: const Icon(Icons.refresh),
-                ),
-              ],
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              'آخر 100 مسودة فقط. السند المرحّل لا يمكن تعديله من هنا.',
-            ),
-          ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text(_error!, style: const TextStyle(color: Colors.red)),
-            ),
-          Expanded(
-            child: _loading && _drafts.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : _drafts.isEmpty
-                    ? const Center(child: Text('لا توجد مسودات محفوظة.'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: _drafts.length,
-                        itemBuilder: (context, index) {
-                          final draft = _drafts[index];
-                          final waiting = _busyId == draft.id;
-                          return Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ListTile(
-                                    title: Text(
-                                      '${draft.partyType.name == 'customer' ? 'قبض' : 'دفع'} · ${draft.amount.formatted}',
-                                    ),
-                                    subtitle: Text(
-                                      'المرجع: ${draft.id}\n'
-                                      'الطرف: ${draft.partyId} · ${draft.statusLabel}'
-                                      '${draft.journalEntryId == null ? '' : '\nالقيد: ${draft.journalEntryId}'}'
-                                      '${draft.rejectionReason == null ? '' : '\nالرفض: ${draft.rejectionReason}'}',
-                                    ),
-                                    isThreeLine: true,
-                                    trailing: waiting
-                                        ? const CircularProgressIndicator()
-                                        : null,
-                                  ),
-                                  if (draft.status == 'draft' &&
-                                      draft.createdBy == widget.user.id)
-                                    TextButton.icon(
-                                      onPressed: _busyId != null
-                                          ? null
-                                          : () => _editDraft(draft),
-                                      icon: const Icon(Icons.edit_outlined),
-                                      label: const Text('تعديل المسودة'),
-                                    ),
-                                  if (draft.status == 'draft' &&
-                                      draft.createdBy == widget.user.id)
-                                    TextButton.icon(
-                                      onPressed: _busyId != null
-                                          ? null
-                                          : () => _act(
-                                                draft,
-                                                (repository, store) =>
-                                                    repository.submit(
-                                                  context: store,
-                                                  draftId: draft.id,
-                                                ),
-                                              ),
-                                      icon: const Icon(Icons.send_outlined),
-                                      label: const Text('إرسال للاعتماد'),
-                                    ),
-                                  if (draft.status == 'pendingApproval' &&
-                                      canApprove)
-                                    Wrap(
-                                      spacing: 8,
-                                      children: [
-                                        FilledButton.icon(
-                                          onPressed: _busyId != null
-                                              ? null
-                                              : () => _act(
-                                                    draft,
-                                                    (repository, store) =>
-                                                        repository.approve(
-                                                      context: store,
-                                                      draftId: draft.id,
-                                                    ),
-                                                  ),
-                                          icon: const Icon(
-                                            Icons.check_circle_outline,
-                                          ),
-                                          label: const Text('اعتماد وترحيل'),
-                                        ),
-                                        OutlinedButton.icon(
-                                          onPressed: _busyId != null
-                                              ? null
-                                              : () => _reject(draft),
-                                          icon: const Icon(Icons.close),
-                                          label: const Text('رفض'),
-                                        ),
-                                      ],
-                                    ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-).hasMatch(value)) {
+              final parts = value.split('.');
+              final valid = parts.isNotEmpty &&
+                  parts.length <= 2 &&
+                  parts.first.isNotEmpty &&
+                  parts.every(
+                    (part) => part.runes.every(
+                      (digit) => digit >= 48 && digit <= 57,
+                    ),
+                  ) &&
+                  (parts.length == 1 ||
+                      (parts.last.isNotEmpty && parts.last.length <= 2));
+              if (!valid) {
                 ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  const SnackBar(content: Text('أدخل مبلغًا صحيحًا من خانتين عشريتين.')),
+                  const SnackBar(
+                    content: Text('أدخل مبلغًا صحيحًا من خانتين عشريتين.'),
+                  ),
                 );
                 return;
               }
-              final parts = value.split('.');
               final major = int.tryParse(parts.first);
               final fraction = parts.length == 1
                   ? 0
                   : int.tryParse(parts.last.padRight(2, '0'));
-              if (major == null || fraction == null) return;
+              if (major == null || fraction == null ||
+                  major > 90071992547409) {
+                return;
+              }
               final minorUnits = major * 100 + fraction;
               if (minorUnits <= 0 || minorUnits > 9007199254740991) {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  const SnackBar(content: Text('المبلغ خارج النطاق المسموح.')),
-                );
                 return;
               }
               final description = descriptionController.text.trim();
@@ -485,6 +319,15 @@ class _VoucherDraftsPageState extends State<VoucherDraftsPage> {
                                         ? const CircularProgressIndicator()
                                         : null,
                                   ),
+                                  if (draft.status == 'draft' &&
+                                      draft.createdBy == widget.user.id)
+                                    TextButton.icon(
+                                      onPressed: _busyId != null
+                                          ? null
+                                          : () => _editDraft(draft),
+                                      icon: const Icon(Icons.edit_outlined),
+                                      label: const Text('تعديل المسودة'),
+                                    ),
                                   if (draft.status == 'draft' &&
                                       draft.createdBy == widget.user.id)
                                     TextButton.icon(
