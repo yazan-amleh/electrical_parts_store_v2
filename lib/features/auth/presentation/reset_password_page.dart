@@ -68,8 +68,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     return V1AuthLayout(
       variant: AuthDecorationVariant.reset,
       title: 'نسيت كلمة المرور؟',
-      subtitle:
-          'أدخل بريدك الإلكتروني لإرسال رابط إعادة تعيين كلمة المرور',
+      subtitle: 'أدخل بريدك الإلكتروني لإرسال رابط إعادة تعيين كلمة المرور',
       onBack: () => Navigator.of(context).pop(),
       content: Form(
         key: _formKey,
