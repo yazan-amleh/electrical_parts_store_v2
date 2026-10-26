@@ -11,11 +11,14 @@ import '../../accounting/domain/enums/accounting_enums.dart';
 import '../../accounting/domain/repositories/accounting_query_repository.dart';
 import '../../inventory/domain/entities/product.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
+import '../../reports/domain/repositories/reports_repository.dart';
+import '../../reports/domain/entities/operational_report.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({
     required this.accountingQueryRepository,
     required this.productRepository,
+    this.reportsRepository,
     required this.user,
     required this.membership,
     super.key,
@@ -23,6 +26,7 @@ class DashboardPage extends StatefulWidget {
 
   final AccountingQueryRepository? accountingQueryRepository;
   final ProductRepository? productRepository;
+  final ReportsRepository? reportsRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -36,6 +40,8 @@ class _DashboardPageState extends State<DashboardPage> {
 
   TrialBalance? _trialBalance;
   List<Product> _products = const <Product>[];
+  OperationalReport? _operationalReport;
+  String? _operationalError;
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -87,6 +93,8 @@ class _DashboardPageState extends State<DashboardPage> {
             _buildHeader(context),
             const SizedBox(height: 12),
             _buildCurrencySelector(),
+            const SizedBox(height: 12),
+            _buildOperationalSummary(context),
             const SizedBox(height: 20),
             GridView.builder(
               shrinkWrap: true,
@@ -162,6 +170,61 @@ class _DashboardPageState extends State<DashboardPage> {
             onSelected: (_) => setState(() => _selectedCurrency = currency),
           ),
       ],
+    );
+  }
+
+  Widget _buildOperationalSummary(BuildContext context) {
+    final report = _operationalReport;
+    if (widget.reportsRepository == null) {
+      return const SizedBox.shrink();
+    }
+    if (_operationalError != null) {
+      return Card(
+        child: ListTile(
+          leading: const Icon(Icons.info_outline),
+          title: const Text('ملخص العمليات لهذا الشهر غير متاح'),
+          subtitle: Text(_operationalError!),
+        ),
+      );
+    }
+    if (report == null) return const SizedBox.shrink();
+    if (report.mayBeTruncated) {
+      return const Card(
+        child: ListTile(
+          leading: Icon(Icons.warning_amber_outlined),
+          title: Text('البيانات التشغيلية غير مكتملة'),
+          subtitle: Text('تجاوز التقرير حد القراءة؛ لا تعرض أرقامًا جزئية.'),
+        ),
+      );
+    }
+    if (report.salesRevenue.currency != _currency) {
+      return Card(
+        child: ListTile(
+          leading: const Icon(Icons.info_outline),
+          title: Text('ملخص العمليات — $_currency'),
+          subtitle: const Text(
+            'مصدر التقرير الحالي لا يدعم فصل العملات تلقائيًا؛ '
+            'لن تعرض أرقام بعملة أخرى.',
+          ),
+        ),
+      );
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Wrap(
+          spacing: 24,
+          runSpacing: 12,
+          children: [
+            Text('عمليات الشهر — $_currency'),
+            Text('المبيعات: ${report.salesRevenue.formatted} '
+                '(${report.salesCount} فاتورة)'),
+            Text('المشتريات: ${report.purchasesTotal.formatted} '
+                '(${report.purchasesCount} فاتورة)'),
+            Text('المصروفات: ${report.expensesTotal.formatted}'),
+          ],
+        ),
+      ),
     );
   }
 
@@ -423,6 +486,8 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _operationalReport = null;
+      _operationalError = null;
     });
 
     final trialBalanceResult = await accountingRepository.getTrialBalance(
@@ -453,12 +518,34 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
 
+    OperationalReport? operational;
+    String? operationalError;
+    final reportsRepository = widget.reportsRepository;
+    if (reportsRepository != null) {
+      final now = DateTime.now();
+      final start = DateTime(now.year, now.month);
+      final end = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      final result = await reportsRepository.getOperationalReport(
+        context: _storeContext,
+        from: start,
+        to: end,
+      );
+      if (!mounted) return;
+      if (result is Success<OperationalReport>) {
+        operational = result.value;
+      } else if (result is FailureResult<OperationalReport>) {
+        operationalError = result.failure.message;
+      }
+    }
+
     if (trialBalanceResult is Success<TrialBalance> &&
         productResult is Success<List<Product>>) {
       setState(() {
         _isLoading = false;
         _trialBalance = trialBalanceResult.value;
         _products = productResult.value;
+        _operationalReport = operational;
+        _operationalError = operationalError;
       });
     }
   }
