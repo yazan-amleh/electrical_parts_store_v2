@@ -77,6 +77,26 @@ void main() {
     expect(auth.resetCalls, 0);
   });
 
+  testWidgets('password reset keeps the success guidance visible',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(420, 920));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester
+        .pumpWidget(MaterialApp(home: LoginPage(controller: controller)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('نسيت كلمة المرور؟'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'member@example.com');
+    await tester.ensureVisible(find.text('إرسال رابط إعادة التعيين'));
+    await tester.tap(find.text('إرسال رابط إعادة التعيين'));
+    await tester.pumpAndSettle();
+
+    expect(auth.resetCalls, 1);
+    expect(find.textContaining('مجلد Spam'), findsOneWidget);
+    expect(find.text('العودة لتسجيل الدخول'), findsOneWidget);
+  });
+
   testWidgets('V1 auth layouts stay responsive at 320px and desktop widths',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
