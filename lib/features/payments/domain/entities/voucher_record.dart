@@ -28,6 +28,7 @@ class VoucherRecord {
   final String journalEntryId;
   final String status;
   final String? description;
+  final String? voucherNumber;
   final String? repairId;
   final String? paymentKind;
   String get typeLabel {
