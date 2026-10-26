@@ -17,6 +17,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   final _emailController = TextEditingController();
   bool _isSending = false;
   String? _errorMessage;
+  bool _resetRequested = false;
 
   Future<void> _submit() async {
     if (_isSending || !(_formKey.currentState?.validate() ?? false)) return;
@@ -35,7 +36,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       });
       return;
     }
-    setState(() => _isSending = false);
+    setState(() {
+      _isSending = false;
+      _resetRequested = true;
+    });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: Colors.green.shade600,
@@ -49,14 +53,13 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
             SizedBox(width: 8),
             Expanded(
               child: Text(
-                'إذا كان البريد مسجّلاً، سيصلك رابط إعادة تعيين كلمة المرور',
+                'إذا كان البريد مسجّلاً، سيصلك رابط إعادة تعيين كلمة المرور. تحقق أيضًا من مجلد الرسائل غير المرغوب فيها (Spam).',
               ),
             ),
           ],
         ),
       ),
     );
-    Navigator.of(context).pop();
   }
 
   @override
@@ -65,7 +68,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       variant: AuthDecorationVariant.reset,
       title: 'نسيت كلمة المرور؟',
       subtitle:
-          'أدخل بريدك الإلكتروني وسنرسل لك رابطاً لإعادة تعيين كلمة المرور',
+          'أدخل بريدك الإلكتروني لإرسال رابط إعادة تعيين كلمة المرور',
       onBack: () => Navigator.of(context).pop(),
       content: Form(
         key: _formKey,
@@ -100,6 +103,13 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
               onPressed: _submit,
             ),
             V1AuthControls.errorBanner(_errorMessage),
+            if (_resetRequested) ...[
+              const SizedBox(height: 16),
+              const Text(
+                'تم قبول الطلب. إذا كان البريد مسجّلاً، افحص صندوق الوارد ومجلد Spam.',
+                textAlign: TextAlign.center,
+              ),
+            ],
           ],
         ),
       ),
@@ -110,7 +120,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
           color: Colors.white.withValues(alpha: 0.9),
         ),
         label: Text(
-          'العودة إلى تسجيل الدخول',
+          'العودة لتسجيل الدخول',
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.9),
             fontWeight: FontWeight.w600,
