@@ -69,6 +69,8 @@ class _DashboardQuickAccessState extends State<DashboardQuickAccess> {
       case 'sales':
       case 'offers':
         return widget.role.canManageSales;
+      case 'vouchers-hub':
+        return widget.role.canManageSales || widget.role.canPostAccounting;
       case 'purchases':
       case 'purchase-orders':
       case 'products':
