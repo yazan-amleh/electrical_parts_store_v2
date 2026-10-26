@@ -50,7 +50,7 @@ class _RegisterPageState extends State<RegisterPage> {
         return V1AuthLayout(
           variant: AuthDecorationVariant.register,
           title: 'إنشاء حساب جديد',
-          subtitle: 'أنشئ حسابك لإدارة متجر القطع الكهربائية وخدماته',
+          subtitle: 'أدخل بياناتك لإنشاء حساب جديد في نظام المتجر',
           onBack: () => Navigator.of(context).pop(),
           content: Form(
             key: _formKey,
