@@ -4673,6 +4673,9 @@ async function postSaleInTransaction(
     taxMinorUnits: command.sale.taxMinorUnits,
     totalMinorUnits: grandTotalMinorUnits,
     costTotalMinorUnits,
+    // Keep a bounded immutable invoice snapshot for reliable period analytics.
+    // Retain the lines subcollection for individual invoice item access.
+    lines: storedLines,
     journalEntryId,
     status: 'posted',
     createdAt: FieldValue.serverTimestamp(),
