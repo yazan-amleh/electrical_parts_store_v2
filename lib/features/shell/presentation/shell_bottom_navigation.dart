@@ -30,12 +30,18 @@ class ShellBottomNavigation extends StatelessWidget {
         ),
         if (role.canManageSales)
           const ShellTabOption('sales', 'المبيعات', Icons.point_of_sale),
-        if (role.canManageSales || role.canPostAccounting)
+        if (role.canManageSales || role.canPostAccounting) ...[
+          const ShellTabOption(
+            'vouchers-hub',
+            'السندات',
+            Icons.receipt_long_outlined,
+          ),
           const ShellTabOption(
             'party-payments',
             'القبض والدفع',
             Icons.payments_outlined,
           ),
+        ],
         const ShellTabOption('customers', 'العملاء', Icons.people_outline),
         if (role.canManageInventory) ...[
           const ShellTabOption(
@@ -63,7 +69,7 @@ class ShellBottomNavigation extends StatelessWidget {
       for (final option in optionsForRole(role)) option.id: option,
     };
     final requested =
-        tabIds ?? const ['dashboard', 'sales', 'party-payments', 'customers'];
+        tabIds ?? const ['dashboard', 'sales', 'vouchers-hub', 'customers'];
     final displayedIds = <String>[];
     for (final id in requested) {
       if (available.containsKey(id) && !displayedIds.contains(id)) {
