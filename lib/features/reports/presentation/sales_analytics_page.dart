@@ -684,14 +684,61 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       return;
     }
 
+    final query = _searchController.text.trim().toLowerCase();
+    if (_selectedTab == 0) {
+      final report = _invoices;
+      if (report == null) {
+        _showMessage('تعذر تحميل تفاصيل الفواتير.');
+        return;
+      }
+      final customers = {
+        for (final row in analytics.customerRows) row.key: row.label,
+      };
+      final rows = <String>[
+        'invoice_id,posted_at_utc,customer,payment,subtotal_minor_units,'
+            'tax_minor_units,total_minor_units,cost_minor_units,currency,'
+            'journal_entry_id',
+        for (final item in report.invoices)
+          if (query.isEmpty ||
+              item.id.toLowerCase().contains(query) ||
+              (customers[item.customerId] ?? item.customerId ?? 'بدون عميل')
+                  .toLowerCase().contains(query) ||
+              (item.description?.toLowerCase().contains(query) ?? false))
+            [
+              _csvValue(item.id),
+              _csvValue(item.postedAt.toUtc().toIso8601String()),
+              _csvValue(customers[item.customerId] ??
+                  item.customerId ?? 'بدون عميل'),
+              _csvValue(item.paymentMethod),
+              item.subtotal.minorUnits.toString(),
+              item.tax.minorUnits.toString(),
+              item.total.minorUnits.toString(),
+              item.cost.minorUnits.toString(),
+              _csvValue(item.total.currency),
+              _csvValue(item.journalEntryId),
+            ].join(','),
+      ];
+      await Clipboard.setData(ClipboardData(text: rows.join('\r\n')));
+      if (mounted) {
+        _showMessage(report.mayBeTruncated
+            ? 'تم نسخ الفواتير المحمّلة فقط، وبعض الفواتير خارج سقف التحميل.'
+            : 'تم نسخ تفاصيل الفواتير المحمّلة بصيغة CSV.');
+      }
+      return;
+    }
+
     final rows = <String>[
       'group,name,quantity,sales,cost,gross_profit,currency',
       for (final row in [
-        ...analytics.productRows.map((value) => ('product', value)),
-        ...analytics.categoryRows.map((value) => ('category', value)),
-        ...analytics.customerRows.map((value) => ('customer', value)),
+        if (_selectedTab == 1)
+          ...analytics.productRows.map((value) => ('product', value)),
+        if (_selectedTab == 1)
+          ...analytics.categoryRows.map((value) => ('category', value)),
+        if (_selectedTab == 2)
+          ...analytics.customerRows.map((value) => ('customer', value)),
       ])
-        [
+        if (row.$2.label.toLowerCase().contains(query))
+          [
           _csvValue(row.$1),
           _csvValue(row.$2.label),
           row.$2.quantityMilliUnits.toString(),
@@ -712,7 +759,11 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
   }
 
   String _csvValue(String value) {
-    return '"${value.replaceAll('"', '""')}"';
+    // Prevent spreadsheet formula execution after CSV is pasted into Excel.
+    final dangerous = value.isNotEmpty &&
+        '=+-@\\t\\r'.contains(value.substring(0, 1));
+    final safe = dangerous ? "'$value" : value;
+    return '"${safe.replaceAll('"', '""')}"';
   }
 
   Future<void> _pickFrom() async {
