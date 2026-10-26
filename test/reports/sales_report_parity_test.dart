@@ -56,7 +56,8 @@ class _Reports implements ReportsRepository {
     required DateTime to,
     int limit = 500,
     int maxDocuments = 10000,
-  }) async => Success(analytics);
+  }) async =>
+      Success(analytics);
 
   @override
   Future<Result<SalesInvoiceReport>> getSalesInvoices({
@@ -65,23 +66,24 @@ class _Reports implements ReportsRepository {
     required DateTime to,
     int limit = 250,
     int maxDocuments = 1000,
-  }) async => Success(SalesInvoiceReport(
-    invoices: [
-      SalesInvoiceSummary(
-        id: 'sale-100',
-        storeId: context.storeId,
-        postedAt: DateTime.utc(2026, 10, 26),
-        customerId: 'customer-1',
-        paymentMethod: 'credit',
-        subtotal: const Money(minorUnits: 10000),
-        tax: const Money(minorUnits: 1700),
-        total: const Money(minorUnits: 11700),
-        cost: const Money(minorUnits: 5000),
-        journalEntryId: 'sale-100-journal',
-      ),
-    ],
-    mayBeTruncated: false,
-  ));
+  }) async =>
+      Success(SalesInvoiceReport(
+        invoices: [
+          SalesInvoiceSummary(
+            id: 'sale-100',
+            storeId: context.storeId,
+            postedAt: DateTime.utc(2026, 10, 26),
+            customerId: 'customer-1',
+            paymentMethod: 'credit',
+            subtotal: const Money(minorUnits: 10000),
+            tax: const Money(minorUnits: 1700),
+            total: const Money(minorUnits: 11700),
+            cost: const Money(minorUnits: 5000),
+            journalEntryId: 'sale-100-journal',
+          ),
+        ],
+        mayBeTruncated: false,
+      ));
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
