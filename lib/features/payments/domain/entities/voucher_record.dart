@@ -3,7 +3,7 @@ import '../../../parties/domain/enums/party_type.dart';
 import '../enums/party_payment_method.dart';
 
 class VoucherRecord {
-  const VoucherRecord({required this.id, required this.storeId, required this.partyType, required this.partyId, required this.paymentMethod, required this.amount, required this.postedAt, required this.journalEntryId, required this.status, this.description});
+  const VoucherRecord({required this.id, required this.storeId, required this.partyType, required this.partyId, required this.paymentMethod, required this.amount, required this.postedAt, required this.journalEntryId, required this.status, this.description, this.repairId, this.paymentKind});
   final String id;
   final String storeId;
   final PartyType partyType;
@@ -14,6 +14,13 @@ class VoucherRecord {
   final String journalEntryId;
   final String status;
   final String? description;
+  final String? repairId;
+  final String? paymentKind;
+  String get typeLabel {
+    if (paymentKind == 'advance') return 'دفعة مقدمة صيانة';
+    if (paymentKind == 'settlement') return 'تسوية صيانة';
+    return isReceipt ? 'قبض من عميل' : 'دفع لمورد';
+  }
   bool get isReceipt => partyType == PartyType.customer;
   String get statusLabel => switch (status) {
     'posted' => 'مرحّل',
