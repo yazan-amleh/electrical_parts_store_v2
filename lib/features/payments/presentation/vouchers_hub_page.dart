@@ -60,16 +60,23 @@ class VouchersHubPage extends StatelessWidget {
             initialPartyType: PartyType.supplier,
           ),
         ),
-      _HubSection(
-        label: 'حركات',
-        icon: Icons.history_rounded,
-        child: _RecentPaymentActivity(
+      if (canPay)
+        _HubSection(
+          label: 'حركات',
+          icon: Icons.history_rounded,
+          child: _RecentPaymentActivity(
           repository: activityLogRepository,
           user: user,
           membership: membership,
         ),
       ),
     ];
+
+    if (tabs.isEmpty) {
+      return const Center(
+        child: Text('لا تملك صلاحية الوصول إلى مركز السندات.'),
+      );
+    }
 
     return Directionality(
       textDirection: TextDirection.rtl,
