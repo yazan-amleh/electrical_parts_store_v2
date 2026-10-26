@@ -269,34 +269,12 @@ class _DashboardQuickAccessState extends State<DashboardQuickAccess> {
                 for (final item in shortcuts)
                   SizedBox(
                     width: itemWidth,
-                    height: 112,
-                    child: Card(
-                      margin: EdgeInsets.zero,
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        key: ValueKey('shortcut-${item.id}'),
-                        onTap: () => widget.onOpenModule(item.id),
-                        child: Padding(
-                          padding: const EdgeInsets.all(10),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                item.icon,
-                                size: 30,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                item.title,
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    height: 122,
+                    child: _ShortcutCard(
+                      key: ValueKey('shortcut-${item.id}'),
+                      item: item,
+                      onTap: () => widget.onOpenModule(item.id),
+                      onLongPress: _customize,
                     ),
                   ),
               ],
@@ -314,4 +292,103 @@ class _DashboardShortcut {
   final String id;
   final String title;
   final IconData icon;
+}
+
+class _ShortcutCard extends StatefulWidget {
+  const _ShortcutCard({
+    required this.item,
+    required this.onTap,
+    required this.onLongPress,
+    super.key,
+  });
+
+  final _DashboardShortcut item;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  @override
+  State<_ShortcutCard> createState() => _ShortcutCardState();
+}
+
+class _ShortcutCardState extends State<_ShortcutCard> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final primary = colors.primary;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.96 : 1,
+        duration: const Duration(milliseconds: 100),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: primary.withValues(alpha: _pressed ? 0.45 : _hovered ? 0.3 : 0.1),
+              width: _pressed ? 2 : _hovered ? 1.5 : 1,
+            ),
+            boxShadow: _hovered
+                ? [
+                    BoxShadow(
+                      color: primary.withValues(alpha: 0.15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : const [],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: widget.onTap,
+              onLongPress: widget.onLongPress,
+              onHighlightChanged: (value) {
+                if (mounted) setState(() => _pressed = value);
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(11),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            primary,
+                            primary.withValues(alpha: 0.75),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        widget.item.icon,
+                        size: 26,
+                        color: colors.onPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.item.title,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
