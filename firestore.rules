@@ -346,7 +346,10 @@ service cloud.firestore {
       }
 
       match /party_payments/{paymentId} {
-        allow read: if canReadStore(storeId);
+        // Individual receipts can be checked by active store members, but
+        // enumerating the complete financial voucher register is accounting-only.
+        allow get: if canReadStore(storeId);
+        allow list: if canPostAccounting(storeId);
         allow create, update, delete: if false;
       }
 
