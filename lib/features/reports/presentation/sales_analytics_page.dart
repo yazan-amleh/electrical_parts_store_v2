@@ -393,6 +393,110 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     );
   }
 
+  Widget _buildInvoiceDetails(
+    BuildContext context,
+    SalesAnalytics analytics,
+  ) {
+    if (_invoiceError != null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'تعذر تحميل تفاصيل الفواتير: $_invoiceError',
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
+      );
+    }
+    final report = _invoices;
+    if (report == null) {
+      return const Center(child: Text('لم تُحمّل تفاصيل الفواتير.'));
+    }
+    final customerNames = {
+      for (final row in analytics.customerRows) row.key: row.label,
+    };
+    final query = _searchController.text.trim().toLowerCase();
+    final invoices = report.invoices.where((invoice) {
+      final customer = customerNames[invoice.customerId] ??
+          invoice.customerId ??
+          'بدون عميل';
+      return query.isEmpty ||
+          invoice.id.toLowerCase().contains(query) ||
+          customer.toLowerCase().contains(query) ||
+          (invoice.description?.toLowerCase().contains(query) ?? false);
+    }).toList(growable: false);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('تفاصيل المبيعات', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text(
+              'يعرض الفواتير المرحّلة المحمّلة فقط. الأرقام والضرائب '
+              'تُقرأ من المستندات المحاسبية، وليست إعادة احتساب للتسويات.',
+            ),
+            if (report.mayBeTruncated)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'تنبيه: تجاوز عدد الفواتير سقف التحميل؛ القائمة والبحث '
+                  'والتصدير لا تشمل بقية الفواتير. ضيّق الفترة.',
+                  style: TextStyle(color: Colors.deepOrange),
+                ),
+              ),
+            const SizedBox(height: 10),
+            Text('${invoices.length} فاتورة مطابقة من '
+                '${report.invoices.length} فاتورة محمّلة'),
+            if (invoices.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('لا توجد فواتير مطابقة في البيانات المحمّلة.'),
+              )
+            else
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columns: const [
+                    DataColumn(label: Text('رقم الفاتورة')),
+                    DataColumn(label: Text('التاريخ')),
+                    DataColumn(label: Text('العميل')),
+                    DataColumn(label: Text('الدفع')),
+                    DataColumn(label: Text('قبل الضريبة')),
+                    DataColumn(label: Text('الضريبة')),
+                    DataColumn(label: Text('الإجمالي')),
+                    DataColumn(label: Text('مرجع القيد')),
+                  ],
+                  rows: [
+                    for (final item in invoices.take(100))
+                      DataRow(cells: [
+                        DataCell(SelectableText(item.id)),
+                        DataCell(Text(_formatDate(item.postedAt))),
+                        DataCell(Text(
+                          customerNames[item.customerId] ??
+                              item.customerId ?? 'بدون عميل',
+                        )),
+                        DataCell(Text(_paymentLabel(item.paymentMethod))),
+                        DataCell(Text(item.subtotal.formatted)),
+                        DataCell(Text(item.tax.formatted)),
+                        DataCell(Text(item.total.formatted)),
+                        DataCell(SelectableText(item.journalEntryId)),
+                      ]),
+                  ],
+                ),
+              ),
+            if (invoices.length > 100)
+              const Text(
+                'تظهر أول 100 فاتورة مطابقة. نسخ CSV يشمل جميع '
+                'الفواتير المحمّلة والمطابقة للبحث، وليس المعروضة فقط.',
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildRanking(
     BuildContext context, {
     required String title,
