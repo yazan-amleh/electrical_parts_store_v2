@@ -30,7 +30,7 @@ class ShellBottomNavigation extends StatelessWidget {
         ),
         if (role.canManageSales)
           const ShellTabOption('sales', 'المبيعات', Icons.point_of_sale),
-        if (role.canManageSales || role.canPostAccounting) ...[
+        if (role.canPostAccounting) ...[
           const ShellTabOption(
             'vouchers-hub',
             'السندات',
