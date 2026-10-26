@@ -468,13 +468,19 @@ class _SalesPageState extends State<SalesPage> {
           Row(
             children: [
               const Expanded(
-                child: Text('الإجمالي قبل الضريبة',
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                child: Text(
+                  'الإجمالي قبل الضريبة',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               const SizedBox(width: 8),
               Flexible(
-                child: Text(_cartTotal.formatted,
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                child: Text(
+                  _cartTotal.formatted,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
