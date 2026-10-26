@@ -14,8 +14,16 @@ function nextVoucherNumber({
   if (!(postedAt instanceof Date) || Number.isNaN(postedAt.getTime())) {
     throw Error('Invalid voucher posting date.');
   }
-  const year = postedAt.getUTCFullYear();
-  const month = String(postedAt.getUTCMonth() + 1).padStart(2, '0');
+  // Preserve V1's business calendar, without depending on server locale.
+  // A configurable per-store time zone can replace this when store settings
+  // support one. Intl handles DST boundary changes deterministically.
+  const calendar = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Hebron',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(postedAt);
+  const year = Number(calendar.find((part) => part.type === 'year').value);
+  const month = calendar.find((part) => part.type === 'month').value;
   const period = String(year) + month;
   const kind = partyType === 'customer' ? 'receipt' : 'payment';
   const previous = sequence || null;
