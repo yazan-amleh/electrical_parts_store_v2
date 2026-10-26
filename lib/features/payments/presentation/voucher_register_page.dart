@@ -215,6 +215,7 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
                               '${item.typeLabel} · ${item.amount.formatted}',
                             ),
                             subtitle: Text(
+                              'الرقم: ${item.voucherNumber ?? 'غير مرقم (قديم)'}\n'
                               'المرجع: ${item.id}\n'
                               'الطرف: ${item.partyId} · ${item.statusLabel}\n'
                               'القيد: ${item.journalEntryId} · '
