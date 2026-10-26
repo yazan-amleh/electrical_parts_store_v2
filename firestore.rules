@@ -345,6 +345,13 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      // Financial drafts are created/transited only by authenticated
+      // callable Functions. They never count toward accounting balances.
+      match /voucher_drafts/{draftId} {
+        allow get, list: if canPostAccounting(storeId);
+        allow create, update, delete: if false;
+      }
+
       match /party_payments/{paymentId} {
         // Individual receipts can be checked by active store members, but
         // enumerating the complete financial voucher register is accounting-only.
