@@ -24,6 +24,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     setState(() {
       _isSending = true;
       _errorMessage = null;
+      _resetRequested = false;
     });
     final result = await widget.controller.sendPasswordResetEmail(
       email: _emailController.text.trim(),
