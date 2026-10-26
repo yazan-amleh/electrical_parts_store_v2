@@ -664,7 +664,9 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   void _addProduct(Product product) {
-    if (_isPosting || _pendingQueued) return;
+    if (_isPosting || _pendingQueued) {
+      return;
+    }
     if (!product.isActive || product.storeId != widget.membership.storeId) {
       _showMessage('هذا الصنف غير متاح للبيع في هذا المتجر.');
       return;
@@ -815,7 +817,9 @@ class _SalesPageState extends State<SalesPage> {
           ],
         ),
       );
-      if (!mounted || confirmed != true) return;
+      if (!mounted || confirmed != true) {
+        return;
+      }
     }
     _clearCart();
   }
