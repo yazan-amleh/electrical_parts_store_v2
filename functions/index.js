@@ -16,6 +16,7 @@ const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
 const { createStoreHandler, selectStoreHandler } = require('./store_onboarding');
+const {createVoucherDraftHandlers} = require('./voucher_drafts');
 const {
   checkedMinorAdd,
   readBalanceForPosting,
@@ -794,6 +795,20 @@ exports.postExpense = onCall(async (request) => {
     );
   }
 });
+
+// Drafts are deliberately stored separately from posted financial documents.
+// Approvals reuse the canonical idempotent journal/balance posting transaction.
+const voucherDraftWorkflow = createVoucherDraftHandlers({
+  db,
+  FieldValue,
+  HttpsError,
+  parsePartyPaymentCommand,
+  postPartyPaymentInTransaction,
+});
+exports.saveVoucherDraft = onCall(voucherDraftWorkflow.save);
+exports.submitVoucherDraft = onCall(voucherDraftWorkflow.submit);
+exports.approveVoucherDraft = onCall(voucherDraftWorkflow.approve);
+exports.rejectVoucherDraft = onCall(voucherDraftWorkflow.reject);
 
 exports.postPartyPayment = onCall(async (request) => {
   if (!request.auth) {
