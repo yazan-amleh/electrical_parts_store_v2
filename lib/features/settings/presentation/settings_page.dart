@@ -35,6 +35,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _isLoading = true;
   bool _isSavingProfile = false;
   bool _isAddingMember = false;
+  String _memberSearch = '';
+  bool _showInactiveMembers = true;
   String? _errorMessage;
 
   bool get _canManage => widget.membership.role.canManageStore;
@@ -235,14 +237,51 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ],
             const SizedBox(height: 12),
+            TextField(
+              decoration: const InputDecoration(
+                labelText: 'البحث عن مستخدم',
+                hintText: 'الاسم أو البريد الإلكتروني أو UID',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (value) {
+                setState(() => _memberSearch = value.trim().toLowerCase());
+              },
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('إظهار المستخدمين غير النشطين'),
+              value: _showInactiveMembers,
+              onChanged: (value) {
+                setState(() => _showInactiveMembers = value);
+              },
+            ),
+            Text(
+              'إجمالي الأعضاء: ${_members.length} • '
+              'النشطون: ${_members.where((member) => member.isActive).length}',
+            ),
+            const SizedBox(height: 8),
             if (_members.isEmpty)
               const Text('لا يوجد أعضاء مسجلون.')
+            else if (_visibleMembers.isEmpty)
+              const Text('لا يوجد أعضاء مطابقون للبحث أو الفلتر.')
             else
-              for (final member in _members) _memberTile(context, member),
+              for (final member in _visibleMembers)
+                _memberTile(context, member),
           ],
         ),
       ),
     );
+  }
+
+  List<StoreMember> get _visibleMembers {
+    return _members.where((member) {
+      if (!_showInactiveMembers && !member.isActive) return false;
+      if (_memberSearch.isEmpty) return true;
+      return member.userId.toLowerCase().contains(_memberSearch) ||
+          (member.displayName ?? '').toLowerCase().contains(_memberSearch) ||
+          (member.email ?? '').toLowerCase().contains(_memberSearch);
+    }).toList();
   }
 
   Widget _memberTile(BuildContext context, StoreMember member) {
