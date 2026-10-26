@@ -220,6 +220,36 @@ class FirestoreReportsRepository implements ReportsRepository {
       ]);
       final salesPage = await salesPageFuture;
 
+      // Historical V2 sales keep their lines only in a subcollection.
+      // Read these in bounded batches. Never silently publish partial
+      // product/category results if the legacy recovery would be too costly.
+      final legacySales = salesPage.documents.where((snapshot) {
+        return snapshot.data()?['lines'] is! List;
+      }).toList(growable: false);
+      if (legacySales.length > 200) {
+        return const FailureResult<SalesAnalytics>(
+          ValidationFailure(
+            'Historical sale lines exceed the safe report read limit. '
+            'Narrow the period or perform a verified line-snapshot migration.',
+          ),
+        );
+      }
+      final recoveredLines = <String, List<Map<String, dynamic>>>{};
+      for (var offset = 0; offset < legacySales.length; offset += 20) {
+        final end = offset + 20 < legacySales.length
+            ? offset + 20
+            : legacySales.length;
+        final batch = legacySales.sublist(offset, end);
+        final lines = await Future.wait(
+          batch.map((invoice) => invoice.reference.collection('lines').get()),
+        );
+        for (var index = 0; index < batch.length; index++) {
+          recoveredLines[batch[index].id] = [
+            for (final item in lines[index].docs) item.data(),
+          ];
+        }
+      }
+
       final productLookup = <String, _ProductAnalyticsLookup>{};
       for (final document in lookupSnapshots[0].docs) {
         final data = document.data();
@@ -313,13 +343,23 @@ class FirestoreReportsRepository implements ReportsRepository {
           currency: saleCurrency,
         );
 
-        final rawLines = data['lines'];
-        if (rawLines is! List) {
-          continue;
+        final rawLines = data['lines'] ?? recoveredLines[document.id];
+        if (rawLines is! List || rawLines.isEmpty) {
+          return FailureResult<SalesAnalytics>(
+            ValidationFailure(
+              'Sale ${document.id} has no verifiable invoice lines.',
+            ),
+          );
         }
+        var verifiedSubtotal = 0;
+        var verifiedCost = 0;
         for (final rawLine in rawLines) {
           if (rawLine is! Map) {
-            continue;
+            return FailureResult<SalesAnalytics>(
+              ValidationFailure(
+                'Sale ${document.id} has malformed invoice lines.',
+              ),
+            );
           }
           final line = Map<String, dynamic>.from(rawLine);
           final productId = _analyticsNullableString(line['productId']);
@@ -340,21 +380,29 @@ class FirestoreReportsRepository implements ReportsRepository {
             quantityMilliUnits,
             factorMilliUnits,
           );
-          final lineRevenueMinorUnits = _nonNegative(
-            _scaled(
-                  _analyticsInt(line['unitPriceMinorUnits']),
-                  quantityMilliUnits,
-                ) -
-                _analyticsInt(line['discountMinorUnits']),
+          final lineRevenueMinorUnits = _analyticsInt(
+            line['totalMinorUnits'],
+            _nonNegative(
+              _scaled(
+                    _analyticsInt(line['unitPriceMinorUnits']),
+                    quantityMilliUnits,
+                  ) -
+                  _analyticsInt(line['discountMinorUnits']),
+            ),
           );
           final isService =
               line['isService'] is bool && line['isService'] as bool;
-          final lineCostMinorUnits = isService
-              ? 0
-              : _scaled(
-                  _analyticsInt(line['unitCostMinorUnits']),
-                  baseQuantityMilliUnits,
-                );
+          final lineCostMinorUnits = _analyticsInt(
+            line['costTotalMinorUnits'],
+            isService
+                ? 0
+                : _scaled(
+                    _analyticsInt(line['unitCostMinorUnits']),
+                    baseQuantityMilliUnits,
+                  ),
+          );
+          verifiedSubtotal += lineRevenueMinorUnits;
+          verifiedCost += lineCostMinorUnits;
 
           _addAnalyticsRow(
             productRows,
@@ -373,6 +421,18 @@ class FirestoreReportsRepository implements ReportsRepository {
             revenueMinorUnits: lineRevenueMinorUnits,
             costMinorUnits: lineCostMinorUnits,
             currency: saleCurrency,
+          );
+        }
+        final expectedSubtotal = _analyticsInt(
+          data['subtotalMinorUnits'],
+          saleTotalMinorUnits - _analyticsInt(data['taxMinorUnits']),
+        );
+        if (verifiedSubtotal != expectedSubtotal ||
+            verifiedCost != saleCostMinorUnits) {
+          return FailureResult<SalesAnalytics>(
+            ValidationFailure(
+              'Sale ${document.id} lines do not match posted totals.',
+            ),
           );
         }
       }
