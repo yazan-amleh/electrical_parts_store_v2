@@ -212,7 +212,7 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
                                   : Icons.north_east_rounded,
                             ),
                             title: Text(
-                              '${item.typeLabel} · ${item.amount.formatted} ${item.amount.currency}',
+                              '${item.typeLabel} · ${item.amount.formatted}',
                             ),
                             subtitle: Text(
                               'المرجع: ${item.id}\n'
