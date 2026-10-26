@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/errors/failure.dart';
@@ -56,6 +58,9 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
   PartyPaymentMethod _paymentMethod = PartyPaymentMethod.cash;
   DateTime? _dueDate;
   bool _isPosting = false;
+  PartyPayment? _pendingPayment;
+  String? _pendingSignature;
+  bool _pendingQueued = false;
 
   @override
   void initState() {
@@ -296,6 +301,14 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
   }
 
   Future<void> _postPayment({bool saveDraft = false}) async {
+    if (_isPosting) return;
+    if (_pendingQueued) {
+      _showMessage(
+        'هذه الحركة محفوظة في طابور الترحيل. لا تُرسلها مرة أخرى '
+        'حتى يتم التحقق من نتيجتها.',
+      );
+      return;
+    }
     final repository = widget.repository;
     if (!saveDraft && repository == null) {
       _showMessage('مستودع المقبوضات والمدفوعات غير موصول بهذه البيئة.');
@@ -333,8 +346,23 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       return;
     }
 
-    final paymentId = 'party-payment-${DateTime.now().microsecondsSinceEpoch}';
-    final payment = PartyPayment(
+    final signature = jsonEncode([
+      widget.membership.storeId,
+      widget.user.id,
+      _partyType.name,
+      partyId,
+      amount.minorUnits,
+      amount.currency,
+      _paymentMethod.name,
+      _descriptionController.text.trim(),
+      chequeNumber,
+      bankName,
+      _dueDate?.toUtc().toIso8601String(),
+    ]);
+    final previous = _pendingSignature == signature ? _pendingPayment : null;
+    final paymentId = previous?.id ??
+        'party-payment-${DateTime.now().microsecondsSinceEpoch}';
+    final payment = previous ?? PartyPayment(
       id: paymentId,
       storeId: widget.membership.storeId,
       idempotencyKey: IdempotencyKey(paymentId),
@@ -350,6 +378,9 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       bankName: bankName,
       dueDate: _dueDate,
     );
+
+    _pendingSignature = signature;
+    _pendingPayment = payment;
 
     if (saveDraft) {
       final draftRepository = widget.draftRepository;
@@ -368,6 +399,8 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       if (draftResult is FailureResult<String>) {
         _showMessage(draftResult.failure.message);
       } else {
+        _pendingPayment = null;
+        _pendingSignature = null;
         _showMessage(
             'تم حفظ المسودة دون ترحيل. أرسلها للاعتماد من تبويب المسودات.');
         _amountController.clear();
@@ -395,7 +428,8 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
     if (result is FailureResult<PartyPaymentPostingPlan>) {
       final failure = result.failure;
       if (failure is QueuedFailure) {
-        _showMessage('تم حفظ الحركة للطابور وسيُرحّل عند عودة الاتصال.');
+        _pendingQueued = true;
+        _showMessage('تم حفظ الحركة للطابور. لا تعِد إرسالها قبل التحقق من حالتها.');
       } else {
         _showMessage(failure.message);
       }
@@ -403,6 +437,9 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
     }
 
     if (result is Success<PartyPaymentPostingPlan>) {
+      _pendingPayment = null;
+      _pendingSignature = null;
+      _pendingQueued = false;
       _amountController.clear();
       _descriptionController.clear();
       _chequeNumberController.clear();
