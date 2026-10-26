@@ -405,6 +405,12 @@ class _AppShellPageState extends State<AppShellPage> {
     }
   }
 
+  void _openModule(String moduleId) {
+    final index = _modules.indexWhere((module) => module.id == moduleId);
+    if (index < 0) return;
+    setState(() => selectedIndex = index);
+  }
+
   Future<void> _searchModules() async {
     var filter = '';
     final modules = _modules;
@@ -506,6 +512,7 @@ class _AppShellPageState extends State<AppShellPage> {
         drawer: _buildDrawer(context),
         body: _ModuleLandingPage(
           module: selected,
+          onOpenModule: _openModule,
           user: widget.user,
           productRepository: widget.dependencies.productRepository,
           categoryRepository: widget.dependencies.categoryRepository,
@@ -643,6 +650,7 @@ class _AppShellPageState extends State<AppShellPage> {
 class _ModuleLandingPage extends StatelessWidget {
   const _ModuleLandingPage({
     required this.module,
+    required this.onOpenModule,
     required this.user,
     required this.productRepository,
     required this.categoryRepository,
@@ -676,6 +684,7 @@ class _ModuleLandingPage extends StatelessWidget {
   });
 
   final _Module module;
+  final ValueChanged<String> onOpenModule;
   final AuthenticatedUser user;
   final ProductRepository? productRepository;
   final CategoryRepository? categoryRepository;
@@ -952,6 +961,7 @@ class _ModuleLandingPage extends StatelessWidget {
         accountingQueryRepository: accountingQueryRepository,
         productRepository: productRepository,
         reportsRepository: reportsRepository,
+        onOpenModule: onOpenModule,
         user: user,
         membership: membership,
       );
