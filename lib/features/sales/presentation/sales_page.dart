@@ -833,7 +833,9 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   Future<void> _postSale() async {
-    if (_isPosting || _pendingQueued || !widget.membership.role.canManageSales) {
+    if (_isPosting ||
+        _pendingQueued ||
+        !widget.membership.role.canManageSales) {
       return;
     }
     final repository = widget.repository;
@@ -926,7 +928,8 @@ class _SalesPageState extends State<SalesPage> {
         accounts: _postingAccounts,
       );
     } catch (_) {
-      if (mounted && epoch == _postingEpoch &&
+      if (mounted &&
+          epoch == _postingEpoch &&
           postingUserId == widget.user.id &&
           sale.storeId == widget.membership.storeId) {
         setState(() => _isPosting = false);
@@ -934,7 +937,8 @@ class _SalesPageState extends State<SalesPage> {
       }
       return;
     }
-    if (!mounted || epoch != _postingEpoch ||
+    if (!mounted ||
+        epoch != _postingEpoch ||
         postingUserId != widget.user.id ||
         sale.storeId != widget.membership.storeId) {
       return;
