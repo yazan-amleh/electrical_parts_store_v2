@@ -46,8 +46,8 @@ void main() {
     await tester.tap(find.text('المبيعات'));
     expect(opened, 'sales');
 
-    await tester.tap(find.text('القبض والدفع'));
-    expect(opened, 'party-payments');
+    await tester.tap(find.text('السندات'));
+    expect(opened, 'vouchers-hub');
 
     await tester.tap(find.text('المزيد'));
     expect(moreCount, 1);
