@@ -2123,7 +2123,6 @@ async function postExpenseInTransaction(transaction, userId, command) {
       idempotencyKey: command.expense.idempotencyKey,
       requestFingerprint: fingerprint,
       journalEntryId,
-      voucherNumber,
       createdAt: FieldValue.serverTimestamp(),
     },
   );
@@ -2650,6 +2649,7 @@ async function postPartyPaymentInTransaction(
       idempotencyKey: command.payment.idempotencyKey,
       requestFingerprint: fingerprint,
       journalEntryId,
+      voucherNumber,
       createdAt: FieldValue.serverTimestamp(),
     },
   );
