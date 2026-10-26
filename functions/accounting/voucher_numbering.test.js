@@ -47,7 +47,7 @@ test('rejects wrong store, wrong year, wrong direction and exhausted counter', (
     {...valid, kind: 'payment'},
     {...valid, period: '202711'},
     {...valid, lastNumber: -1},
-    {...valid, lastNumber: 999999},
+    {...valid, lastNumber: 999999999},
     {...valid, lastNumber: 1.5},
   ]) {
     assert.throws(() => nextVoucherNumber({
