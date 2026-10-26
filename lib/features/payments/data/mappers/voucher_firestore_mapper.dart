@@ -16,7 +16,8 @@ abstract final class VoucherFirestoreMapper {
         data['storeId'] != expectedStoreId ||
         data['journalEntryId'] is! String ||
         (data['journalEntryId'] as String).trim().isEmpty) {
-      throw const FormatException('Voucher ownership or journal link is invalid.');
+      throw const FormatException(
+          'Voucher ownership or journal link is invalid.');
     }
     final partyType = switch (data['partyType']) {
       'customer' => PartyType.customer,
