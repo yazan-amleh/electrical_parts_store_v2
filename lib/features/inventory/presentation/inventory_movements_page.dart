@@ -246,7 +246,8 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
                       decimal: true,
                     ),
                     decoration: InputDecoration(
-                      labelText: 'تكلفة الوحدة (${product.purchasePrice.currency})',
+                      labelText:
+                          'تكلفة الوحدة (${product.purchasePrice.currency})',
                       prefixIcon: const Icon(Icons.price_change_outlined),
                     ),
                   ),
