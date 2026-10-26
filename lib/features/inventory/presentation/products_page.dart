@@ -88,9 +88,10 @@ class _ProductsPageState extends State<ProductsPage> {
                 ),
                 const SizedBox(width: 8),
                 FilledButton.icon(
-                  onPressed: widget.repository == null || !_canManage || _isSaving
-                      ? null
-                      : () => _openEditor(),
+                  onPressed:
+                      widget.repository == null || !_canManage || _isSaving
+                          ? null
+                          : () => _openEditor(),
                   icon: const Icon(Icons.add),
                   label: const Text('إضافة صنف'),
                 ),
@@ -112,20 +113,17 @@ class _ProductsPageState extends State<ProductsPage> {
                   ChoiceChip(
                     label: Text(option.$2),
                     selected: _productType == option.$1,
-                    onSelected: (_) =>
-                        setState(() => _productType = option.$1),
+                    onSelected: (_) => setState(() => _productType = option.$1),
                   ),
                 FilterChip(
                   label: const Text('منخفض المخزون'),
                   selected: _lowStockOnly,
-                  onSelected: (value) =>
-                      setState(() => _lowStockOnly = value),
+                  onSelected: (value) => setState(() => _lowStockOnly = value),
                 ),
                 FilterChip(
                   label: const Text('إظهار غير النشط'),
                   selected: _showInactive,
-                  onSelected: (value) =>
-                      setState(() => _showInactive = value),
+                  onSelected: (value) => setState(() => _showInactive = value),
                 ),
                 if (_categories.isNotEmpty)
                   DropdownButton<String?>(
@@ -198,9 +196,7 @@ class _ProductsPageState extends State<ProductsPage> {
         final product = products[index];
         return Card(
           child: ListTile(
-            onTap: !_canManage || _isSaving
-                ? null
-                : () => _openEditor(product),
+            onTap: !_canManage || _isSaving ? null : () => _openEditor(product),
             leading: CircleAvatar(
               child: Icon(
                 product.isService
