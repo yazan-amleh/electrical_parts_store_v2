@@ -245,9 +245,9 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(
-                      labelText: 'تكلفة الوحدة',
-                      prefixIcon: Icon(Icons.price_change_outlined),
+                    decoration: InputDecoration(
+                      labelText: 'تكلفة الوحدة (${product.purchasePrice.currency})',
+                      prefixIcon: const Icon(Icons.price_change_outlined),
                     ),
                   ),
                 ),
@@ -403,12 +403,15 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
       return;
     }
 
-    setState(() => _isLoadingMovements = true);
+    setState(() {
+      _isLoadingMovements = true;
+      _movements = const <InventoryMovement>[];
+    });
     final result = await inventoryRepository.getMovements(
       context: _storeContext,
       productId: product.id,
     );
-    if (!mounted) {
+    if (!mounted || _selectedProduct?.id != product.id) {
       return;
     }
 
@@ -514,7 +517,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
         : int.parse(parts[1].padRight(2, '0'));
     return Money(
       minorUnits: int.parse(parts.first) * 100 + fraction,
-      currency: 'ILS',
+      currency: _selectedProduct?.purchasePrice.currency ?? 'ILS',
     );
   }
 
