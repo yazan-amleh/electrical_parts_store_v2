@@ -133,11 +133,11 @@ class _DashboardPageState extends State<DashboardPage> {
               product.isActive && !product.isService && product.isLowStock,
         )
         .toList()
-          ..sort(
-            (left, right) => left.quantityOnHand.milliUnits.compareTo(
-              right.quantityOnHand.milliUnits,
-            ),
-          );
+      ..sort(
+        (left, right) => left.quantityOnHand.milliUnits.compareTo(
+          right.quantityOnHand.milliUnits,
+        ),
+      );
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -390,7 +390,9 @@ class _DashboardPageState extends State<DashboardPage> {
           minorUnits: _products
               .where(
                 (product) =>
-                    product.isActive && !product.isService && product.isLowStock,
+                    product.isActive &&
+                    !product.isService &&
+                    product.isLowStock,
               )
               .length,
           currency: _currency,
