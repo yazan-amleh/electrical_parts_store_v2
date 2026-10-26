@@ -459,6 +459,43 @@ describe('Firestore security rules', function () {
     );
   });
 
+  it('protects voucher drafts from direct client mutations', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(storeDoc(context.firestore(), 'voucher_drafts', 'draft-1'), {
+        storeId: STORE_ID,
+        createdBy: 'accountant-1',
+        status: 'pendingApproval',
+      });
+    });
+
+    await assertSucceeds(
+      getDocs(collection(accountantDb, 'stores', STORE_ID, 'voucher_drafts')),
+    );
+    await assertSucceeds(
+      getDoc(storeDoc(ownerDb, 'voucher_drafts', 'draft-1')),
+    );
+    await assertFails(
+      getDocs(collection(salesDb, 'stores', STORE_ID, 'voucher_drafts')),
+    );
+    await assertFails(
+      getDoc(storeDoc(outsiderDb, 'voucher_drafts', 'draft-1')),
+    );
+    await assertFails(
+      setDoc(storeDoc(ownerDb, 'voucher_drafts', 'draft-2'), {
+        storeId: STORE_ID,
+        status: 'posted',
+      }),
+    );
+    await assertFails(
+      updateDoc(storeDoc(accountantDb, 'voucher_drafts', 'draft-1'), {
+        status: 'posted',
+      }),
+    );
+    await assertFails(
+      deleteDoc(storeDoc(ownerDb, 'voucher_drafts', 'draft-1')),
+    );
+  });
+
   it('restricts financial voucher listings to accounting roles', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(
