@@ -36,6 +36,7 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
   String? _error;
   String _direction = 'all';
   String _status = 'all';
+  DateTimeRange? _dateRange;
 
   @override
   void initState() {
@@ -109,6 +110,14 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
   List<VoucherRecord> get _visibleRecords {
     final search = _searchController.text.trim().toLowerCase();
     return _records.where((record) {
+      final range = _dateRange;
+      if (range != null) {
+        final date = DateUtils.dateOnly(record.postedAt.toLocal());
+        if (date.isBefore(DateUtils.dateOnly(range.start)) ||
+            date.isAfter(DateUtils.dateOnly(range.end))) {
+          return false;
+        }
+      }
       if (_direction == 'receipt' && !record.isReceipt) return false;
       if (_direction == 'payment' && record.isReceipt) return false;
       if (_status != 'all' && record.status != _status) return false;
@@ -119,6 +128,33 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
           record.journalEntryId.toLowerCase().contains(search) ||
           (record.description?.toLowerCase().contains(search) ?? false);
     }).toList(growable: false);
+  }
+
+  Future<void> _printSingle(VoucherRecord record) async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      await _exportService.printPdf([record]);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تعذرت طباعة السند.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  Future<void> _pickDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      initialDateRange: _dateRange,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (!mounted || picked == null) return;
+    setState(() => _dateRange = picked);
   }
 
   Future<bool> _export(
@@ -195,6 +231,21 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
                   if (value != null) setState(() => _status = value);
                 },
               ),
+              OutlinedButton.icon(
+                onPressed: _pickDateRange,
+                icon: const Icon(Icons.date_range_outlined),
+                label: Text(
+                  _dateRange == null
+                      ? 'تحديد فترة'
+                      : 'فترة: ${_dateRange!.start.year}/${_dateRange!.start.month}/${_dateRange!.start.day}'
+                          ' – ${_dateRange!.end.year}/${_dateRange!.end.month}/${_dateRange!.end.day}',
+                ),
+              ),
+              if (_dateRange != null)
+                TextButton(
+                  onPressed: () => setState(() => _dateRange = null),
+                  child: const Text('مسح الفترة'),
+                ),
               OutlinedButton.icon(
                 onPressed: _exporting || records.isEmpty
                     ? null
@@ -279,6 +330,11 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
                               '${item.postedAt.toLocal().toString().split('.').first}',
                             ),
                             isThreeLine: true,
+                            trailing: IconButton(
+                              tooltip: 'طباعة هذا السند',
+                              onPressed: _exporting ? null : () => _printSingle(item),
+                              icon: const Icon(Icons.print_outlined),
+                            ),
                           ),
                         );
                       },
