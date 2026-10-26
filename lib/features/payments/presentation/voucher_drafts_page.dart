@@ -175,8 +175,7 @@ class _VoucherDraftsPageState extends State<VoucherDraftsPage> {
               final fraction = parts.length == 1
                   ? 0
                   : int.tryParse(parts.last.padRight(2, '0'));
-              if (major == null || fraction == null ||
-                  major > 90071992547409) {
+              if (major == null || fraction == null || major > 90071992547409) {
                 return;
               }
               final minorUnits = major * 100 + fraction;
