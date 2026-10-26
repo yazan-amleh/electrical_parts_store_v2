@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 /// V1's authentication visual language, ported without V1's controllers,
@@ -37,14 +39,14 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 1200),
     );
     _fadeAnimation = CurvedAnimation(
       parent: _animationController,
       curve: Curves.easeIn,
     );
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.5),
+      begin: const Offset(0, 0.3),
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _animationController,
@@ -55,7 +57,8 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
 
   @override
   Widget build(BuildContext context) {
-    final height = MediaQuery.sizeOf(context).height;
+    final screenSize = MediaQuery.sizeOf(context);
+    final height = screenSize.height;
     final isLogin = widget.variant == AuthDecorationVariant.login;
     final isReset = widget.variant == AuthDecorationVariant.reset;
     return Directionality(
@@ -69,28 +72,61 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
                   begin: Alignment.topRight,
                   end: Alignment.bottomLeft,
                   colors: [
-                    isReset ? Colors.blue.shade700 : Colors.blue.shade800,
-                    Colors.indigo.shade900,
+                    const Color(0xFF1A237E),
+                    const Color(0xFF303F9F),
+                    const Color(0xFF1565C0),
                   ],
+                  stops: const [0.1, 0.5, 0.9],
                 ),
               ),
               child: const SizedBox.expand(),
             ),
             Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: height * (isLogin ? 0.4 : 0.3),
-              child: CustomPaint(
-                painter: V1AuthCurvePainter(variant: widget.variant),
+              top: -height * 0.1,
+              right: -screenSize.width * 0.2,
+              child: CircleAvatar(
+                radius: (screenSize.width * 0.3).clamp(60.0, 300.0),
+                backgroundColor: Colors.white.withValues(alpha: 0.1),
               ),
             ),
+            Positioned(
+              bottom: -height * 0.05,
+              left: -screenSize.width * 0.1,
+              child: CircleAvatar(
+                radius: (screenSize.width * 0.25).clamp(50.0, 250.0),
+                backgroundColor: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+            for (var i = 0; i < 6; i++)
+              Positioned(
+                top: height * i / 6,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: Container(
+                    height: height / 12,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.white.withValues(alpha: 0),
+                          Colors.white.withValues(alpha: 0.04),
+                          Colors.white.withValues(alpha: 0),
+                        ],
+                        stops: const [0.1, 0.5, 0.9],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             SafeArea(
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 560),
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 20,
+                    ),
                     child: FadeTransition(
                       opacity: _fadeAnimation,
                       child: SlideTransition(
@@ -98,7 +134,7 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            SizedBox(height: height * (isLogin ? 0.1 : 0.05)),
+                            const SizedBox(height: 12),
                             if (widget.onBack != null)
                               Align(
                                 alignment: Alignment.centerRight,
@@ -114,37 +150,28 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
                             if (isReset) SizedBox(height: height * 0.02),
                             Center(
                               child: Hero(
-                                tag: 'app_logo',
+                                tag: isReset ? 'reset_logo' : 'app_logo',
                                 child: Container(
-                                  height: isLogin
-                                      ? 120
-                                      : isReset
-                                          ? 100
-                                          : 90,
-                                  width: isLogin
-                                      ? 120
-                                      : isReset
-                                          ? 100
-                                          : 90,
+                                  height: isLogin ? 130 : 110,
+                                  width: isLogin ? 130 : 110,
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color:
-                                            Colors.black.withValues(alpha: 0.2),
-                                        blurRadius: 15,
-                                        offset: const Offset(0, 5),
+                                        color: Colors.blue.withValues(alpha: 0.5),
+                                        blurRadius: 20,
+                                        spreadRadius: 2,
                                       ),
                                     ],
                                   ),
                                   child: Icon(
                                     isReset
-                                        ? Icons.lock_reset
+                                        ? Icons.lock_reset_rounded
                                         : isLogin
-                                            ? Icons.electrical_services_outlined
-                                            : Icons.person_add,
-                                    size: isLogin ? 64 : 45,
+                                            ? Icons.electric_bolt_rounded
+                                            : Icons.person_add_alt_1_rounded,
+                                    size: isLogin ? 68 : 56,
                                     color: Colors.blue.shade700,
                                   ),
                                 ),
@@ -160,7 +187,7 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
                               widget.title,
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: 28,
+                                fontSize: isLogin ? 32 : 28,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
                                 shadows: [
@@ -178,8 +205,9 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 16,
-                                color: Colors.white.withValues(alpha: 0.8),
+                                color: Colors.white.withValues(alpha: 0.9),
                                 letterSpacing: 0.5,
+                                height: 1.3,
                               ),
                             ),
                             SizedBox(
@@ -188,15 +216,17 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
                                     : isReset
                                         ? 40
                                         : 25),
-                            Card(
-                              elevation: 8,
-                              shadowColor: Colors.black.withValues(alpha: 0.2),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(24),
-                                child: widget.content,
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(24),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(
+                                  sigmaX: 10,
+                                  sigmaY: 10,
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: widget.content,
+                                ),
                               ),
                             ),
                             if (widget.footer != null) ...[
@@ -301,39 +331,49 @@ class V1AuthControls {
     String? hint,
     Widget? suffix,
   }) {
-    final normal = BorderSide(color: Colors.grey.shade300);
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      labelStyle: TextStyle(color: Colors.grey.shade700, fontSize: 16),
+      floatingLabelBehavior: FloatingLabelBehavior.auto,
+      floatingLabelStyle: TextStyle(
+        color: Colors.blue.shade800,
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+      ),
+      labelStyle: TextStyle(
+        color: Colors.blue.shade800,
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+      ),
+      hintStyle: TextStyle(color: Colors.grey.shade400),
       prefixIcon: Icon(icon, color: Colors.blue.shade700, size: 22),
       suffixIcon: suffix,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: normal,
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: normal,
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.blue.shade600, width: 2),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: Colors.blue.shade400, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         borderSide: const BorderSide(color: Colors.red),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         borderSide: const BorderSide(color: Colors.red, width: 2),
       ),
       contentPadding: const EdgeInsets.symmetric(
-        vertical: 16,
+        vertical: 18,
         horizontal: 16,
       ),
       filled: true,
-      fillColor: Colors.grey.shade50,
+      fillColor: Colors.white,
     );
   }
 
@@ -345,7 +385,10 @@ class V1AuthControls {
     return Container(
       height: 56,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6A11CB), Color(0xFF2575FC)],
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.blue.shade300.withValues(alpha: 0.3),
@@ -357,12 +400,13 @@ class V1AuthControls {
       child: ElevatedButton(
         onPressed: loading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue.shade700,
+          backgroundColor: Colors.transparent,
           foregroundColor: Colors.white,
-          disabledBackgroundColor: Colors.blue.shade300,
+          disabledBackgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
         child: loading
