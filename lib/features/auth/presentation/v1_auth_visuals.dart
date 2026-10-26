@@ -85,7 +85,7 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
               top: -height * 0.1,
               right: -screenSize.width * 0.2,
               child: CircleAvatar(
-                radius: (screenSize.width * 0.3).clamp(60.0, 300.0),
+                radius: (screenSize.width * 0.3).clamp(60.0, 300.0).toDouble(),
                 backgroundColor: Colors.white.withValues(alpha: 0.1),
               ),
             ),
@@ -93,7 +93,7 @@ class _V1AuthLayoutState extends State<V1AuthLayout>
               bottom: -height * 0.05,
               left: -screenSize.width * 0.1,
               child: CircleAvatar(
-                radius: (screenSize.width * 0.25).clamp(50.0, 250.0),
+                radius: (screenSize.width * 0.25).clamp(50.0, 250.0).toDouble(),
                 backgroundColor: Colors.white.withValues(alpha: 0.08),
               ),
             ),
