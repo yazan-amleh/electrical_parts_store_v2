@@ -63,7 +63,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   Widget build(BuildContext context) {
     return V1AuthLayout(
       variant: AuthDecorationVariant.reset,
-      title: 'إعادة تعيين كلمة المرور',
+      title: 'نسيت كلمة المرور؟',
       subtitle:
           'أدخل بريدك الإلكتروني وسنرسل لك رابطاً لإعادة تعيين كلمة المرور',
       onBack: () => Navigator.of(context).pop(),
