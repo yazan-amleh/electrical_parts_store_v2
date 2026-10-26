@@ -10,9 +10,11 @@ const {
   initializeTestEnvironment,
 } = require('@firebase/rules-unit-testing');
 const {
+  collection,
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   Timestamp,
   updateDoc,
@@ -454,6 +456,31 @@ describe('Firestore security rules', function () {
         description: 'Client write',
         timestamp: Timestamp.now(),
       }),
+    );
+  });
+
+  it('restricts financial voucher listings to accounting roles', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        storeDoc(context.firestore(), 'party_payments', 'posted-1'),
+        { storeId: STORE_ID, status: 'posted' },
+      );
+    });
+
+    await assertSucceeds(
+      getDocs(collection(accountantDb, 'stores', STORE_ID, 'party_payments')),
+    );
+    await assertSucceeds(
+      getDoc(storeDoc(salesDb, 'party_payments', 'posted-1')),
+    );
+    await assertFails(
+      getDocs(collection(salesDb, 'stores', STORE_ID, 'party_payments')),
+    );
+    await assertFails(
+      getDocs(collection(warehouseDb, 'stores', STORE_ID, 'party_payments')),
+    );
+    await assertFails(
+      getDocs(collection(outsiderDb, 'stores', STORE_ID, 'party_payments')),
     );
   });
 
