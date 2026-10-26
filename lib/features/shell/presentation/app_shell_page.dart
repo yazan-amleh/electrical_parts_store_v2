@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app_dependencies.dart';
+import 'shell_bottom_navigation.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../dashboard/presentation/dashboard_page.dart';
 import '../../categories/domain/repositories/category_repository.dart';
@@ -83,6 +84,7 @@ class AppShellPage extends StatefulWidget {
 }
 
 class _AppShellPageState extends State<AppShellPage> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   static const _sections = <_NavigationSection>[
     _NavigationSection(
       title: 'عام',
@@ -490,10 +492,12 @@ class _AppShellPageState extends State<AppShellPage> {
   Widget build(BuildContext context) {
     final modules = _modules;
     final selected = modules[selectedIndex];
+    final showCompactNavigation = MediaQuery.sizeOf(context).width < 760;
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
+        key: _scaffoldKey,
         appBar: AppBar(
           title: Text(selected.label),
           actions: [
@@ -510,6 +514,14 @@ class _AppShellPageState extends State<AppShellPage> {
           ],
         ),
         drawer: _buildDrawer(context),
+        bottomNavigationBar: showCompactNavigation
+            ? ShellBottomNavigation(
+                activeModuleId: selected.id,
+                role: widget.membership.role,
+                onOpenModule: _openModule,
+                onMore: () => _scaffoldKey.currentState?.openDrawer(),
+              )
+            : null,
         body: _ModuleLandingPage(
           module: selected,
           onOpenModule: _openModule,
