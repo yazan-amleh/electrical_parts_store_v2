@@ -2384,7 +2384,27 @@ async function postPartyPaymentInTransaction(
 
   const partyBalanceSnapshot = await transaction.get(partyBalanceRef);
 
+  // Allocate a receipt/payment serial in the same transaction as its journal.
+  // Retried idempotent commands return before this read and never increment it.
   const isCustomerPayment = command.payment.partyType === 'customer';
+  const voucherYear = command.payment.postedAt.getUTCFullYear();
+  const voucherKind = isCustomerPayment ? 'receipt' : 'payment';
+  const voucherSequenceRef = storeRef.collection('voucher_sequences')
+    .doc(voucherKind + '-' + voucherYear);
+  const voucherSequenceSnapshot = await transaction.get(voucherSequenceRef);
+  const previousVoucherSerial = voucherSequenceSnapshot.exists
+    ? voucherSequenceSnapshot.data().lastNumber
+    : 0;
+  if (!Number.isSafeInteger(previousVoucherSerial) ||
+      previousVoucherSerial < 0 ||
+      previousVoucherSerial >= 999999 ||
+      (voucherSequenceSnapshot.exists &&
+        voucherSequenceSnapshot.data().storeId !== command.storeId)) {
+    conflict('Voucher sequence is invalid or exhausted.');
+  }
+  const nextVoucherSerial = previousVoucherSerial + 1;
+  const voucherNumber = (isCustomerPayment ? 'RC-' : 'PV-') +
+    voucherYear + '-' + String(nextVoucherSerial).padStart(6, '0');
   const settlementAccountType =
     !isCustomerPayment && command.payment.paymentMethod === 'cheque'
       ? 'liability'
@@ -2474,6 +2494,7 @@ async function postPartyPaymentInTransaction(
     currency: command.payment.currency,
     description: command.payment.description,
     journalEntryId,
+    voucherNumber,
     status: command.payment.paymentMethod === 'cheque'
       ? 'pending'
       : 'posted',
@@ -2485,6 +2506,13 @@ async function postPartyPaymentInTransaction(
     createdAt: FieldValue.serverTimestamp(),
   };
   transaction.set(paymentRef, paymentData);
+  transaction.set(voucherSequenceRef, {
+    storeId: command.storeId,
+    kind: voucherKind,
+    year: voucherYear,
+    lastNumber: nextVoucherSerial,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
 
   transaction.set(
     partyLedgerRef,
@@ -2626,6 +2654,7 @@ async function postPartyPaymentInTransaction(
     status: 'posted',
     paymentId: command.payment.id,
     journalEntryId,
+    voucherNumber,
   };
 }
 
