@@ -161,7 +161,8 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
                 items: const [
                   DropdownMenuItem(value: 'all', child: Text('كل الحالات')),
                   DropdownMenuItem(value: 'posted', child: Text('مرحّل')),
-                  DropdownMenuItem(value: 'pending', child: Text('شيك قيد التحصيل')),
+                  DropdownMenuItem(
+                      value: 'pending', child: Text('شيك قيد التحصيل')),
                   DropdownMenuItem(value: 'cleared', child: Text('شيك محصّل')),
                   DropdownMenuItem(value: 'bounced', child: Text('شيك مرتجع')),
                 ],
