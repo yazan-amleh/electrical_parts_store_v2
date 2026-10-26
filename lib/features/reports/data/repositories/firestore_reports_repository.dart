@@ -7,6 +7,7 @@ import '../../../../core/tenancy/store_context.dart';
 import '../../../../infrastructure/firebase/firebase_paths.dart';
 import '../../domain/entities/operational_report.dart';
 import '../../domain/entities/sales_analytics.dart';
+import '../../domain/entities/sales_invoice_report.dart';
 import '../../domain/repositories/reports_repository.dart';
 import '../mappers/report_firestore_mapper.dart';
 
@@ -171,6 +172,95 @@ class FirestoreReportsRepository implements ReportsRepository {
       );
     } catch (error) {
       return FailureResult<OperationalReport>(
+        InfrastructureFailure(error.toString()),
+      );
+    }
+  }
+
+  @override
+  Future<Result<SalesInvoiceReport>> getSalesInvoices({
+    required StoreContext context,
+    required DateTime from,
+    required DateTime to,
+    int limit = 250,
+    int maxDocuments = 1000,
+  }) async {
+    if (context.storeId.trim().isEmpty || from.isAfter(to) ||
+        limit < 1 || limit > 2000 ||
+        maxDocuments < 1 || maxDocuments > 10000) {
+      return const FailureResult<SalesInvoiceReport>(
+        ValidationFailure('Invalid sales invoice report scope or page limit.'),
+      );
+    }
+    try {
+      final page = await _readPeriodDocuments(
+        collection: FirebasePaths.sales(_firestore, context.storeId),
+        start: Timestamp.fromDate(from.toUtc()),
+        end: Timestamp.fromDate(to.toUtc()),
+        pageSize: limit,
+        maxDocuments: maxDocuments,
+      );
+      final invoices = <SalesInvoiceSummary>[];
+      for (final document in page.documents) {
+        final data = document.data();
+        if (data == null || data['storeId'] != context.storeId ||
+            data['status'] != 'posted') {
+          return FailureResult<SalesInvoiceReport>(
+            ValidationFailure(
+              'Sale ${document.id} has invalid tenant or posting status.',
+            ),
+          );
+        }
+        final postedAt = _analyticsDate(data['postedAt']);
+        final currency = data['currency'];
+        final subtotal = data['subtotalMinorUnits'];
+        final tax = data['taxMinorUnits'];
+        final total = data['totalMinorUnits'];
+        final cost = data['costTotalMinorUnits'];
+        final journalId = data['journalEntryId'];
+        if (postedAt == null || currency is! String || currency.isEmpty ||
+            subtotal is! int || subtotal < 0 ||
+            tax is! int || tax < 0 ||
+            total is! int || total <= 0 ||
+            cost is! int || cost < 0 ||
+            subtotal + tax != total ||
+            journalId is! String || journalId.isEmpty) {
+          return FailureResult<SalesInvoiceReport>(
+            ValidationFailure(
+              'Sale ${document.id} has incomplete or inconsistent totals.',
+            ),
+          );
+        }
+        invoices.add(SalesInvoiceSummary(
+          id: document.id,
+          storeId: context.storeId,
+          postedAt: postedAt,
+          customerId: _analyticsNullableString(data['customerId']),
+          paymentMethod: _analyticsString(data['paymentMethod'], 'unknown'),
+          subtotal: Money(minorUnits: subtotal, currency: currency),
+          tax: Money(minorUnits: tax, currency: currency),
+          total: Money(minorUnits: total, currency: currency),
+          cost: Money(minorUnits: cost, currency: currency),
+          journalEntryId: journalId,
+          description: _analyticsNullableString(data['description']),
+        ));
+      }
+      invoices.sort((a, b) {
+        final order = b.postedAt.compareTo(a.postedAt);
+        return order == 0 ? a.id.compareTo(b.id) : order;
+      });
+      return Success<SalesInvoiceReport>(
+        SalesInvoiceReport(
+          invoices: List.unmodifiable(invoices),
+          mayBeTruncated: page.mayBeTruncated,
+        ),
+      );
+    } on FirebaseException catch (error) {
+      return FailureResult<SalesInvoiceReport>(
+        InfrastructureFailure(error.message ?? error.code),
+      );
+    } catch (error) {
+      return FailureResult<SalesInvoiceReport>(
         InfrastructureFailure(error.toString()),
       );
     }
