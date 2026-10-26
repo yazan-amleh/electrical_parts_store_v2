@@ -37,6 +37,15 @@ A module is accepted **only** after these distinct gates pass: (1) V1 current-so
 
 Remaining sales release requirements: V1 all screens and report export parity; actual draft/returns and reversal scenarios; authorization/idempotency with concurrent users; offline queue recovery and reload; quantities, discounts, multiple currencies and tax posting reconciliation; real store test with Firebase Functions/Firestore/Storage; narrow-device and printed-invoice visual checks. None is certified by this checkpoint.
 
+## Sales reporting parity work (2026-10-27)
+
+- The approved V1 three sales-report tabs are now represented as **تفاصيل المبيعات**, **الأصناف الأكثر مبيعاً**, and **ملخص العملاء** in V2, with tab-scoped searching and CSV copying. These are partial functional equivalents; exact UI and V1's bulk invoice printing, single-invoice layout and XLSX export remain open.
+- New posted sale headers now include an immutable bounded **line snapshot** (in the same transaction) in addition to the existing subcollection. This fixes the previous silent omission of product/category rankings in analytics.
+- Older invoices without embedded lines are recovered from their `lines` subcollections in batches of 20, to a strict maximum of **200 old invoice reads per report**. Exceeding this fails explicitly; it never publishes misleading partial product/category totals.
+- Analytics reconciles the sum of lines against header subtotal and COGS; a missing or malformed set fails rather than showing inaccurate profitability.
+- The posted invoice list validates invoice total = subtotal + tax, limits loaded documents by default to 1,000, warns on truncation, and displays 100 matched headers per UI view. Search and CSV apply to all **loaded** invoices; none of this claims historical completeness outside the bounded query.
+- Major remaining report release gaps: verified per-invoice PDF with sale lines, bulk selection/printing, XLSX exports, period-wide verification with mixed currencies, actual V1 visual comparison and emulator/deployed Firebase E2E.
+
 ## Mandatory rollout gate
 
 Do not deploy or merge merely because CI succeeds. Verify roles, privileged service accounts, close-period writer boundaries and real backup/restore recovery in an **isolated V2** environment. Obtain an explicit deployment decision from the owner. The existing manual deploy workflow checks out `v2/port-v1-complete`, not this audit branch; approving a separate deployment action requires a deliberate branch/release review.
