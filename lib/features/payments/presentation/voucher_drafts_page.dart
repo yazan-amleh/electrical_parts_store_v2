@@ -4,6 +4,7 @@ import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
 import '../domain/entities/voucher_draft.dart';
 import '../domain/repositories/voucher_draft_repository.dart';
 
