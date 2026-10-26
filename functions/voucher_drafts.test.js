@@ -198,3 +198,36 @@ test('rejection preserves immutable financial data without journal entries', asy
     (error) => error.code === 'failed-precondition',
   );
 });
+
+test('editing an unsent draft increments revision without posting', async () => {
+  const t = setup();
+  const identity = {storeId: 'store-a', draftId: 'voucher-1'};
+  await t.handlers.save(t.request('creator', t.command));
+  const changed = await t.handlers.update(t.request('creator', {
+    ...identity, expectedRevision: 1,
+    amountMinorUnits: 2750, description: 'Corrected receipt',
+  }));
+  assert.equal(changed.revision, 2);
+  assert.equal(t.documents.get(t.key).financialRequest.payment.amountMinorUnits, 2750);
+  assert.equal(t.postCount, 0);
+  await assert.rejects(
+    t.handlers.update(t.request('creator', {
+      ...identity, expectedRevision: 1,
+      amountMinorUnits: 9000,
+    })),
+    (error) => error.code === 'failed-precondition',
+  );
+  await assert.rejects(
+    t.handlers.update(t.request('approver', {
+      ...identity, expectedRevision: 2, amountMinorUnits: 1000,
+    })),
+    (error) => error.code === 'permission-denied',
+  );
+  await t.handlers.submit(t.request('creator', identity));
+  await assert.rejects(
+    t.handlers.update(t.request('creator', {
+      ...identity, expectedRevision: 2, amountMinorUnits: 1000,
+    })),
+    (error) => error.code === 'failed-precondition',
+  );
+});
