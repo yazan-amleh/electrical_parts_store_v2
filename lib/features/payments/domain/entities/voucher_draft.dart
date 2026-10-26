@@ -12,6 +12,7 @@ class VoucherDraft {
     required this.amount,
     required this.description,
     required this.postedAt,
+    required this.revision,
     this.approvedBy,
     this.journalEntryId,
     this.rejectionReason,
@@ -26,6 +27,7 @@ class VoucherDraft {
   final Money amount;
   final String? description;
   final DateTime postedAt;
+  final int revision;
   final String? approvedBy;
   final String? journalEntryId;
   final String? rejectionReason;
