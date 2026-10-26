@@ -118,7 +118,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                 onTap: (tab) => setState(() => _selectedTab = tab),
                 tabs: const [
                   Tab(text: 'تفاصيل المبيعات', icon: Icon(Icons.receipt_long)),
-                  Tab(text: 'الأصناف الأكثر مبيعاً', icon: Icon(Icons.inventory_2)),
+                  Tab(
+                      text: 'الأصناف الأكثر مبيعاً',
+                      icon: Icon(Icons.inventory_2)),
                   Tab(text: 'ملخص العملاء', icon: Icon(Icons.groups_outlined)),
                 ],
               ),
@@ -431,7 +433,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('تفاصيل المبيعات', style: Theme.of(context).textTheme.titleLarge),
+            Text('تفاصيل المبيعات',
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(
               'يعرض الفواتير المرحّلة المحمّلة فقط. الأرقام والضرائب '
@@ -475,7 +478,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                         DataCell(Text(_formatDate(item.postedAt))),
                         DataCell(Text(
                           customerNames[item.customerId] ??
-                              item.customerId ?? 'بدون عميل',
+                              item.customerId ??
+                              'بدون عميل',
                         )),
                         DataCell(Text(_paymentLabel(item.paymentMethod))),
                         DataCell(Text(item.subtotal.formatted)),
@@ -525,10 +529,11 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                     const DataColumn(label: Text('مجمل الربح')),
                   ],
                   rows: [
-                    for (final row in rows.where((row) =>
-                        row.label.toLowerCase().contains(
-                          _searchController.text.trim().toLowerCase(),
-                        )).take(25))
+                    for (final row in rows
+                        .where((row) => row.label.toLowerCase().contains(
+                              _searchController.text.trim().toLowerCase(),
+                            ))
+                        .take(25))
                       DataRow(
                         cells: [
                           DataCell(
@@ -616,7 +621,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       to: _to,
     );
     final invoicesResult = await invoiceFuture;
-    if (!mounted || epoch != _reportEpoch ||
+    if (!mounted ||
+        epoch != _reportEpoch ||
         requestedStore != widget.membership.storeId ||
         requestedUser != widget.user.id) {
       return;
@@ -702,13 +708,14 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
           if (query.isEmpty ||
               item.id.toLowerCase().contains(query) ||
               (customers[item.customerId] ?? item.customerId ?? 'بدون عميل')
-                  .toLowerCase().contains(query) ||
+                  .toLowerCase()
+                  .contains(query) ||
               (item.description?.toLowerCase().contains(query) ?? false))
             [
               _csvValue(item.id),
               _csvValue(item.postedAt.toUtc().toIso8601String()),
-              _csvValue(customers[item.customerId] ??
-                  item.customerId ?? 'بدون عميل'),
+              _csvValue(
+                  customers[item.customerId] ?? item.customerId ?? 'بدون عميل'),
               _csvValue(item.paymentMethod),
               item.subtotal.minorUnits.toString(),
               item.tax.minorUnits.toString(),
@@ -739,14 +746,14 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       ])
         if (row.$2.label.toLowerCase().contains(query))
           [
-          _csvValue(row.$1),
-          _csvValue(row.$2.label),
-          row.$2.quantityMilliUnits.toString(),
-          row.$2.revenue.minorUnits.toString(),
-          row.$2.cost.minorUnits.toString(),
-          row.$2.grossProfit.minorUnits.toString(),
-          _csvValue(row.$2.revenue.currency),
-        ].join(','),
+            _csvValue(row.$1),
+            _csvValue(row.$2.label),
+            row.$2.quantityMilliUnits.toString(),
+            row.$2.revenue.minorUnits.toString(),
+            row.$2.cost.minorUnits.toString(),
+            row.$2.grossProfit.minorUnits.toString(),
+            _csvValue(row.$2.revenue.currency),
+          ].join(','),
     ];
     await Clipboard.setData(ClipboardData(text: rows.join('\n')));
     if (mounted) {
@@ -760,8 +767,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
 
   String _csvValue(String value) {
     // Prevent spreadsheet formula execution after CSV is pasted into Excel.
-    final dangerous = value.isNotEmpty &&
-        '=+-@\\t\\r'.contains(value.substring(0, 1));
+    final dangerous =
+        value.isNotEmpty && '=+-@\\t\\r'.contains(value.substring(0, 1));
     final safe = dangerous ? "'$value" : value;
     return '"${safe.replaceAll('"', '""')}"';
   }
