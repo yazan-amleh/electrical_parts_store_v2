@@ -211,7 +211,7 @@ class _VoucherRegisterPageState extends State<VoucherRegisterPage> {
                     ? null
                     : () async {
                         await _export(_exportService.copyCsv);
-                        if (mounted) {
+                        if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
