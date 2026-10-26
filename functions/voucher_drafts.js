@@ -1,5 +1,22 @@
 'use strict';
 
+const {createHash} = require('node:crypto');
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) {
+    return '[' + value.map(canonicalJson).join(',') + ']';
+  }
+  if (value && typeof value === 'object') {
+    return '{' + Object.keys(value).sort().map((key) =>
+      JSON.stringify(key) + ':' + canonicalJson(value[key])).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
+
+function fingerprint(value) {
+  return createHash('sha256').update(canonicalJson(value)).digest('hex');
+}
+
 // Drafts do not touch ledgers. Approval alone invokes the canonical
 // postPartyPaymentInTransaction within the SAME Firestore transaction.
 function createVoucherDraftHandlers({
@@ -73,6 +90,7 @@ function createVoucherDraftHandlers({
     const draftId = payment.id;
     const {draft, member} = refs(storeId, draftId, request.auth.uid);
     const financialRequest = canonicalRequest(command);
+    const requestFingerprint = fingerprint(financialRequest);
     return db.runTransaction(async (tx) => {
       const [membership, existing] = await Promise.all([
         tx.get(member),
@@ -82,8 +100,7 @@ function createVoucherDraftHandlers({
       if (existing.exists) {
         const current = existing.data();
         if (current.createdBy === request.auth.uid &&
-            JSON.stringify(current.financialRequest) ===
-              JSON.stringify(financialRequest)) {
+            current.requestFingerprint === requestFingerprint) {
           return {draftId, status: current.status};
         }
         conflict('Voucher draft id is already in use.');
@@ -93,6 +110,7 @@ function createVoucherDraftHandlers({
         createdBy: request.auth.uid,
         status: 'draft',
         financialRequest,
+        requestFingerprint,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
@@ -154,6 +172,9 @@ function createVoucherDraftHandlers({
           data.financialRequest.payment?.id !== draftId ||
           data.financialRequest.storeId !== storeId) {
         conflict('Voucher identity or stored financial command has changed.');
+      }
+      if (fingerprint(data.financialRequest) !== data.requestFingerprint) {
+        conflict('Financial command fingerprint does not match the draft.');
       }
       const financialCommand = parsePartyPaymentCommand(data.financialRequest);
       const posted = await postPartyPaymentInTransaction(
