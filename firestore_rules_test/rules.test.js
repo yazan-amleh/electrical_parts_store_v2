@@ -496,6 +496,33 @@ describe('Firestore security rules', function () {
     );
   });
 
+  it('never permits client tampering with voucher sequence counters', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        storeDoc(context.firestore(), 'voucher_sequences', 'receipt-202610'),
+        {
+          storeId: STORE_ID,
+          period: '202610',
+          kind: 'receipt',
+          lastNumber: 3,
+        },
+      );
+    });
+    await assertFails(
+      getDoc(storeDoc(accountantDb, 'voucher_sequences', 'receipt-202610')),
+    );
+    await assertFails(
+      updateDoc(storeDoc(ownerDb, 'voucher_sequences', 'receipt-202610'), {
+        lastNumber: 0,
+      }),
+    );
+    await assertFails(
+      setDoc(storeDoc(ownerDb, 'voucher_sequences', 'payment-202610'), {
+        lastNumber: 999,
+      }),
+    );
+  });
+
   it('restricts financial voucher listings to accounting roles', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(
