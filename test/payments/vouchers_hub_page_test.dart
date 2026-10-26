@@ -61,7 +61,7 @@ void main() {
     expect(find.text('قبض'), findsNothing);
     expect(find.text('دفع'), findsNothing);
     expect(find.text('حركات'), findsNothing);
-    expect(find.text('لا تملك صلاحية الوصول إلى مركز السندات.'),
-        findsOneWidget);
+    expect(
+        find.text('لا تملك صلاحية الوصول إلى مركز السندات.'), findsOneWidget);
   });
 }
