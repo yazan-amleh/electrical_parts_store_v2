@@ -2121,6 +2121,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
       idempotencyKey: command.expense.idempotencyKey,
       requestFingerprint: fingerprint,
       journalEntryId,
+      voucherNumber,
       createdAt: FieldValue.serverTimestamp(),
     },
   );
@@ -2315,6 +2316,7 @@ async function postPartyPaymentInTransaction(
       status: 'already_posted',
       paymentId: command.payment.id,
       journalEntryId,
+      voucherNumber: marker.voucherNumber || null,
     };
   }
 
