@@ -29,20 +29,20 @@ class FirestoreVoucherDraftRepository implements VoucherDraftRepository {
     required PartyPayment payment,
     required PartyPaymentPostingAccounts accounts,
   }) async {
-    if (context.storeId != payment.storeId ||
-        context.userId.trim().isEmpty) {
+    if (context.storeId != payment.storeId || context.userId.trim().isEmpty) {
       return const FailureResult<String>(
         ValidationFailure('Store or creator does not match this draft.'),
       );
     }
     try {
-      final result = await _functions.httpsCallable('saveVoucherDraft').call<
-          Map<String, dynamic>>(
-        PartyPaymentCommandMapper.toRequest(
-          payment: payment,
-          accounts: accounts,
-        ),
-      );
+      final result = await _functions
+          .httpsCallable('saveVoucherDraft')
+          .call<Map<String, dynamic>>(
+            PartyPaymentCommandMapper.toRequest(
+              payment: payment,
+              accounts: accounts,
+            ),
+          );
       final id = result.data['draftId'];
       if (id != payment.id) {
         return const FailureResult<String>(
@@ -61,20 +61,23 @@ class FirestoreVoucherDraftRepository implements VoucherDraftRepository {
   Future<Result<void>> submit({
     required StoreContext context,
     required String draftId,
-  }) => _action('submitVoucherDraft', context, draftId);
+  }) =>
+      _action('submitVoucherDraft', context, draftId);
 
   @override
   Future<Result<void>> approve({
     required StoreContext context,
     required String draftId,
-  }) => _action('approveVoucherDraft', context, draftId);
+  }) =>
+      _action('approveVoucherDraft', context, draftId);
 
   @override
   Future<Result<void>> reject({
     required StoreContext context,
     required String draftId,
     required String reason,
-  }) => _action(
+  }) =>
+      _action(
         'rejectVoucherDraft',
         context,
         draftId,
@@ -96,9 +99,8 @@ class FirestoreVoucherDraftRepository implements VoucherDraftRepository {
       );
     }
     try {
-      final result = await _functions
-          .httpsCallable(name)
-          .call<Map<String, dynamic>>({
+      final result =
+          await _functions.httpsCallable(name).call<Map<String, dynamic>>({
         'storeId': context.storeId,
         'draftId': draftId,
         if (reason != null) 'reason': reason,
@@ -143,7 +145,8 @@ class FirestoreVoucherDraftRepository implements VoucherDraftRepository {
         final command = data['financialRequest'];
         if (command is! Map<String, dynamic> ||
             command['storeId'] != context.storeId) {
-          throw const FormatException('Draft does not have its posting command.');
+          throw const FormatException(
+              'Draft does not have its posting command.');
         }
         final payment = command['payment'];
         if (payment is! Map<String, dynamic> ||
@@ -206,8 +209,7 @@ class FirestoreVoucherDraftRepository implements VoucherDraftRepository {
   Failure _functionFailure(
     cloud_functions.FirebaseFunctionsException error,
   ) {
-    if (error.code == 'permission-denied' ||
-        error.code == 'unauthenticated') {
+    if (error.code == 'permission-denied' || error.code == 'unauthenticated') {
       return AuthorizationFailure(error.message ?? 'Access denied.');
     }
     if (error.code == 'invalid-argument') {
