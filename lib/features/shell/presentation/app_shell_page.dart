@@ -567,96 +567,176 @@ class _AppShellPageState extends State<AppShellPage> {
   }
 
   Widget _buildDrawer(BuildContext context) {
-    final navigationItems = <Widget>[];
-    var moduleOffset = 0;
+    var filter = '';
+    return StatefulBuilder(
+      builder: (drawerContext, updateDrawer) {
+        final colorScheme = Theme.of(drawerContext).colorScheme;
+        final query = filter.trim().toLowerCase();
+        final navigationItems = <Widget>[];
 
-    for (final section in _sections) {
-      final sectionOffset = moduleOffset;
-      navigationItems.add(
-        Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(20, 12, 20, 4),
-          child: Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: Text(
-              section.title,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-          ),
-        ),
-      );
+        for (final section in _sections) {
+          final matchingModules = [
+            for (final module in section.modules)
+              if (query.isEmpty ||
+                  module.label.toLowerCase().contains(query) ||
+                  module.description.toLowerCase().contains(query))
+                module,
+          ];
+          if (matchingModules.isEmpty) continue;
 
-      for (var localIndex = 0;
-          localIndex < section.modules.length;
-          localIndex++) {
-        navigationItems.add(
-          ListTile(
-            leading: Icon(section.modules[localIndex].icon),
-            title: Text(section.modules[localIndex].label),
-            selected: selectedIndex == sectionOffset + localIndex,
-            onTap: () {
-              setState(() {
-                selectedIndex = sectionOffset + localIndex;
-              });
-              Navigator.of(context).pop();
-            },
-          ),
-        );
-      }
-      moduleOffset += section.modules.length;
-    }
-
-    return Drawer(
-      child: SafeArea(
-        child: Column(
-          children: [
-            UserAccountsDrawerHeader(
-              accountName: Text(
-                widget.user.displayName?.trim().isNotEmpty == true
-                    ? widget.user.displayName!
-                    : 'مستخدم V2',
-              ),
-              accountEmail: Text(widget.user.email),
-              currentAccountPicture: const CircleAvatar(
-                child: Icon(Icons.person_outline),
-              ),
-              otherAccountsPictures: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    widget.membership.storeId,
-                    style: const TextStyle(fontSize: 11),
+          navigationItems.add(
+            Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(20, 18, 20, 4),
+              child: Row(
+                children: [
+                  Container(
+                    height: 16,
+                    width: 4,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
+                  const SizedBox(width: 8),
+                  Text(
+                    section.title,
+                    style: Theme.of(drawerContext).textTheme.titleSmall,
+                  ),
+                ],
+              ),
+            ),
+          );
+
+          for (final module in matchingModules) {
+            final moduleIndex =
+                _modules.indexWhere((entry) => entry.id == module.id);
+            final isSelected = moduleIndex == selectedIndex;
+            navigationItems.add(
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
+                child: Material(
+                  color: isSelected
+                      ? colorScheme.primaryContainer
+                      : colorScheme.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    selected: isSelected,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        module.icon,
+                        size: 22,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                    title: Text(module.label),
+                    onTap: () {
+                      Navigator.of(drawerContext).pop();
+                      _openModule(module.id);
+                    },
+                  ),
+                ),
+              ),
+            );
+          }
+        }
+
+        return Drawer(
+          child: SafeArea(
+            child: Column(
+              children: [
+                UserAccountsDrawerHeader(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topRight,
+                      end: Alignment.bottomLeft,
+                      colors: [
+                        colorScheme.primary,
+                        colorScheme.primary.withValues(alpha: 0.85),
+                      ],
+                    ),
+                  ),
+                  accountName: Text(
+                    widget.user.displayName?.trim().isNotEmpty == true
+                        ? widget.user.displayName!
+                        : 'مستخدم V2',
+                  ),
+                  accountEmail: Text(widget.user.email),
+                  currentAccountPicture: const CircleAvatar(
+                    child: Icon(Icons.person_outline),
+                  ),
+                  otherAccountsPictures: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        widget.membership.storeId,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.white,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: TextField(
+                    key: const ValueKey('shell-drawer-search'),
+                    textDirection: TextDirection.rtl,
+                    decoration: const InputDecoration(
+                      hintText: 'ابحث في وحدات النظام',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) => updateDrawer(() => filter = value),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: navigationItems.isEmpty
+                      ? const Center(child: Text('لا توجد وحدات مطابقة'))
+                      : ListView(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          children: navigationItems,
+                        ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.storefront_outlined),
+                  title: const Text('تغيير المتجر'),
+                  onTap: () {
+                    Navigator.of(drawerContext).pop();
+                    _chooseStore();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.logout),
+                  title: const Text('تسجيل الخروج'),
+                  onTap: () {
+                    Navigator.of(drawerContext).pop();
+                    _signOut();
+                  },
                 ),
               ],
             ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                children: navigationItems,
-              ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.storefront_outlined),
-              title: const Text('تغيير المتجر'),
-              onTap: () {
-                Navigator.of(context).pop();
-                _chooseStore();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text('تسجيل الخروج'),
-              onTap: () {
-                Navigator.of(context).pop();
-                _signOut();
-              },
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
+
 }
 
 class _ModuleLandingPage extends StatelessWidget {
