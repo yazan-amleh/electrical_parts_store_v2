@@ -93,17 +93,40 @@ class FirestoreCategoryRepository implements CategoryRepository {
           }
         }
 
-        if (category.parentId != null) {
-          final parentReference = FirebasePaths.categories(
+        // Read the whole ancestor chain before any write. This prevents
+        // creating a cycle (A -> B -> A), including with stale clients.
+        var ancestorId = category.parentId;
+        final visited = <String>{};
+        while (ancestorId != null) {
+          if (ancestorId == category.id || !visited.add(ancestorId)) {
+            return const FailureResult<void>(
+              ValidationFailure('Category hierarchy cannot contain a cycle.'),
+            );
+          }
+          if (visited.length > 100) {
+            return const FailureResult<void>(
+              ValidationFailure('Category hierarchy is too deep.'),
+            );
+          }
+          final ancestorReference = FirebasePaths.categories(
             _firestore,
             context.storeId,
-          ).doc(category.parentId);
-          final parentSnapshot = await transaction.get(parentReference);
-          if (!parentSnapshot.exists) {
+          ).doc(ancestorId);
+          final ancestorSnapshot = await transaction.get(ancestorReference);
+          if (!ancestorSnapshot.exists) {
             return const FailureResult<void>(
               ValidationFailure('Parent category was not found.'),
             );
           }
+          final ancestor = CategoryFirestoreMapper.fromSnapshot(
+            ancestorSnapshot,
+          );
+          if (ancestor.storeId != context.storeId) {
+            return const FailureResult<void>(
+              AuthorizationFailure('Parent belongs to another store.'),
+            );
+          }
+          ancestorId = ancestor.parentId;
         }
 
         transaction.set(
