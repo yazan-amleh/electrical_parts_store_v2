@@ -3,7 +3,20 @@ import '../../../parties/domain/enums/party_type.dart';
 import '../enums/party_payment_method.dart';
 
 class VoucherRecord {
-  const VoucherRecord({required this.id, required this.storeId, required this.partyType, required this.partyId, required this.paymentMethod, required this.amount, required this.postedAt, required this.journalEntryId, required this.status, this.description, this.repairId, this.paymentKind});
+  const VoucherRecord({
+    required this.id,
+    required this.storeId,
+    required this.partyType,
+    required this.partyId,
+    required this.paymentMethod,
+    required this.amount,
+    required this.postedAt,
+    required this.journalEntryId,
+    required this.status,
+    this.description,
+    this.repairId,
+    this.paymentKind,
+  });
   final String id;
   final String storeId;
   final PartyType partyType;
@@ -21,14 +34,15 @@ class VoucherRecord {
     if (paymentKind == 'settlement') return 'تسوية صيانة';
     return isReceipt ? 'قبض من عميل' : 'دفع لمورد';
   }
+
   bool get isReceipt => partyType == PartyType.customer;
   String get statusLabel => switch (status) {
-    'posted' => 'مرحّل',
-    'pending' => 'شيك قيد التحصيل',
-    'cleared' => 'شيك محصّل',
-    'bounced' => 'شيك مرتجع',
-    _ => 'حالة غير معروفة',
-  };
+        'posted' => 'مرحّل',
+        'pending' => 'شيك قيد التحصيل',
+        'cleared' => 'شيك محصّل',
+        'bounced' => 'شيك مرتجع',
+        _ => 'حالة غير معروفة',
+      };
 }
 
 class VoucherCursor {
@@ -38,7 +52,11 @@ class VoucherCursor {
 }
 
 class VoucherPage {
-  VoucherPage({required List<VoucherRecord> records, required this.hasMore, required this.nextCursor}) : records = List.unmodifiable(records);
+  VoucherPage({
+    required List<VoucherRecord> records,
+    required this.hasMore,
+    required this.nextCursor,
+  }) : records = List.unmodifiable(records);
   final List<VoucherRecord> records;
   final bool hasMore;
   final VoucherCursor? nextCursor;
