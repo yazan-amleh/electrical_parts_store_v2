@@ -57,6 +57,8 @@ abstract final class VoucherFirestoreMapper {
       journalEntryId: data['journalEntryId'] as String,
       status: status,
       description: data['description'] as String?,
+      repairId: data['repairId'] as String?,
+      paymentKind: data['paymentKind'] as String?,
     );
   }
 }
