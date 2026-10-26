@@ -6,6 +6,7 @@ import '../../../core/money/money.dart';
 import '../../../core/result/result.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
 import '../../parties/domain/enums/party_type.dart';
 import '../domain/entities/party_payment.dart';
 import '../domain/entities/party_payment_posting_plan.dart';
@@ -64,6 +65,11 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.membership.role.canPostAccounting) {
+      return const Center(
+        child: Text('ليس لديك صلاحية لترحيل سندات القبض أو الدفع.'),
+      );
+    }
     final isCustomer = _partyType == PartyType.customer;
     final actionLabel = isCustomer ? 'قبض من عميل' : 'دفع لمورد';
 
