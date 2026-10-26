@@ -42,7 +42,8 @@ void main() {
 
     await tester.tap(find.text('حركات'));
     await tester.pumpAndSettle();
-    expect(find.text('مستودع سجل السندات غير موصول بهذه البيئة.'), findsOneWidget);
+    expect(
+        find.text('مستودع سجل السندات غير موصول بهذه البيئة.'), findsOneWidget);
   });
 
   testWidgets('sales role cannot access supplier payment tab', (tester) async {
