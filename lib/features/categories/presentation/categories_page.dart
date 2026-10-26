@@ -7,6 +7,7 @@ import '../../inventory/domain/entities/product.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
 import '../domain/entities/category.dart';
 import '../domain/repositories/category_repository.dart';
 import '../domain/services/category_inventory_document_builder.dart';
@@ -37,7 +38,10 @@ class _CategoriesPageState extends State<CategoriesPage> {
   List<Category> _categories = const <Category>[];
   bool _isLoading = true;
   bool _isExporting = false;
+  bool _isSaving = false;
   String? _errorMessage;
+
+  bool get _canManage => widget.membership.role.canManageInventory;
 
   StoreContext get _storeContext {
     return StoreContext(
@@ -187,7 +191,9 @@ class _CategoriesPageState extends State<CategoriesPage> {
             ),
             const SizedBox(width: 4),
             FilledButton.icon(
-              onPressed: () => _openEditor(),
+              onPressed: _canManage && !_isSaving
+                  ? () => _openEditor()
+                  : null,
               icon: const Icon(Icons.add),
               label: const Text('إضافة'),
             ),
@@ -211,7 +217,9 @@ class _CategoriesPageState extends State<CategoriesPage> {
         subtitle: Text(category.isActive ? 'نشط' : 'غير نشط'),
         trailing: IconButton(
           tooltip: 'تعديل',
-          onPressed: () => _openEditor(category),
+          onPressed: _canManage && !_isSaving
+              ? () => _openEditor(category)
+              : null,
           icon: const Icon(Icons.edit_outlined),
         ),
       ),
@@ -220,8 +228,8 @@ class _CategoriesPageState extends State<CategoriesPage> {
 
   Future<void> _openEditor([Category? initialCategory]) async {
     final repository = widget.repository;
-    if (repository == null) {
-      _showMessage('مستودع التصنيفات غير موصول بهذه البيئة.');
+    if (repository == null || !_canManage || _isSaving) {
+      _showMessage('تعديل التصنيفات غير متاح بصلاحياتك الحالية.');
       return;
     }
 
@@ -237,22 +245,31 @@ class _CategoriesPageState extends State<CategoriesPage> {
       return;
     }
 
-    final result = await repository.saveCategory(
-      context: _storeContext,
-      category: category,
-    );
-    if (!mounted) {
-      return;
-    }
-    if (result is FailureResult<void>) {
-      _showMessage(result.failure.message);
-      return;
-    }
-    if (result is Success<void>) {
-      _showMessage(
-        initialCategory == null ? 'تمت إضافة التصنيف.' : 'تم تحديث التصنيف.',
+    setState(() => _isSaving = true);
+    try {
+      final result = await repository.saveCategory(
+        context: _storeContext,
+        category: category,
       );
-      await _loadCategories();
+      if (!mounted) return;
+      if (result is FailureResult<void>) {
+        _showMessage(result.failure.message);
+        return;
+      }
+      if (result is Success<void>) {
+        await _loadCategories();
+        if (mounted) {
+          _showMessage(
+            initialCategory == null
+                ? 'تمت إضافة التصنيف.'
+                : 'تم تحديث التصنيف.',
+          );
+        }
+      }
+    } catch (error) {
+      if (mounted) _showMessage('تعذر حفظ التصنيف: $error');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -412,8 +429,23 @@ class _CategoryEditorDialogState extends State<_CategoryEditorDialog> {
   @override
   Widget build(BuildContext context) {
     final initialId = widget.initialCategory?.id;
+    final excludedIds = <String>{
+      if (initialId != null) initialId,
+    };
+    // Descendants must not become parents of their own ancestors.
+    bool changed;
+    do {
+      changed = false;
+      for (final category in widget.categories) {
+        if (category.parentId != null &&
+            excludedIds.contains(category.parentId) &&
+            excludedIds.add(category.id)) {
+          changed = true;
+        }
+      }
+    } while (changed);
     final parentOptions = widget.categories
-        .where((category) => category.id != initialId)
+        .where((category) => !excludedIds.contains(category.id))
         .toList(growable: false);
 
     return AlertDialog(
