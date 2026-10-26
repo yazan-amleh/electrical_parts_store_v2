@@ -131,7 +131,7 @@ class _VoucherDraftsPageState extends State<VoucherDraftsPage> {
                   decimal: true,
                 ),
                 decoration: InputDecoration(
-                  labelText: 'المبلغ (' + draft.amount.currency + ')',
+                  labelText: 'المبلغ (${draft.amount.currency})',
                   helperText: 'لا تؤثر التعديلات على الأرصدة.',
                 ),
               ),
