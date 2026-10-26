@@ -815,6 +815,8 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   Future<void> _postSale() async {
+    if (_isPosting || _pendingQueued ||
+        !widget.membership.role.canManageSales) return;
     final repository = widget.repository;
     if (repository == null) {
       _showMessage('مستودع المبيعات غير موصول بهذه البيئة.');
@@ -836,14 +838,37 @@ class _SalesPageState extends State<SalesPage> {
       return;
     }
 
-    final saleId = 'sale-${DateTime.now().microsecondsSinceEpoch}';
-    final sale = Sale(
+    final sortedLines = _cart.values.toList()
+      ..sort((a, b) => a.product.id.compareTo(b.product.id));
+    final signature = jsonEncode([
+      widget.membership.storeId,
+      widget.user.id,
+      _paymentMethod.name,
+      _paymentMethod == SalePaymentMethod.credit ? customerId : null,
+      tax.minorUnits,
+      _currency,
+      for (final line in sortedLines)
+        [
+          line.product.id,
+          line.quantity.milliUnits,
+          line.product.sellingPrice.minorUnits,
+          line.product.purchasePrice.minorUnits,
+          line.discount.minorUnits,
+          line.product.baseUnitId,
+          line.product.baseUnitName,
+          line.product.isService,
+        ],
+    ]);
+    final existing = _pendingSignature == signature ? _pendingSale : null;
+    final saleId = existing?.id ??
+        'sale-${DateTime.now().microsecondsSinceEpoch}';
+    final sale = existing ?? Sale(
       id: saleId,
       storeId: widget.membership.storeId,
       idempotencyKey: IdempotencyKey(saleId),
       postedAt: DateTime.now().toUtc(),
       paymentMethod: _paymentMethod,
-      lines: _cart.values
+      lines: sortedLines
           .map(
             (item) => SaleLine(
               id: '$saleId-${item.product.id}',
@@ -866,12 +891,25 @@ class _SalesPageState extends State<SalesPage> {
       description: 'بيع من نقطة البيع',
     );
 
-    setState(() => _isPosting = true);
-    final result = await repository.postSale(
+    setState(() {
+      _pendingSignature = signature;
+      _pendingSale = sale;
+      _isPosting = true;
+    });
+    final Result<SalePostingPlan> result;
+    try {
+      result = await repository.postSale(
       context: sale.contextFor(widget.user.id),
       sale: sale,
-      accounts: _postingAccounts,
-    );
+        accounts: _postingAccounts,
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isPosting = false);
+        _showMessage('تعذر التأكد من نتيجة البيع؛ أعد المحاولة بنفس الفاتورة.');
+      }
+      return;
+    }
     if (!mounted) {
       return;
     }
@@ -880,7 +918,8 @@ class _SalesPageState extends State<SalesPage> {
     if (result is FailureResult<SalePostingPlan>) {
       final failure = result.failure;
       if (failure is QueuedFailure) {
-        _showMessage('تم حفظ البيع للطابور وسيُرحّل عند عودة الاتصال.');
+        setState(() => _pendingQueued = true);
+        _showMessage('البيع محفوظ بالطابور؛ لا تعِد ترحيله قبل التحقق من حالته.');
       } else {
         _showMessage(failure.message);
       }
