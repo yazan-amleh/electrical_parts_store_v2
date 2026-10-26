@@ -43,6 +43,19 @@ void main() {
     expect(opened, 'sales');
   });
 
+  testWidgets('long press on a shortcut opens V1-style customization',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(screen(onOpenModule: (_) {}));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.byKey(const ValueKey('shortcut-sales')));
+    await tester.pumpAndSettle();
+    expect(find.text('تخصيص اختصارات لوحة التحكم'), findsOneWidget);
+    expect(find.text('حفظ الاختصارات'), findsOneWidget);
+  });
+
   testWidgets('viewer only receives read-only shortcut choices',
       (tester) async {
     await tester.pumpWidget(
