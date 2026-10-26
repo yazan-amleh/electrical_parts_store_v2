@@ -736,7 +736,6 @@ class _AppShellPageState extends State<AppShellPage> {
       },
     );
   }
-
 }
 
 class _ModuleLandingPage extends StatelessWidget {
