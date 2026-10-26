@@ -65,15 +65,17 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     if (widget.accountingQueryRepository == null ||
         widget.productRepository == null) {
-      return const Center(
-        child: Text('مستودعات لوحة التحكم غير موصولة بهذه البيئة.'),
+      return _buildNavigationHome(
+        const Text('مستودعات لوحة التحكم غير موصولة بهذه البيئة.'),
       );
     }
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return _buildNavigationHome(
+        const CircularProgressIndicator(),
+      );
     }
     if (_errorMessage != null || _trialBalance == null) {
-      return _buildErrorState();
+      return _buildNavigationHome(_buildErrorState());
     }
 
     final metrics = _buildMetrics();
@@ -128,6 +130,29 @@ class _DashboardPageState extends State<DashboardPage> {
             _buildLowStockCard(context, lowStockProducts),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildNavigationHome(Widget status) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          _buildHeader(context),
+          if (widget.onOpenModule != null) ...[
+            const SizedBox(height: 18),
+            DashboardQuickAccess(
+              storeId: widget.membership.storeId,
+              userId: widget.user.id,
+              role: widget.membership.role,
+              onOpenModule: widget.onOpenModule!,
+            ),
+          ],
+          const SizedBox(height: 24),
+          Center(child: status),
+        ],
       ),
     );
   }
