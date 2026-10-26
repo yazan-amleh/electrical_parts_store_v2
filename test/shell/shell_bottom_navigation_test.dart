@@ -15,6 +15,7 @@ void main() {
   Widget screen({
     required StoreRole role,
     required String activeId,
+    List<String>? tabs,
     required ValueChanged<String> onNavigate,
     required VoidCallback onMore,
   }) {
@@ -24,6 +25,7 @@ void main() {
         bottomNavigationBar: ShellBottomNavigation(
           activeModuleId: activeId,
           role: role,
+          tabIds: tabs,
           onOpenModule: onNavigate,
           onMore: onMore,
         ),
@@ -66,6 +68,54 @@ void main() {
     expect(find.text('الرئيسية'), findsOneWidget);
     expect(find.text('العملاء'), findsOneWidget);
     expect(find.text('المزيد'), findsOneWidget);
+  });
+
+  testWidgets('selected tabs are ordered and restricted by role',
+      (tester) async {
+    await tester.pumpWidget(
+      screen(
+        role: StoreRole.owner,
+        activeId: 'inventory',
+        tabs: const ['dashboard', 'inventory', 'notes'],
+        onNavigate: (id) => opened = id,
+        onMore: () {},
+      ),
+    );
+    expect(find.text('المخزون'), findsOneWidget);
+    expect(find.text('الملاحظات'), findsOneWidget);
+    expect(find.text('المبيعات'), findsNothing);
+
+    await tester.tap(find.text('المخزون'));
+    expect(opened, 'inventory');
+
+    await tester.pumpWidget(
+      screen(
+        role: StoreRole.viewer,
+        activeId: 'dashboard',
+        tabs: const ['sales', 'inventory', 'customers'],
+        onNavigate: (_) {},
+        onMore: () {},
+      ),
+    );
+    await tester.pump();
+    expect(find.text('المبيعات'), findsNothing);
+    expect(find.text('المخزون'), findsNothing);
+    expect(find.text('العملاء'), findsOneWidget);
+  });
+
+  testWidgets('compact bar fits a narrow phone viewport', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      screen(
+        role: StoreRole.owner,
+        activeId: 'dashboard',
+        onNavigate: (_) {},
+        onMore: () {},
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.byType(BottomNavigationBar), findsOneWidget);
   });
 
   testWidgets('non-tab destinations highlight More', (tester) async {
