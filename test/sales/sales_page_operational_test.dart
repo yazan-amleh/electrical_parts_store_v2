@@ -89,7 +89,8 @@ void main() {
         body: SalesPage(
           repository: sales,
           productRepository: products,
-          user: const AuthenticatedUser(id: 'user-1', email: 'test@example.com'),
+          user:
+              const AuthenticatedUser(id: 'user-1', email: 'test@example.com'),
           membership: StoreMembership(
             storeId: storeId,
             userId: 'user-1',
@@ -118,12 +119,14 @@ void main() {
     await tester.tap(find.text('USD item'));
     await tester.pump();
 
-    expect(find.textContaining('لا يمكن بيع أصناف بعملات مختلفة'), findsOneWidget);
+    expect(
+        find.textContaining('لا يمكن بيع أصناف بعملات مختلفة'), findsOneWidget);
     expect(tester.takeException(), isNull);
     expect(find.text('ILS item'), findsWidgets);
   });
 
-  testWidgets('unknown outcome retry uses exactly the same sale idempotency key',
+  testWidgets(
+      'unknown outcome retry uses exactly the same sale idempotency key',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1200, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -149,8 +152,7 @@ void main() {
     );
   });
 
-  testWidgets('queued sales cannot be re-posted accidentally',
-      (tester) async {
+  testWidgets('queued sales cannot be re-posted accidentally', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1200, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final sales = _Sales()..queued = true;
