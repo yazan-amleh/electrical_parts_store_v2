@@ -185,9 +185,12 @@ class FirestoreReportsRepository implements ReportsRepository {
     int limit = 250,
     int maxDocuments = 1000,
   }) async {
-    if (context.storeId.trim().isEmpty || from.isAfter(to) ||
-        limit < 1 || limit > 2000 ||
-        maxDocuments < 1 || maxDocuments > 10000) {
+    if (context.storeId.trim().isEmpty ||
+        from.isAfter(to) ||
+        limit < 1 ||
+        limit > 2000 ||
+        maxDocuments < 1 ||
+        maxDocuments > 10000) {
       return const FailureResult<SalesInvoiceReport>(
         ValidationFailure('Invalid sales invoice report scope or page limit.'),
       );
@@ -203,7 +206,8 @@ class FirestoreReportsRepository implements ReportsRepository {
       final invoices = <SalesInvoiceSummary>[];
       for (final document in page.documents) {
         final data = document.data();
-        if (data == null || data['storeId'] != context.storeId ||
+        if (data == null ||
+            data['storeId'] != context.storeId ||
             data['status'] != 'posted') {
           return FailureResult<SalesInvoiceReport>(
             ValidationFailure(
@@ -218,13 +222,20 @@ class FirestoreReportsRepository implements ReportsRepository {
         final total = data['totalMinorUnits'];
         final cost = data['costTotalMinorUnits'];
         final journalId = data['journalEntryId'];
-        if (postedAt == null || currency is! String || currency.isEmpty ||
-            subtotal is! int || subtotal < 0 ||
-            tax is! int || tax < 0 ||
-            total is! int || total <= 0 ||
-            cost is! int || cost < 0 ||
+        if (postedAt == null ||
+            currency is! String ||
+            currency.isEmpty ||
+            subtotal is! int ||
+            subtotal < 0 ||
+            tax is! int ||
+            tax < 0 ||
+            total is! int ||
+            total <= 0 ||
+            cost is! int ||
+            cost < 0 ||
             subtotal + tax != total ||
-            journalId is! String || journalId.isEmpty) {
+            journalId is! String ||
+            journalId.isEmpty) {
           return FailureResult<SalesInvoiceReport>(
             ValidationFailure(
               'Sale ${document.id} has incomplete or inconsistent totals.',
@@ -326,9 +337,8 @@ class FirestoreReportsRepository implements ReportsRepository {
       }
       final recoveredLines = <String, List<Map<String, dynamic>>>{};
       for (var offset = 0; offset < legacySales.length; offset += 20) {
-        final end = offset + 20 < legacySales.length
-            ? offset + 20
-            : legacySales.length;
+        final end =
+            offset + 20 < legacySales.length ? offset + 20 : legacySales.length;
         final batch = legacySales.sublist(offset, end);
         final lines = await Future.wait(
           batch.map((invoice) => invoice.reference.collection('lines').get()),
