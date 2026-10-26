@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/errors/failure.dart';
@@ -8,6 +10,7 @@ import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
 import '../../inventory/domain/entities/product.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
 import '../../parties/domain/entities/party.dart';
@@ -60,6 +63,11 @@ class _SalesPageState extends State<SalesPage> {
   bool _isLoading = true;
   bool _isLoadingCustomers = false;
   bool _isPosting = false;
+  Sale? _pendingSale;
+  String? _pendingSignature;
+  bool _pendingQueued = false;
+  int _productsRequest = 0;
+  int _customersRequest = 0;
   String? _errorMessage;
   String? _customerError;
 
@@ -114,15 +122,32 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   @override
+  void didUpdateWidget(covariant SalesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.user.id != oldWidget.user.id ||
+        widget.membership.storeId != oldWidget.membership.storeId) {
+      _clearCart();
+      _products = const [];
+      _customers = const [];
+      _loadProducts();
+      _loadCustomers();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (!widget.membership.role.canManageSales) {
+      return const Center(child: Text('ليس لديك صلاحية لإنشاء المبيعات.'));
+    }
     final search = _searchController.text.trim().toLowerCase();
     final filteredProducts = _products
         .where(
           (product) =>
-              search.isEmpty ||
-              product.name.toLowerCase().contains(search) ||
-              (product.sku?.toLowerCase().contains(search) ?? false) ||
-              (product.barcode?.toLowerCase().contains(search) ?? false),
+              product.isActive &&
+              (search.isEmpty ||
+                  product.name.toLowerCase().contains(search) ||
+                  (product.sku?.toLowerCase().contains(search) ?? false) ||
+                  (product.barcode?.toLowerCase().contains(search) ?? false)),
         )
         .toList(growable: false);
 
@@ -244,10 +269,14 @@ class _SalesPageState extends State<SalesPage> {
             subtitle: Text('${product.sellingPrice.formatted} • $available'),
             trailing: IconButton(
               tooltip: 'إضافة',
-              onPressed: () => _addProduct(product),
+              onPressed: _isPosting || _pendingQueued
+                  ? null
+                  : () => _addProduct(product),
               icon: const Icon(Icons.add_circle_outline),
             ),
-            onTap: () => _addProduct(product),
+            onTap: _isPosting || _pendingQueued
+                ? null
+                : () => _addProduct(product),
           ),
         );
       },
@@ -273,7 +302,7 @@ class _SalesPageState extends State<SalesPage> {
                 if (_cart.isNotEmpty)
                   IconButton(
                     tooltip: 'تفريغ الفاتورة',
-                    onPressed: _clearCart,
+                    onPressed: _isPosting ? null : _requestClearCart,
                     icon: const Icon(Icons.delete_sweep_outlined),
                   ),
               ],
@@ -299,7 +328,7 @@ class _SalesPageState extends State<SalesPage> {
             child: SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _isPosting ? null : _postSale,
+                onPressed: _isPosting || _pendingQueued ? null : _postSale,
                 icon: _isPosting
                     ? const SizedBox(
                         height: 18,
@@ -310,7 +339,9 @@ class _SalesPageState extends State<SalesPage> {
                 label: Text(
                   _isPosting
                       ? 'جارٍ الترحيل...'
-                      : 'ترحيل البيع • ${(_cartTotal + _taxAmount).formatted}',
+                      : _pendingQueued
+                          ? 'البيع محفوظ في طابور الترحيل'
+                          : 'ترحيل البيع • ${(_cartTotal + _taxAmount).formatted}',
                 ),
               ),
             ),
@@ -349,20 +380,25 @@ class _SalesPageState extends State<SalesPage> {
               IconButton(
                 visualDensity: VisualDensity.compact,
                 tooltip: 'تعديل الخصم',
-                onPressed: item.product.discountable && !_isPosting
+                onPressed: item.product.discountable &&
+                        !_isPosting && !_pendingQueued
                     ? () => _editDiscount(item.product)
                     : null,
                 icon: const Icon(Icons.percent_outlined),
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                onPressed: () => _decrementProduct(item.product),
+                onPressed: _isPosting || _pendingQueued
+                    ? null
+                    : () => _decrementProduct(item.product),
                 icon: const Icon(Icons.remove_circle_outline),
               ),
               Text(item.quantity.formatted),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                onPressed: () => _addProduct(item.product),
+                onPressed: _isPosting || _pendingQueued
+                    ? null
+                    : () => _addProduct(item.product),
                 icon: const Icon(Icons.add_circle_outline),
               ),
             ],
@@ -612,6 +648,15 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   void _addProduct(Product product) {
+    if (_isPosting || _pendingQueued) return;
+    if (!product.isActive || product.storeId != widget.membership.storeId) {
+      _showMessage('هذا الصنف غير متاح للبيع في هذا المتجر.');
+      return;
+    }
+    if (_cart.isNotEmpty && product.sellingPrice.currency != _currency) {
+      _showMessage('لا يمكن بيع أصناف بعملات مختلفة في فاتورة واحدة.');
+      return;
+    }
     if (!product.isService) {
       final current =
           _cart[product.id]?.quantity ?? const Quantity.fromMilliUnits(0);
@@ -640,7 +685,8 @@ class _SalesPageState extends State<SalesPage> {
 
   Future<void> _editDiscount(Product product) async {
     final current = _cart[product.id];
-    if (current == null || !product.discountable || _isPosting) {
+    if (current == null || !product.discountable ||
+        _isPosting || _pendingQueued) {
       return;
     }
 
@@ -703,7 +749,7 @@ class _SalesPageState extends State<SalesPage> {
 
   void _decrementProduct(Product product) {
     final current = _cart[product.id];
-    if (current == null) {
+    if (current == null || _isPosting || _pendingQueued) {
       return;
     }
 
@@ -729,8 +775,38 @@ class _SalesPageState extends State<SalesPage> {
     });
   }
 
+  Future<void> _requestClearCart() async {
+    if (_pendingQueued) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('فاتورة في طابور الترحيل'),
+          content: const Text(
+            'قد تُرحّل الفاتورة عند عودة الاتصال. بدء فاتورة جديدة '
+            'لا يلغي العملية المعلقة. تحقق من حالتها قبل تسجيلها مجددًا.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('بدء فاتورة جديدة'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true) return;
+    }
+    _clearCart();
+  }
+
   void _clearCart() {
     setState(() {
+      _pendingSale = null;
+      _pendingSignature = null;
+      _pendingQueued = false;
       _cart.clear();
       _customerController.clear();
       _taxController.clear();
