@@ -833,8 +833,9 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   Future<void> _postSale() async {
-    if (_isPosting || _pendingQueued || !widget.membership.role.canManageSales)
+    if (_isPosting || _pendingQueued || !widget.membership.role.canManageSales) {
       return;
+    }
     final repository = widget.repository;
     if (repository == null) {
       _showMessage('مستودع المبيعات غير موصول بهذه البيئة.');
