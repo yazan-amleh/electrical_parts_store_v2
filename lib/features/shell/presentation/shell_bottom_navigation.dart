@@ -12,6 +12,7 @@ class ShellBottomNavigation extends StatelessWidget {
     required this.role,
     required this.onOpenModule,
     required this.onMore,
+    this.tabIds,
     super.key,
   });
 
@@ -19,29 +20,61 @@ class ShellBottomNavigation extends StatelessWidget {
   final StoreRole role;
   final ValueChanged<String> onOpenModule;
   final VoidCallback onMore;
+  final List<String>? tabIds;
+
+  static List<ShellTabOption> optionsForRole(StoreRole role) => [
+        const ShellTabOption(
+          'dashboard',
+          'الرئيسية',
+          Icons.dashboard_outlined,
+        ),
+        if (role.canManageSales)
+          const ShellTabOption('sales', 'المبيعات', Icons.point_of_sale),
+        if (role.canManageSales || role.canPostAccounting)
+          const ShellTabOption(
+            'party-payments',
+            'القبض والدفع',
+            Icons.payments_outlined,
+          ),
+        const ShellTabOption('customers', 'العملاء', Icons.people_outline),
+        if (role.canManageInventory) ...[
+          const ShellTabOption(
+            'purchases',
+            'المشتريات',
+            Icons.shopping_cart_outlined,
+          ),
+          const ShellTabOption(
+            'products',
+            'الأصناف',
+            Icons.inventory_2_outlined,
+          ),
+          const ShellTabOption(
+            'inventory',
+            'المخزون',
+            Icons.inventory_outlined,
+          ),
+        ],
+        const ShellTabOption('notes', 'الملاحظات', Icons.note_alt_outlined),
+      ];
 
   @override
   Widget build(BuildContext context) {
-    final destinations = <_BottomDestination>[
-      const _BottomDestination(
-        'dashboard',
-        'الرئيسية',
-        Icons.dashboard_outlined,
-      ),
-      if (role.canManageSales)
-        const _BottomDestination('sales', 'المبيعات', Icons.point_of_sale),
-      if (role.canManageSales || role.canPostAccounting)
-        const _BottomDestination(
-          'party-payments',
-          'القبض والدفع',
-          Icons.payments_outlined,
-        ),
-      const _BottomDestination(
-        'customers',
-        'العملاء',
-        Icons.people_outline,
-      ),
-      const _BottomDestination('more', 'المزيد', Icons.menu),
+    final available = {
+      for (final option in optionsForRole(role)) option.id: option,
+    };
+    final requested = tabIds ??
+        const ['dashboard', 'sales', 'party-payments', 'customers'];
+    final displayedIds = <String>[];
+    for (final id in requested) {
+      if (available.containsKey(id) && !displayedIds.contains(id)) {
+        displayedIds.add(id);
+      }
+      if (displayedIds.length == 4) break;
+    }
+    if (displayedIds.isEmpty) displayedIds.add('dashboard');
+    final destinations = [
+      for (final id in displayedIds) available[id]!,
+      const ShellTabOption('more', 'المزيد', Icons.menu),
     ];
 
     final selectedIndex = destinations.indexWhere(
@@ -96,8 +129,8 @@ class ShellBottomNavigation extends StatelessWidget {
   }
 }
 
-class _BottomDestination {
-  const _BottomDestination(this.id, this.title, this.icon);
+class ShellTabOption {
+  const ShellTabOption(this.id, this.title, this.icon);
 
   final String id;
   final String title;
