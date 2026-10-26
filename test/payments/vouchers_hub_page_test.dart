@@ -50,7 +50,7 @@ void main() {
     await tester.pumpWidget(screen(StoreRole.sales));
     await tester.pumpAndSettle();
 
-    expect(find.text('قبض'), findsOneWidget);
+    expect(find.text('قبض'), findsNothing);
     expect(find.text('دفع'), findsNothing);
     expect(find.text('حركات'), findsNothing);
   });
