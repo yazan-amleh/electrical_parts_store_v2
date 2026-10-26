@@ -380,10 +380,10 @@ class _SalesPageState extends State<SalesPage> {
               IconButton(
                 visualDensity: VisualDensity.compact,
                 tooltip: 'تعديل الخصم',
-                onPressed: item.product.discountable &&
-                        !_isPosting && !_pendingQueued
-                    ? () => _editDiscount(item.product)
-                    : null,
+                onPressed:
+                    item.product.discountable && !_isPosting && !_pendingQueued
+                        ? () => _editDiscount(item.product)
+                        : null,
                 icon: const Icon(Icons.percent_outlined),
               ),
               IconButton(
@@ -697,8 +697,10 @@ class _SalesPageState extends State<SalesPage> {
 
   Future<void> _editDiscount(Product product) async {
     final current = _cart[product.id];
-    if (current == null || !product.discountable ||
-        _isPosting || _pendingQueued) {
+    if (current == null ||
+        !product.discountable ||
+        _isPosting ||
+        _pendingQueued) {
       return;
     }
 
@@ -827,8 +829,8 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   Future<void> _postSale() async {
-    if (_isPosting || _pendingQueued ||
-        !widget.membership.role.canManageSales) return;
+    if (_isPosting || _pendingQueued || !widget.membership.role.canManageSales)
+      return;
     final repository = widget.repository;
     if (repository == null) {
       _showMessage('مستودع المبيعات غير موصول بهذه البيئة.');
@@ -872,36 +874,37 @@ class _SalesPageState extends State<SalesPage> {
         ],
     ]);
     final existing = _pendingSignature == signature ? _pendingSale : null;
-    final saleId = existing?.id ??
-        'sale-${DateTime.now().microsecondsSinceEpoch}';
-    final sale = existing ?? Sale(
-      id: saleId,
-      storeId: widget.membership.storeId,
-      idempotencyKey: IdempotencyKey(saleId),
-      postedAt: DateTime.now().toUtc(),
-      paymentMethod: _paymentMethod,
-      lines: sortedLines
-          .map(
-            (item) => SaleLine(
-              id: '$saleId-${item.product.id}',
-              productId: item.product.id,
-              description: item.product.name,
-              quantity: item.quantity,
-              unitFactorToBase: const Quantity.fromMilliUnits(1000),
-              unitPrice: item.product.sellingPrice,
-              unitCost: item.product.purchasePrice,
-              discount: item.discount,
-              unitId: item.product.baseUnitId,
-              unitName: item.product.baseUnitName,
-              isService: item.product.isService,
-            ),
-          )
-          .toList(growable: false),
-      tax: tax,
-      customerId:
-          _paymentMethod == SalePaymentMethod.credit ? customerId : null,
-      description: 'بيع من نقطة البيع',
-    );
+    final saleId =
+        existing?.id ?? 'sale-${DateTime.now().microsecondsSinceEpoch}';
+    final sale = existing ??
+        Sale(
+          id: saleId,
+          storeId: widget.membership.storeId,
+          idempotencyKey: IdempotencyKey(saleId),
+          postedAt: DateTime.now().toUtc(),
+          paymentMethod: _paymentMethod,
+          lines: sortedLines
+              .map(
+                (item) => SaleLine(
+                  id: '$saleId-${item.product.id}',
+                  productId: item.product.id,
+                  description: item.product.name,
+                  quantity: item.quantity,
+                  unitFactorToBase: const Quantity.fromMilliUnits(1000),
+                  unitPrice: item.product.sellingPrice,
+                  unitCost: item.product.purchasePrice,
+                  discount: item.discount,
+                  unitId: item.product.baseUnitId,
+                  unitName: item.product.baseUnitName,
+                  isService: item.product.isService,
+                ),
+              )
+              .toList(growable: false),
+          tax: tax,
+          customerId:
+              _paymentMethod == SalePaymentMethod.credit ? customerId : null,
+          description: 'بيع من نقطة البيع',
+        );
 
     setState(() {
       _pendingSignature = signature;
@@ -911,8 +914,8 @@ class _SalesPageState extends State<SalesPage> {
     final Result<SalePostingPlan> result;
     try {
       result = await repository.postSale(
-      context: sale.contextFor(widget.user.id),
-      sale: sale,
+        context: sale.contextFor(widget.user.id),
+        sale: sale,
         accounts: _postingAccounts,
       );
     } catch (_) {
@@ -931,7 +934,8 @@ class _SalesPageState extends State<SalesPage> {
       final failure = result.failure;
       if (failure is QueuedFailure) {
         setState(() => _pendingQueued = true);
-        _showMessage('البيع محفوظ بالطابور؛ لا تعِد ترحيله قبل التحقق من حالته.');
+        _showMessage(
+            'البيع محفوظ بالطابور؛ لا تعِد ترحيله قبل التحقق من حالته.');
       } else {
         _showMessage(failure.message);
       }
