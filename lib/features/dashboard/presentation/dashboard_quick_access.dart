@@ -330,8 +330,17 @@ class _ShortcutCardState extends State<_ShortcutCard> {
             color: colors.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: primary.withValues(alpha: _pressed ? 0.45 : _hovered ? 0.3 : 0.1),
-              width: _pressed ? 2 : _hovered ? 1.5 : 1,
+              color: primary.withValues(
+                  alpha: _pressed
+                      ? 0.45
+                      : _hovered
+                          ? 0.3
+                          : 0.1),
+              width: _pressed
+                  ? 2
+                  : _hovered
+                      ? 1.5
+                      : 1,
             ),
             boxShadow: _hovered
                 ? [
