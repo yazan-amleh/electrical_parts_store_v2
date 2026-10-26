@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../app/app_dependencies.dart';
 import 'shell_bottom_navigation.dart';
 import '../../../core/tenancy/store_context.dart';
+import '../../../core/result/result.dart';
 import '../../dashboard/presentation/dashboard_page.dart';
 import '../../categories/domain/repositories/category_repository.dart';
 import '../../categories/domain/services/category_inventory_document_builder.dart';
@@ -60,6 +61,7 @@ import '../../chat/domain/repositories/chat_repository.dart';
 import '../../chat/presentation/chat_page.dart';
 import '../../chatbot/presentation/chatbot_page.dart';
 import '../../settings/domain/repositories/settings_repository.dart';
+import '../../settings/domain/entities/store_profile.dart';
 import '../../notes/domain/repositories/note_repository.dart';
 import '../../notes/presentation/notes_page.dart';
 import '../../settings/presentation/settings_page.dart';
@@ -89,6 +91,8 @@ class _AppShellPageState extends State<AppShellPage> {
   List<String>? _bottomNavIds;
   bool _savingBottomNavigation = false;
   int _bottomNavEpoch = 0;
+  int _storeProfileEpoch = 0;
+  String? _storeDisplayName;
 
   String get _bottomNavPreferenceKey =>
       'v2:bottom-navigation:${widget.membership.storeId}:${widget.user.id}';
@@ -387,6 +391,7 @@ class _AppShellPageState extends State<AppShellPage> {
   void initState() {
     super.initState();
     _loadBottomNavigation();
+    _loadStoreProfile();
     _registerNotifications();
   }
 
@@ -397,6 +402,32 @@ class _AppShellPageState extends State<AppShellPage> {
         widget.membership.storeId != oldWidget.membership.storeId ||
         widget.membership.role != oldWidget.membership.role) {
       _loadBottomNavigation();
+      _loadStoreProfile();
+    }
+  }
+
+  Future<void> _loadStoreProfile() async {
+    final epoch = ++_storeProfileEpoch;
+    final repository = widget.dependencies.settingsRepository;
+    if (repository == null) {
+      if (mounted) setState(() => _storeDisplayName = null);
+      return;
+    }
+
+    if (mounted) setState(() => _storeDisplayName = null);
+    try {
+      final result = await repository.getStoreProfile(
+        context: StoreContext(
+          storeId: widget.membership.storeId,
+          userId: widget.user.id,
+        ),
+      );
+      if (!mounted || epoch != _storeProfileEpoch) return;
+      if (result is Success<StoreProfile>) {
+        setState(() => _storeDisplayName = result.value.name.trim());
+      }
+    } catch (_) {
+      // Store ID remains a reliable title if the profile cannot be read.
     }
   }
 
@@ -560,7 +591,9 @@ class _AppShellPageState extends State<AppShellPage> {
   void _openModule(String moduleId) {
     final index = _modules.indexWhere((module) => module.id == moduleId);
     if (index < 0) return;
+    final previousId = _modules[selectedIndex].id;
     setState(() => selectedIndex = index);
+    if (previousId == 'settings') _loadStoreProfile();
   }
 
   Future<void> _searchModules() async {
@@ -625,7 +658,7 @@ class _AppShellPageState extends State<AppShellPage> {
       ),
     );
     if (!mounted || chosen == null) return;
-    setState(() => selectedIndex = chosen);
+    _openModule(modules[chosen].id);
   }
 
   Future<void> _signOut() async {
@@ -649,18 +682,57 @@ class _AppShellPageState extends State<AppShellPage> {
       child: Scaffold(
         key: _scaffoldKey,
         appBar: AppBar(
-          title: Text(selected.label),
+          titleSpacing: 0,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _storeDisplayName?.isNotEmpty == true
+                    ? _storeDisplayName!
+                    : widget.membership.storeId,
+                key: const ValueKey('shell-store-title'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              Text(
+                selected.label,
+                key: const ValueKey('shell-module-title'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
+          ),
           actions: [
+            if (!showCompactNavigation)
+              IconButton(
+                tooltip: 'الرئيسية',
+                onPressed: () => _openModule('dashboard'),
+                icon: const Icon(Icons.home_outlined),
+              ),
+            if (!showCompactNavigation &&
+                widget.dependencies.chatRepository != null)
+              IconButton(
+                tooltip: 'المحادثات',
+                onPressed: () => _openModule('chat'),
+                icon: const Icon(Icons.chat_bubble_outline),
+              ),
             IconButton(
               tooltip: 'البحث في الوحدات',
               onPressed: _searchModules,
               icon: const Icon(Icons.search),
             ),
-            Chip(
-              avatar: const Icon(Icons.verified_user_outlined, size: 18),
-              label: Text(widget.membership.role.arabicLabel),
-            ),
-            const SizedBox(width: 12),
+            if (!showCompactNavigation)
+              Tooltip(
+                message: 'دور المستخدم',
+                child: Chip(
+                  avatar: const Icon(Icons.verified_user_outlined, size: 18),
+                  label: Text(widget.membership.role.arabicLabel),
+                ),
+              ),
+            const SizedBox(width: 8),
           ],
         ),
         drawer: _buildDrawer(context),
