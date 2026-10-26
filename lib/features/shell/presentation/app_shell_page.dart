@@ -951,6 +951,7 @@ class _ModuleLandingPage extends StatelessWidget {
       return DashboardPage(
         accountingQueryRepository: accountingQueryRepository,
         productRepository: productRepository,
+        reportsRepository: reportsRepository,
         user: user,
         membership: membership,
       );
