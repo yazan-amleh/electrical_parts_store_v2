@@ -298,11 +298,14 @@ class _SalesPageState extends State<SalesPage> {
               children: [
                 const Icon(Icons.shopping_cart_outlined),
                 const SizedBox(width: 8),
-                Text(
-                  'الفاتورة الحالية',
-                  style: Theme.of(context).textTheme.titleLarge,
+                Expanded(
+                  child: Text(
+                    'الفاتورة الحالية',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                 ),
-                const Spacer(),
                 if (_cart.isNotEmpty)
                   IconButton(
                     tooltip: 'تفريغ الفاتورة',
@@ -464,19 +467,29 @@ class _SalesPageState extends State<SalesPage> {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Text('الإجمالي قبل الضريبة'),
-              const Spacer(),
-              Text(_cartTotal.formatted),
+              const Expanded(
+                child: Text('الإجمالي قبل الضريبة',
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(_cartTotal.formatted,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
             ],
           ),
           const SizedBox(height: 4),
           Row(
             children: [
-              const Text('الإجمالي'),
-              const Spacer(),
-              Text(
-                (_cartTotal + _taxAmount).formatted,
-                style: const TextStyle(fontWeight: FontWeight.bold),
+              const Expanded(child: Text('الإجمالي')),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  (_cartTotal + _taxAmount).formatted,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
