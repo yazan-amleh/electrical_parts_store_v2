@@ -45,6 +45,7 @@ import '../../expenses/domain/repositories/expense_repository.dart';
 import '../../expenses/presentation/expenses_page.dart';
 import '../../payments/domain/repositories/party_payment_repository.dart';
 import '../../payments/domain/repositories/voucher_query_repository.dart';
+import '../../payments/domain/repositories/voucher_draft_repository.dart';
 import '../../payments/presentation/party_payments_page.dart';
 import '../../payments/presentation/vouchers_hub_page.dart';
 import '../../cheques/domain/repositories/cheque_repository.dart';
@@ -797,6 +798,7 @@ class _AppShellPageState extends State<AppShellPage> {
               widget.dependencies.accountingCloseRepository,
           partyPaymentRepository: widget.dependencies.partyPaymentRepository,
           voucherQueryRepository: widget.dependencies.voucherQueryRepository,
+          voucherDraftRepository: widget.dependencies.voucherDraftRepository,
           chequeRepository: widget.dependencies.chequeRepository,
           partyRepository: widget.dependencies.partyRepository,
           partyLedgerRepository: widget.dependencies.partyLedgerRepository,
@@ -1020,6 +1022,7 @@ class _ModuleLandingPage extends StatelessWidget {
     this.accountingCloseRepository,
     required this.partyPaymentRepository,
     required this.voucherQueryRepository,
+    required this.voucherDraftRepository,
     required this.chequeRepository,
     required this.partyRepository,
     required this.partyLedgerRepository,
@@ -1055,6 +1058,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final FirestoreAccountingCloseRepository? accountingCloseRepository;
   final PartyPaymentRepository? partyPaymentRepository;
   final VoucherQueryRepository? voucherQueryRepository;
+  final VoucherDraftRepository? voucherDraftRepository;
   final ChequeRepository? chequeRepository;
   final PartyRepository? partyRepository;
   final PartyLedgerRepository? partyLedgerRepository;
@@ -1139,6 +1143,7 @@ class _ModuleLandingPage extends StatelessWidget {
       return VouchersHubPage(
         paymentRepository: partyPaymentRepository,
         voucherQueryRepository: voucherQueryRepository,
+        draftRepository: voucherDraftRepository,
         user: user,
         membership: membership,
       );
