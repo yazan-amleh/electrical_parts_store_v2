@@ -35,6 +35,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _isLoading = true;
   bool _isSavingProfile = false;
   bool _isAddingMember = false;
+  final Set<String> _savingMemberIds = <String>{};
   String _memberSearch = '';
   bool _showInactiveMembers = true;
   String? _errorMessage;
@@ -285,7 +286,9 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _memberTile(BuildContext context, StoreMember member) {
-    final canEditMember = _canManage && member.role != StoreRole.owner;
+    final isSaving = _savingMemberIds.contains(member.userId);
+    final canEditMember =
+        _canManage && member.role != StoreRole.owner && !isSaving;
     final roleItems = StoreRole.values
         .where((role) => role != StoreRole.owner)
         .map(
@@ -369,11 +372,17 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-              if (canEditMember)
+              if (_canManage && member.role != StoreRole.owner)
                 OutlinedButton.icon(
-                  onPressed: () => _saveMember(member),
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('حفظ'),
+                  onPressed: isSaving ? null : () => _saveMember(member),
+                  icon: isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(isSaving ? 'جارٍ الحفظ...' : 'حفظ'),
                 ),
             ],
           ),
@@ -525,23 +534,37 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _saveMember(StoreMember member) async {
     final repository = widget.repository;
-    if (repository == null) {
+    if (repository == null ||
+        !_canManage ||
+        member.role == StoreRole.owner ||
+        _savingMemberIds.contains(member.userId)) {
       return;
     }
 
-    final result = await repository.updateMember(
-      context: _context,
-      member: member,
-    );
-    if (!mounted) {
-      return;
+    setState(() => _savingMemberIds.add(member.userId));
+    try {
+      final result = await repository.updateMember(
+        context: _context,
+        member: member,
+      );
+      if (!mounted) return;
+      if (result is FailureResult<void>) {
+        await _load();
+        if (mounted) _showMessage(result.failure.message);
+        return;
+      }
+      await _load();
+      if (mounted) _showMessage('تم تحديث صلاحيات العضو.');
+    } catch (error) {
+      if (mounted) {
+        await _load();
+        if (mounted) _showMessage('تعذر تحديث صلاحيات العضو: $error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _savingMemberIds.remove(member.userId));
+      }
     }
-    if (result is FailureResult<void>) {
-      _showMessage(result.failure.message);
-      return;
-    }
-    _showMessage('تم تحديث صلاحيات العضو.');
-    await _load();
   }
 
   void _replaceMember(StoreMember replacement) {
