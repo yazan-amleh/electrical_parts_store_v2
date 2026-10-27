@@ -595,7 +595,6 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     final customerNames = {
       for (final row in analytics.customerRows) row.key: row.label,
     };
-    final query = _searchController.text.trim().toLowerCase();
     final invoices = _matchingInvoices(report, analytics);
     return Card(
       child: Padding(
