@@ -31,7 +31,10 @@ void main() {
   test('CSV includes exactly selected posted invoices and currency', () {
     const exporter = SalesInvoiceSelectionExport();
     final csv = exporter.csv(
-      invoices: [sale(id: 'selected-1'), sale(id: 'selected-2', currency: 'USD')],
+      invoices: [
+        sale(id: 'selected-1'),
+        sale(id: 'selected-2', currency: 'USD')
+      ],
       customerNames: const {'customer-1': 'عميل'},
     );
     expect(csv, contains('selected-1'));
