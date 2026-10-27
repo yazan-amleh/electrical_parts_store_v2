@@ -40,6 +40,7 @@ describe('store onboarding emulator: server authority and atomic creation', () =
     assert.equal(store.data().currency, 'ILS');
     assert.equal(store.data().initialChartVersion, 2);
     assert.equal(store.data().initialChartAccountCount, 27);
+    assert.equal(store.data().accountingChartVersion, 2);
     const accounts = await storeRef.collection('accounts').get();
     assert.equal(accounts.size, 27);
     const cash = accounts.docs.find((doc) => doc.id === '1110');
@@ -75,6 +76,175 @@ describe('store onboarding emulator: server authority and atomic creation', () =
       functions.createStore.run(request({ name: 'x' }, 'user-invalid-name')),
       (error) => error.code === 'invalid-argument',
     );
+  });
+
+  it('upgrades an existing chart atomically and is idempotent', async () => {
+    const uid = 'bootstrap-upgrade-owner';
+    const store = db.collection('stores').doc('bootstrap-upgrade-v1');
+    await db.recursiveDelete(store);
+    const batch = db.batch();
+    batch.set(store, {
+      ownerId: uid,
+      name: 'Old V2 Store',
+      currency: 'ILS',
+      initialChartVersion: 1,
+      initialChartAccountCount: 25,
+    });
+    batch.set(store.collection('members').doc(uid), {
+      storeId: store.id,
+      userId: uid,
+      role: 'owner',
+      isActive: true,
+    });
+    batch.set(store.collection('accounts').doc('3100'), {
+      storeId: store.id,
+      id: '3100',
+      code: '3100',
+      name: 'حقوق الملكية',
+      type: 'equity',
+      normalSide: 'credit',
+      controlType: 'none',
+      statementSection: 'equity',
+      parentId: null,
+      currency: 'ILS',
+      isHeader: true,
+      sortOrder: 400,
+      isActive: true,
+    });
+    await batch.commit();
+
+    const first = await functions.upgradeDefaultChart.run({
+      auth: {uid, token: {uid}},
+      data: {storeId: store.id},
+    });
+    assert.equal(first.status, 'upgraded');
+    assert.equal(first.version, 2);
+    assert.deepEqual(first.addedAccountIds.sort(), ['3400', '4200']);
+    assert.equal((await store.get()).data().accountingChartVersion, 2);
+    assert.equal((await store.collection('accounts').doc('3400').get())
+      .data().normalSide, 'credit');
+    assert.equal((await store.collection('accounts').doc('4200').get())
+      .data().normalSide, 'debit');
+    assert.equal((await store.collection('journal_entries').get()).empty, true);
+    assert.equal((await store.collection('account_balances').get()).empty, true);
+    const epochAfterFirst = (await store.collection('accounting_posting_epochs')
+      .get()).docs.reduce((sum, doc) => sum + doc.data().sequence, 0);
+    assert.equal(epochAfterFirst, 1);
+
+    const second = await functions.upgradeDefaultChart.run({
+      auth: {uid, token: {uid}},
+      data: {storeId: store.id},
+    });
+    assert.equal(second.status, 'unchanged');
+    assert.deepEqual(second.addedAccountIds, []);
+    const epochAfterSecond = (await store.collection('accounting_posting_epochs')
+      .get()).docs.reduce((sum, doc) => sum + doc.data().sequence, 0);
+    assert.equal(epochAfterSecond, 1);
+    await db.recursiveDelete(store);
+  });
+
+  it('rejects a conflicting chart without partially creating prerequisites', async () => {
+    const uid = 'bootstrap-upgrade-conflict-owner';
+    const store = db.collection('stores').doc('bootstrap-upgrade-conflict');
+    await db.recursiveDelete(store);
+    const batch = db.batch();
+    batch.set(store, {
+      ownerId: uid,
+      name: 'Conflicting Store',
+      currency: 'ILS',
+      initialChartVersion: 1,
+      initialChartAccountCount: 25,
+    });
+    batch.set(store.collection('members').doc(uid), {
+      storeId: store.id,
+      userId: uid,
+      role: 'owner',
+      isActive: true,
+    });
+    batch.set(store.collection('accounts').doc('3100'), {
+      storeId: store.id,
+      id: '3100',
+      code: '3100',
+      name: 'حقوق الملكية',
+      type: 'equity',
+      normalSide: 'credit',
+      controlType: 'none',
+      statementSection: 'equity',
+      parentId: null,
+      currency: 'ILS',
+      isHeader: true,
+      sortOrder: 400,
+      isActive: true,
+    });
+    batch.set(store.collection('accounts').doc('4200'), {
+      storeId: store.id,
+      id: '4200',
+      code: '4200',
+      name: 'Wrong Sales Returns',
+      type: 'revenue',
+      normalSide: 'credit',
+      controlType: 'none',
+      statementSection: 'revenue',
+      parentId: null,
+      currency: 'ILS',
+      isHeader: false,
+      sortOrder: 520,
+      isActive: true,
+    });
+    await batch.commit();
+
+    await assert.rejects(
+      functions.upgradeDefaultChart.run({
+        auth: {uid, token: {uid}},
+        data: {storeId: store.id},
+      }),
+      (error) => error.code === 'failed-precondition',
+    );
+    assert.equal((await store.collection('accounts').doc('3400').get()).exists,
+      false);
+    assert.equal((await store.get()).data().accountingChartVersion, undefined);
+    assert.equal((await store.collection('accounting_posting_epochs').get())
+      .empty, true);
+    await db.recursiveDelete(store);
+  });
+
+  it('allows only an active owner/admin to upgrade the default chart', async () => {
+    const owner = 'bootstrap-upgrade-role-owner';
+    const accountant = 'bootstrap-upgrade-role-accountant';
+    const store = db.collection('stores').doc('bootstrap-upgrade-role');
+    await db.recursiveDelete(store);
+    const batch = db.batch();
+    batch.set(store, {ownerId: owner, name: 'Role Store', currency: 'ILS'});
+    batch.set(store.collection('members').doc(owner), {
+      storeId: store.id, userId: owner, role: 'owner', isActive: true,
+    });
+    batch.set(store.collection('members').doc(accountant), {
+      storeId: store.id, userId: accountant, role: 'accountant', isActive: true,
+    });
+    batch.set(store.collection('accounts').doc('3100'), {
+      storeId: store.id,
+      id: '3100',
+      code: '3100',
+      name: 'حقوق الملكية',
+      type: 'equity',
+      normalSide: 'credit',
+      controlType: 'none',
+      statementSection: 'equity',
+      parentId: null,
+      currency: 'ILS',
+      isHeader: true,
+      sortOrder: 400,
+      isActive: true,
+    });
+    await batch.commit();
+    await assert.rejects(
+      functions.upgradeDefaultChart.run({
+        auth: {uid: accountant, token: {uid: accountant}},
+        data: {storeId: store.id},
+      }),
+      (error) => error.code === 'permission-denied',
+    );
+    await db.recursiveDelete(store);
   });
 
   it('selects only an existing active membership; prevents cross-store takeover', async () => {

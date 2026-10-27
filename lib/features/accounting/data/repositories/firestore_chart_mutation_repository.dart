@@ -97,6 +97,34 @@ class FirestoreChartMutationRepository {
     }
   }
 
+  Future<Result<String>> upgradeDefaultChart({
+    required StoreContext context,
+  }) async {
+    try {
+      final response = await _functions
+          .httpsCallable('upgradeDefaultChart')
+          .call<Map<String, dynamic>>({
+        'storeId': context.storeId,
+      });
+      final status = response.data['status'];
+      final version = response.data['version'];
+      if ((status != 'upgraded' && status != 'unchanged') ||
+          version is! int ||
+          version < 1) {
+        return const FailureResult<String>(
+          InfrastructureFailure('Invalid chart upgrade confirmation.'),
+        );
+      }
+      return Success<String>(status as String);
+    } on firebase_functions.FirebaseFunctionsException catch (error) {
+      return FailureResult<String>(_failure(error));
+    } catch (error) {
+      return FailureResult<String>(
+        InfrastructureFailure(error.toString()),
+      );
+    }
+  }
+
   Failure _failure(firebase_functions.FirebaseFunctionsException e) {
     switch (e.code) {
       case 'unauthenticated':

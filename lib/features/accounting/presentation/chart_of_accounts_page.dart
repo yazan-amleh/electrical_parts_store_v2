@@ -126,6 +126,12 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
             ),
             const SizedBox(width: 8),
             if (_isSaving) const CircularProgressIndicator(),
+            if (_mayChangeChart)
+              IconButton(
+                tooltip: 'ترقية الشجرة القياسية',
+                onPressed: _isSaving ? null : _upgradeDefaultChart,
+                icon: const Icon(Icons.system_update_alt),
+              ),
             IconButton(
               tooltip: 'تحديث',
               onPressed: _loadAccounts,
@@ -188,6 +194,33 @@ class _ChartOfAccountsPageState extends State<ChartOfAccountsPage> {
         storeId: widget.membership.storeId,
         userId: widget.user.id,
       );
+
+  Future<void> _upgradeDefaultChart() async {
+    if (!_mayChangeChart) return;
+    setState(() => _isSaving = true);
+    final result = await widget.mutationRepository!.upgradeDefaultChart(
+      context: _storeContext,
+    );
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    if (result is FailureResult<String>) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.failure.message)),
+      );
+      return;
+    }
+    final status = (result as Success<String>).value;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          status == 'upgraded'
+              ? 'تمت ترقية الشجرة القياسية بأمان.'
+              : 'الشجرة القياسية محدثة بالفعل.',
+        ),
+      ),
+    );
+    await _loadAccounts();
+  }
 
   Future<void> _renameAccount(Account account) async {
     final controller = TextEditingController(text: account.name);

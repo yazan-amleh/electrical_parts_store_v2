@@ -98,6 +98,7 @@ const {
 const {getUnifiedAuditReport} = require('./accounting/unified_audit_report');
 const {markJournalPosting} = require('./accounting/posting_epoch');
 const {mutateChartAccount} = require('./accounting/chart_mutation');
+const {upgradeDefaultChart} = require('./accounting/default_chart_upgrade');
 const {
   assertAccountingWritesOpen,
   parseIds,
@@ -125,6 +126,19 @@ exports.mutateChartAccount = onCall(async (request) => {
     data: request.data,
     assertAccess: (member, storeId) => assertMembership(
       member, storeId, 'modify chart of accounts', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.upgradeDefaultChart = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  return upgradeDefaultChart({
+    db, FieldValue, HttpsError, userId: request.auth.uid,
+    data: request.data,
+    assertAccess: (member, storeId) => assertMembership(
+      member, storeId, 'upgrade default chart', new Set(['owner', 'admin']),
     ),
   });
 });

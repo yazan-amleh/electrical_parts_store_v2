@@ -53,6 +53,7 @@ async function createStoreHandler({ db, FieldValue, HttpsError, request }) {
       currency: 'ILS',
       initialChartVersion: chartVersion,
       initialChartAccountCount: initialAccounts.length,
+      accountingChartVersion: chartVersion,
       createdAt: timestamp,
       updatedAt: timestamp,
     });

@@ -38,6 +38,11 @@ balances or overwrite a conflicting account.
 - The `createStore` callable is scoped to an authenticated Firebase user, not a production release by itself.
 - Test first on V2 isolated Firebase emulators and then an approved non-production Firebase environment.
 - No automatic migration/backfill is run on stores created with prior V2 code. Do not silently seed any established accounting books.
+- Existing stores can use the explicit Owner/Admin **ترقية الشجرة القياسية**
+  action. The server performs the version-2 prerequisite upgrade atomically:
+  it verifies `3100`, refuses incompatible/colliding `3400` or `4200`,
+  creates only missing compatible definitions, writes no journal/balance, and
+  records `accountingChartVersion = 2`. A retry is idempotent.
 
 ## Firebase platform reality
 
