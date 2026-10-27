@@ -7,8 +7,32 @@ const functions = require('./index');
 
 const db = admin.firestore();
 const USER = 'sale-accountant';
+const STOCK_USER = 'sale-stock-owner';
 const DATE = '2026-10-06T13:00:00.000Z';
 const invoke = (req) => functions.postSale.run(req);
+
+function inventoryIssueRequest(storeId) {
+  return {
+    auth: { uid: STOCK_USER, token: { uid: STOCK_USER } },
+    data: {
+      storeId,
+      movement: {
+        id: 'competing-adjustment',
+        idempotencyKey: 'competing-adjustment-key',
+        productId: 'product-a',
+        type: 'adjustment',
+        quantityDeltaMilliUnits: -1000,
+        unitCostMinorUnits: 400,
+        totalCostMinorUnits: 400,
+        currency: 'ILS',
+        sourceType: 'audit-concurrency-test',
+        sourceId: null,
+        description: 'Competing stock issue',
+        occurredAt: DATE,
+      },
+    },
+  };
+}
 
 function request(storeId, id, key, options = {}) {
   const credit = options.credit === true;
@@ -60,6 +84,9 @@ async function seed(storeId, product = {}) {
   batch.set(ref.collection('members').doc(USER), {
     storeId, userId: USER, role: 'accountant', isActive: true,
   });
+  batch.set(ref.collection('members').doc(STOCK_USER), {
+    storeId, userId: STOCK_USER, role: 'owner', isActive: true,
+  });
   batch.set(ref.collection('parties').doc('customer-1'), {
     storeId, partyType: 'customer', name: 'Test customer', isActive: true,
   });
@@ -109,6 +136,48 @@ describe('sales inventory, journal and receivable integrity', () => {
     assert.equal(lines.size, 4);
     assert.deepEqual([...lines.docs.map((d) => d.data().lineNumber)].sort(),
       [1, 2, 3, 4]);
+    await db.recursiveDelete(store);
+  });
+
+  it('serializes competing sale and stock issue without double-depleting inventory', async () => {
+    const store = await seed('sale-vs-stock-race', {
+      quantityOnHandMilliUnits: 1000,
+      inventoryValueMinorUnits: 400,
+    });
+    const sale = request(
+      store.id,
+      'sale-stock-race',
+      'sale-stock-race-key',
+    );
+    const stockIssue = inventoryIssueRequest(store.id);
+
+    const results = await Promise.allSettled([
+      invoke(sale),
+      functions.postInventoryMovement.run(stockIssue),
+    ]);
+    const fulfilled = results.filter((result) => result.status === 'fulfilled');
+    const rejected = results.filter((result) => result.status === 'rejected');
+    assert.equal(fulfilled.length, 1);
+    assert.equal(rejected.length, 1);
+    assert.equal(rejected[0].reason.code, 'failed-precondition');
+
+    const product = (await store.collection('products')
+      .doc('product-a').get()).data();
+    assert.equal(product.quantityOnHandMilliUnits, 0);
+    assert.equal(product.inventoryValueMinorUnits, 0);
+
+    const movements = await store.collection('inventory_movements').get();
+    const sales = await store.collection('sales').get();
+    const journals = await store.collection('journal_entries').get();
+    assert.equal(movements.size, 1);
+    assert.ok(sales.size === 0 || sales.size === 1);
+    assert.equal(journals.size, sales.size);
+
+    const epochs = await store.collection('accounting_posting_epochs').get();
+    assert.equal(
+      epochs.docs.reduce((sum, doc) => sum + doc.data().sequence, 0),
+      1,
+    );
     await db.recursiveDelete(store);
   });
 
