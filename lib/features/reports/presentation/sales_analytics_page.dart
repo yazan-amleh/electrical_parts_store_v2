@@ -562,8 +562,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
         return;
       }
 
-      final documents =
-          (result as Success<List<SalesInvoiceDocument>>).value;
+      final documents = (result as Success<List<SalesInvoiceDocument>>).value;
       final bytes = await _invoiceSelectionExport.invoicePdf(
         documents: documents,
         customerNames: _customerNames(),

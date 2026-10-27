@@ -420,9 +420,7 @@ class FirestoreReportsRepository implements ReportsRepository {
           final discount = _analyticsInt(line['discountMinorUnits'], -1);
           final gross = _analyticsInt(
             line['grossTotalMinorUnits'],
-            quantity > 0 && unitPrice >= 0
-                ? _scaled(unitPrice, quantity)
-                : -1,
+            quantity > 0 && unitPrice >= 0 ? _scaled(unitPrice, quantity) : -1,
           );
           final lineTotal = _analyticsInt(line['totalMinorUnits'], -1);
           final lineCost = _analyticsInt(line['costTotalMinorUnits'], -1);
