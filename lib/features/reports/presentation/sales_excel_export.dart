@@ -121,8 +121,7 @@ class SalesExcelExport {
     for (final row in rows) {
       sheet.appendRow([
         TextCellValue(_safeText(row.label)),
-        if (includeQuantity)
-          DoubleCellValue(row.quantityMilliUnits / 1000.0),
+        if (includeQuantity) DoubleCellValue(row.quantityMilliUnits / 1000.0),
         DoubleCellValue(_major(row.revenue.minorUnits)),
         DoubleCellValue(_major(row.cost.minorUnits)),
         DoubleCellValue(_major(row.grossProfit.minorUnits)),

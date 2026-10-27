@@ -957,8 +957,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
           invoices: invoices,
           customerNames: customers,
         );
-        filename =
-            'sales_details_${_formatDate(_from)}_${_formatDate(_to)}';
+        filename = 'sales_details_${_formatDate(_from)}_${_formatDate(_to)}';
         truncated = report.mayBeTruncated;
       } else if (_selectedTab == 1) {
         final products = analytics.productRows
@@ -982,8 +981,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
           customers: customers,
           paymentMethodCounts: analytics.paymentMethodCounts,
         );
-        filename =
-            'sales_customers_${_formatDate(_from)}_${_formatDate(_to)}';
+        filename = 'sales_customers_${_formatDate(_from)}_${_formatDate(_to)}';
         truncated = analytics.mayBeTruncated;
       }
 
