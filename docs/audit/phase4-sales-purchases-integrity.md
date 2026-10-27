@@ -53,17 +53,74 @@ Actions: https://github.com/yazan-amleh/electrical_parts_store_v2/actions/runs/3
 
 **Important:** local emulator/compilation evidence does not imply deployed Firebase E2E correctness or production readiness.
 
+## Later closures verified on the current audit branch
+
+The original 2026-10-23 gap list below was partially superseded by later
+audit slices. Do not reopen already-proven defects without new evidence.
+
+- **Purchase-order receipt replay integrity:** closed by the dedicated
+  purchase-order receipt hardening. New receipt markers carry a normalized
+  request fingerprint; legacy fingerprintless receipts are verified against
+  the completed order, purchase and journal evidence before an exact retry is
+  acknowledged. Safe checked accumulation is also used for purchase-order
+  totals. See `phase4-purchase-order-receipt-integrity.md`; its recorded
+  source commit is `886eb10361758167f857d6b2f676914035f7067c` and its
+  verification run is `39942358564`.
+- **Full stock-depletion rounding:** closed for sale posting by commit
+  `180f87f67fe7e96f8b8b713735d30a68b59e43ed`. When the last units are
+  sold, any residual difference between the rounded average unit cost and the
+  authoritative stored inventory valuation is allocated to the sale COGS and
+  its line/movement/journal consistently. Quantity zero must end with
+  inventory value zero. GitHub Actions run `40544502079` passed.
+- **Sale versus manual stock race:** characterized by commit
+  `fd35d4b75c19ce4c63e826044c912b73fb381446`. A sale and a negative
+  adjustment competing for the last units serialize through Firestore
+  transactions: only one commits, the other fails closed, and the posting
+  epoch advances once. Run `40545291000` passed.
+- **Manual inventory command integrity:** hardened by commit
+  `e7a4eea59e6084f134fb89b3d4edbad58249d2bd`. New idempotency markers
+  include an immutable request fingerprint, legacy retries are verified from
+  the original movement, malformed stored stock/value fields fail closed,
+  quantity/value arithmetic is checked, and a full manual depletion must
+  remove the exact remaining valuation. Run `40546205380` passed.
+- **Whole-store read-only reconciliation:** later Phase-4 slices added
+  checkpointed ledger, journal-header, orphan-path, stored-balance and
+  inventory/currency reconciliation plus a unified non-certifying report.
+  These detect many cross-projection inconsistencies but deliberately do not
+  claim an immutable point-in-time accounting snapshot.
+
 ## Open accounting gaps (must NOT be marked complete)
 
-- **Return/refund flows:** No standalone return/refund path was identified by pathname in V2 or the V1 main tree; this is not proof return behavior is absent from V1 screens. Audit embedded buttons and business rules before designing return/reversal journal and inventory restocking.
-- **Receipt idempotency:** `receivePurchaseOrderInTransaction` has an independent receipt key/ID replay branch needing payload fingerprints and exact receipt/posting checks; `createPurchaseOrderInTransaction` still sums order totals without safe accumulation.
-- **Full depletion rounding:** Sale COGS uses the stored rounded average cost per unit; a stock issue that reduces quantity to zero may leave a rounding remainder in `inventoryValueMinorUnits`. This requires explicit cost-allocation and accounting-policy tests; do not silently zero or invent adjustments.
-- **Stock/GL cross-projection reconciliation:** These isolated tests confirm a transaction's deltas, not a whole-store replay of all journals versus `account_balances`, party ledgers, inventory movements and current product valuation. Missing inventory opening balances and historical adjustments must be surfaced, not fabricated.
-- **Concurrency across different features:** Sale vs inventory adjustments vs purchase on the same product, refunds and stock units remain to be characterized with real conflict tests.
-- **Multi-currency, tax policy, cost valuation policies, reversals, high-volume pagination** remain open.
-- **V1 UI parity:** Detailed V1 sales screens (including several alternative detail, search, export and analytics views) have not all been ported pixel-for-pixel to V2; UI acceptance remains open.
-- **Native platforms / real Firebase environment:** Android/iOS registration and actual V2 Firebase deployed end-to-end testing remain open.
+- **True return/refund flows:** the audit found that V2 exposed
+  `saleReturn` and `purchaseReturn` as generic stock-only movements. Those
+  new manual paths are now blocked because they changed inventory without the
+  corresponding financial reversal. Historical movement records remain
+  readable. A real return must reference the originating business document
+  and atomically reverse/adjust stock, tax, settlement/party balances,
+  revenue/purchase effects and COGS/inventory as applicable.
+- **Manual opening-balance and adjustment accounting policy:** generic
+  inventory movements can change stock valuation without creating a GL
+  journal. The mutation epoch detects the change, and reconciliation can flag
+  divergence, but the correct counter-account/business policy has not been
+  specified. Do not invent an opening-equity or adjustment account silently.
+- **Immutable accounting cutoff:** the checkpointed audits detect
+  instrumented source changes but are not a Firestore historical snapshot.
+  Privileged/Admin out-of-band writes remain an operational boundary.
+- **Full line-identity historical reconciliation and source provenance:** the
+  unified audit compares strong independent aggregates and paths, but matching
+  totals can still conceal offsetting historical differences. Opening stock
+  provenance must be evidenced, not fabricated.
+- **Multi-currency, return/reversal policy, tax edge cases and historical
+  compatibility** still require source-specific acceptance scenarios.
+- **V1 visual/UI parity:** exact responsive screenshots, printed invoices and
+  all alternative V1 workflows remain acceptance gates even where equivalent
+  V2 logic exists.
+- **Native/deployed V2 E2E:** Android/iOS registration (if in release scope)
+  and an isolated deployed V2 Firebase end-to-end run remain open.
 
 ## Next gate
 
-Review purchase-order receipt/idempotency and embedded return behavior; design lossless, read-only ledger-vs-inventory reconciler and require passing accounting policy tests before rewriting any historical balances.
+Audit the accounting semantics of manual opening-balance/adjustment movements
+and the real V1 return behavior before creating any new financial reversal
+contract. Continue UI/print parity and isolated deployed-V2 E2E independently;
+do not rewrite historical balances to make audits pass.

@@ -48,6 +48,33 @@ Remaining sales release requirements: V1 all screens and report export parity; a
 - XLSX export now covers the three V1-style sales report views: loaded invoice details, top products/categories, and customer/payment summaries. The workbook is generated locally from the same loaded/verified report data and warns when the source page is truncated.
 - Major remaining report release gaps: return/reversal representation, period-wide verification with mixed currencies, exact V1 invoice visual comparison and deployed Firebase E2E.
 
+## Inventory integrity follow-up (2026-10-27)
+
+- Sale full-depletion costing now consumes the **exact stored inventory value**
+  on the final units and allocates only the residual rounding difference to
+  COGS. Sale header, line snapshot, inventory movement, inventory projection
+  and journal use the same final cost. CI: `180f87f...` / run
+  `40544502079`.
+- A real concurrency fixture now races a sale against a negative manual stock
+  adjustment for the same last units. Exactly one transaction commits; the
+  loser fails closed, stock/value end at zero without double depletion, and
+  the mutation epoch increments once. CI: `fd35d4b...` / run
+  `40545291000`.
+- Manual inventory movements now fingerprint the complete request and verify
+  legacy retries, reject corrupt stored quantity/value fields, use checked
+  arithmetic and require exact value removal on a full depletion. The manual
+  UI sends the authoritative stored valuation when removing the entire
+  remaining quantity. CI: `e7a4eea...` / run `40546205380`.
+- The previous manual `saleReturn` / `purchaseReturn` options are disabled
+  for new posting because they were **stock-only**, not accounting returns.
+  Existing historical records are still rendered. A true return/reversal
+  remains a release requirement and must update the original financial and
+  inventory effects atomically.
+- Still open: the accounting counter-account/policy for manual opening
+  balances and valuation adjustments. The current mutation fence and audits
+  can detect changes/divergence but do not make a no-journal valuation change
+  financially complete.
+
 ## Mandatory rollout gate
 
 Do not deploy or merge merely because CI succeeds. Verify roles, privileged service accounts, close-period writer boundaries and real backup/restore recovery in an **isolated V2** environment. Obtain an explicit deployment decision from the owner. The existing manual deploy workflow checks out `v2/port-v1-complete`, not this audit branch; approving a separate deployment action requires a deliberate branch/release review.
