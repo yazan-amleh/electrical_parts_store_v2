@@ -45,7 +45,8 @@ Remaining sales release requirements: V1 all screens and report export parity; a
 - Analytics reconciles the sum of lines against header subtotal and COGS; a missing or malformed set fails rather than showing inaccurate profitability.
 - The posted invoice list validates invoice total = subtotal + tax, limits loaded documents by default to 1,000, warns on truncation, and displays 100 matched headers per UI view. Search and CSV apply to all **loaded** invoices; none of this claims historical completeness outside the bounded query.
 - V1-style multi-select now prints and shares **detailed invoices with verified line items**, not header-only summaries. Invoice lines are loaded only when requested; current invoices use the immutable embedded snapshot and historical invoices fall back to the `lines` subcollection. Export is refused if line totals/COGS do not reconcile to the posted header.
-- Major remaining report release gaps: XLSX exports, return/reversal representation, period-wide verification with mixed currencies, exact V1 invoice visual comparison and emulator/deployed Firebase E2E.
+- XLSX export now covers the three V1-style sales report views: loaded invoice details, top products/categories, and customer/payment summaries. The workbook is generated locally from the same loaded/verified report data and warns when the source page is truncated.
+- Major remaining report release gaps: return/reversal representation, period-wide verification with mixed currencies, exact V1 invoice visual comparison and deployed Firebase E2E.
 
 ## Mandatory rollout gate
 

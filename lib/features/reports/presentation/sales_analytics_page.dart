@@ -1,3 +1,4 @@
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
@@ -12,6 +13,7 @@ import '../domain/entities/sales_analytics.dart';
 import '../domain/entities/sales_invoice_report.dart';
 import '../domain/repositories/reports_repository.dart';
 import '../domain/services/report_document_builder.dart';
+import 'sales_excel_export.dart';
 import 'sales_invoice_selection_export.dart';
 
 class SalesAnalyticsPage extends StatefulWidget {
@@ -41,6 +43,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
   final _searchController = TextEditingController();
   final _selectedInvoiceIds = <String>{};
   final _invoiceSelectionExport = const SalesInvoiceSelectionExport();
+  final _salesExcelExport = const SalesExcelExport();
   bool _selectionMode = false;
   int _selectedTab = 0;
   int _reportEpoch = 0;
@@ -231,6 +234,12 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                   onPressed: _analytics == null ? null : _copyCsv,
                   icon: const Icon(Icons.content_copy_outlined),
                   label: const Text('نسخ CSV'),
+                ),
+                OutlinedButton.icon(
+                  onPressed:
+                      _analytics == null || _isExporting ? null : _exportXlsx,
+                  icon: const Icon(Icons.table_view_outlined),
+                  label: const Text('تصدير XLSX'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _analytics == null ||
@@ -921,6 +930,85 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _exportXlsx() async {
+    final analytics = _analytics;
+    if (analytics == null || _isExporting) {
+      return;
+    }
+
+    setState(() => _isExporting = true);
+    try {
+      final query = _searchController.text.trim().toLowerCase();
+      late final Uint8List bytes;
+      late final String filename;
+      var truncated = false;
+
+      if (_selectedTab == 0) {
+        final report = _invoices;
+        if (report == null) {
+          _showMessage('تعذر تحميل تفاصيل الفواتير.');
+          return;
+        }
+        final customers = _customerNames();
+        final invoices = _matchingInvoices(report, analytics);
+        bytes = _salesExcelExport.invoices(
+          invoices: invoices,
+          customerNames: customers,
+        );
+        filename =
+            'sales_details_${_formatDate(_from)}_${_formatDate(_to)}';
+        truncated = report.mayBeTruncated;
+      } else if (_selectedTab == 1) {
+        final products = analytics.productRows
+            .where((row) => row.label.toLowerCase().contains(query))
+            .toList(growable: false);
+        final categories = analytics.categoryRows
+            .where((row) => row.label.toLowerCase().contains(query))
+            .toList(growable: false);
+        bytes = _salesExcelExport.topProducts(
+          products: products,
+          categories: categories,
+        );
+        filename =
+            'sales_top_products_${_formatDate(_from)}_${_formatDate(_to)}';
+        truncated = analytics.mayBeTruncated;
+      } else {
+        final customers = analytics.customerRows
+            .where((row) => row.label.toLowerCase().contains(query))
+            .toList(growable: false);
+        bytes = _salesExcelExport.customers(
+          customers: customers,
+          paymentMethodCounts: analytics.paymentMethodCounts,
+        );
+        filename =
+            'sales_customers_${_formatDate(_from)}_${_formatDate(_to)}';
+        truncated = analytics.mayBeTruncated;
+      }
+
+      await FileSaver.instance.saveFile(
+        name: filename,
+        bytes: bytes,
+        fileExtension: 'xlsx',
+        mimeType: MimeType.microsoftExcel,
+      );
+      if (mounted) {
+        _showMessage(
+          truncated
+              ? 'تم تصدير XLSX للبيانات المحمّلة فقط؛ ضيّق الفترة لاعتماد تقرير كامل.'
+              : 'تم تصدير ملف XLSX بنجاح.',
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        _showMessage('تعذر تصدير XLSX: $error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting = false);
+      }
+    }
   }
 
   Future<void> _copyCsv() async {
