@@ -56,6 +56,35 @@ void main() {
     expect(csv, contains('""unsafe""'));
   });
 
+  test('detailed invoice PDF is generated from verified line data', () async {
+    const exporter = SalesInvoiceSelectionExport();
+    final invoice = sale();
+    final bytes = await exporter.invoicePdf(
+      documents: [
+        SalesInvoiceDocument(
+          invoice: invoice,
+          lines: const [
+            SalesInvoiceLineSummary(
+              id: 'line-1',
+              productId: 'product-1',
+              description: 'كابل كهربائي',
+              quantityMilliUnits: 2000,
+              unitPrice: Money(minorUnits: 5000),
+              discount: Money(minorUnits: 0),
+              total: Money(minorUnits: 10000),
+              cost: Money(minorUnits: 6000),
+              unitName: 'متر',
+            ),
+          ],
+        ),
+      ],
+      customerNames: const {'customer-1': 'عميل'},
+      storeLabel: 'متجر الاختبار',
+    );
+    expect(bytes.length, greaterThan(700));
+    expect(latin1.decode(bytes.take(4).toList()), '%PDF');
+  });
+
   test('PDF is generated offline using bundled Arabic font', () async {
     const exporter = SalesInvoiceSelectionExport();
     final bytes = await exporter.pdf(

@@ -525,13 +525,47 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
 
   Future<void> _exportSelectedInvoices({required bool print}) async {
     final invoices = _selectedInvoices();
-    if (_isExporting || invoices.isEmpty) return;
+    await _exportInvoiceDocuments(invoices, print: print);
+  }
+
+  Future<void> _exportInvoiceDocument(
+    SalesInvoiceSummary invoice, {
+    required bool print,
+  }) async {
+    await _exportInvoiceDocuments([invoice], print: print);
+  }
+
+  Future<void> _exportInvoiceDocuments(
+    List<SalesInvoiceSummary> invoices, {
+    required bool print,
+  }) async {
+    final repository = widget.repository;
+    if (_isExporting || invoices.isEmpty || repository == null) return;
     setState(() => _isExporting = true);
     final requestedStore = widget.membership.storeId;
     final requestedUser = widget.user.id;
     try {
-      final bytes = await _invoiceSelectionExport.pdf(
-        invoices: invoices,
+      final result = await repository.getSalesInvoiceDocuments(
+        context: _context,
+        invoiceIds: invoices.map((invoice) => invoice.id).toList(),
+        maxInvoices: 100,
+      );
+      if (!mounted ||
+          requestedStore != widget.membership.storeId ||
+          requestedUser != widget.user.id) {
+        return;
+      }
+      if (result is FailureResult<List<SalesInvoiceDocument>>) {
+        _showMessage(
+          'تعذر تحميل سطور الفاتورة: ${result.failure.message}',
+        );
+        return;
+      }
+
+      final documents =
+          (result as Success<List<SalesInvoiceDocument>>).value;
+      final bytes = await _invoiceSelectionExport.invoicePdf(
+        documents: documents,
         customerNames: _customerNames(),
         storeLabel: requestedStore,
       );
@@ -543,13 +577,13 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       if (print) {
         await Printing.layoutPdf(onLayout: (_) async => bytes);
       } else {
-        await Printing.sharePdf(
-          bytes: bytes,
-          filename: 'selected_sale_summaries.pdf',
-        );
+        final filename = documents.length == 1
+            ? 'sale_invoice_${documents.first.invoice.id}.pdf'
+            : 'selected_sales_invoices.pdf';
+        await Printing.sharePdf(bytes: bytes, filename: filename);
       }
     } catch (_) {
-      if (mounted) _showMessage('تعذر تجهيز ملخص الفواتير المحددة.');
+      if (mounted) _showMessage('تعذر تجهيز الفاتورة التفصيلية.');
     } finally {
       if (mounted) setState(() => _isExporting = false);
     }
@@ -640,6 +674,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                     DataColumn(label: Text('الضريبة')),
                     DataColumn(label: Text('الإجمالي')),
                     DataColumn(label: Text('مرجع القيد')),
+                    DataColumn(label: Text('إجراءات')),
                   ],
                   rows: [
                     for (final item in invoices.take(100))
@@ -662,6 +697,33 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                             DataCell(Text(item.tax.formatted)),
                             DataCell(Text(item.total.formatted)),
                             DataCell(SelectableText(item.journalEntryId)),
+                            DataCell(Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'طباعة الفاتورة ${item.id}',
+                                  onPressed: _isExporting
+                                      ? null
+                                      : () => _exportInvoiceDocument(
+                                            item,
+                                            print: true,
+                                          ),
+                                  icon: const Icon(Icons.print_outlined),
+                                ),
+                                IconButton(
+                                  tooltip: 'مشاركة PDF للفاتورة ${item.id}',
+                                  onPressed: _isExporting
+                                      ? null
+                                      : () => _exportInvoiceDocument(
+                                            item,
+                                            print: false,
+                                          ),
+                                  icon: const Icon(
+                                    Icons.picture_as_pdf_outlined,
+                                  ),
+                                ),
+                              ],
+                            )),
                           ]),
                   ],
                 ),

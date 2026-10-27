@@ -21,6 +21,12 @@ abstract interface class ReportsRepository {
     int maxDocuments = 1000,
   });
 
+  Future<Result<List<SalesInvoiceDocument>>> getSalesInvoiceDocuments({
+    required StoreContext context,
+    required List<String> invoiceIds,
+    int maxInvoices = 100,
+  });
+
   Future<Result<SalesAnalytics>> getSalesAnalytics({
     required StoreContext context,
     required DateTime from,

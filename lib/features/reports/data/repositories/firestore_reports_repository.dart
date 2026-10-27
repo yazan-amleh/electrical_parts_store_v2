@@ -278,6 +278,220 @@ class FirestoreReportsRepository implements ReportsRepository {
   }
 
   @override
+  Future<Result<List<SalesInvoiceDocument>>> getSalesInvoiceDocuments({
+    required StoreContext context,
+    required List<String> invoiceIds,
+    int maxInvoices = 100,
+  }) async {
+    if (context.storeId.trim().isEmpty ||
+        maxInvoices < 1 ||
+        maxInvoices > 100 ||
+        invoiceIds.isEmpty) {
+      return const FailureResult<List<SalesInvoiceDocument>>(
+        ValidationFailure('Invalid sales invoice detail request.'),
+      );
+    }
+
+    final ids = <String>[];
+    final seen = <String>{};
+    for (final rawId in invoiceIds) {
+      final id = rawId.trim();
+      if (id.isEmpty || id.contains('/')) {
+        return const FailureResult<List<SalesInvoiceDocument>>(
+          ValidationFailure('Invoice ids must be safe document ids.'),
+        );
+      }
+      if (seen.add(id)) {
+        ids.add(id);
+      }
+    }
+    if (ids.length > maxInvoices) {
+      return FailureResult<List<SalesInvoiceDocument>>(
+        ValidationFailure(
+          'At most $maxInvoices invoices can be loaded for one export.',
+        ),
+      );
+    }
+
+    try {
+      final sales = FirebasePaths.sales(_firestore, context.storeId);
+      final documents = <SalesInvoiceDocument>[];
+
+      for (final invoiceId in ids) {
+        final invoiceRef = sales.doc(invoiceId);
+        final snapshot = await invoiceRef.get();
+        final data = snapshot.data();
+        if (!snapshot.exists ||
+            data == null ||
+            data['storeId'] != context.storeId ||
+            data['status'] != 'posted') {
+          return FailureResult<List<SalesInvoiceDocument>>(
+            ValidationFailure(
+              'Sale $invoiceId is missing, unposted, or belongs to another store.',
+            ),
+          );
+        }
+
+        final postedAt = _analyticsDate(data['postedAt']);
+        final currency = data['currency'];
+        final subtotal = data['subtotalMinorUnits'];
+        final tax = data['taxMinorUnits'];
+        final total = data['totalMinorUnits'];
+        final cost = data['costTotalMinorUnits'];
+        final journalId = data['journalEntryId'];
+        if (postedAt == null ||
+            currency is! String ||
+            currency.isEmpty ||
+            subtotal is! int ||
+            subtotal < 0 ||
+            tax is! int ||
+            tax < 0 ||
+            total is! int ||
+            total <= 0 ||
+            cost is! int ||
+            cost < 0 ||
+            subtotal + tax != total ||
+            journalId is! String ||
+            journalId.isEmpty) {
+          return FailureResult<List<SalesInvoiceDocument>>(
+            ValidationFailure(
+              'Sale $invoiceId has incomplete or inconsistent totals.',
+            ),
+          );
+        }
+
+        final invoice = SalesInvoiceSummary(
+          id: invoiceId,
+          storeId: context.storeId,
+          postedAt: postedAt,
+          customerId: _analyticsNullableString(data['customerId']),
+          paymentMethod: _analyticsString(data['paymentMethod'], 'unknown'),
+          subtotal: Money(minorUnits: subtotal, currency: currency),
+          tax: Money(minorUnits: tax, currency: currency),
+          total: Money(minorUnits: total, currency: currency),
+          cost: Money(minorUnits: cost, currency: currency),
+          journalEntryId: journalId,
+          description: _analyticsNullableString(data['description']),
+        );
+
+        final embeddedLines = data['lines'];
+        final rawLines = <Map<String, dynamic>>[];
+        if (embeddedLines is List && embeddedLines.isNotEmpty) {
+          for (final value in embeddedLines) {
+            if (value is! Map) {
+              return FailureResult<List<SalesInvoiceDocument>>(
+                ValidationFailure(
+                  'Sale $invoiceId has malformed embedded invoice lines.',
+                ),
+              );
+            }
+            rawLines.add(Map<String, dynamic>.from(value));
+          }
+        } else {
+          final lineSnapshot = await invoiceRef.collection('lines').get();
+          for (final lineDocument in lineSnapshot.docs) {
+            final line = lineDocument.data();
+            rawLines.add({
+              ...line,
+              'id': _analyticsString(line['id'], lineDocument.id),
+            });
+          }
+        }
+
+        if (rawLines.isEmpty) {
+          return FailureResult<List<SalesInvoiceDocument>>(
+            ValidationFailure(
+              'Sale $invoiceId has no verifiable invoice lines.',
+            ),
+          );
+        }
+
+        final lineIds = <String>{};
+        final lines = <SalesInvoiceLineSummary>[];
+        var verifiedSubtotal = 0;
+        var verifiedCost = 0;
+        for (final line in rawLines) {
+          final lineStoreId = line['storeId'];
+          final id = _analyticsString(line['id'], '');
+          final productId = _analyticsString(line['productId'], '');
+          final description = _analyticsString(line['description'], '');
+          final quantity = _analyticsInt(line['quantityMilliUnits'], -1);
+          final unitPrice = _analyticsInt(line['unitPriceMinorUnits'], -1);
+          final discount = _analyticsInt(line['discountMinorUnits'], -1);
+          final gross = _analyticsInt(
+            line['grossTotalMinorUnits'],
+            quantity > 0 && unitPrice >= 0
+                ? _scaled(unitPrice, quantity)
+                : -1,
+          );
+          final lineTotal = _analyticsInt(line['totalMinorUnits'], -1);
+          final lineCost = _analyticsInt(line['costTotalMinorUnits'], -1);
+
+          if ((lineStoreId is String && lineStoreId != context.storeId) ||
+              id.isEmpty ||
+              productId.isEmpty ||
+              description.isEmpty ||
+              !lineIds.add(id) ||
+              quantity <= 0 ||
+              unitPrice < 0 ||
+              discount < 0 ||
+              gross < 0 ||
+              lineTotal < 0 ||
+              lineCost < 0 ||
+              discount > gross ||
+              gross - discount != lineTotal) {
+            return FailureResult<List<SalesInvoiceDocument>>(
+              ValidationFailure(
+                'Sale $invoiceId contains invalid invoice line data.',
+              ),
+            );
+          }
+
+          verifiedSubtotal += lineTotal;
+          verifiedCost += lineCost;
+          lines.add(SalesInvoiceLineSummary(
+            id: id,
+            productId: productId,
+            description: description,
+            quantityMilliUnits: quantity,
+            unitPrice: Money(minorUnits: unitPrice, currency: currency),
+            discount: Money(minorUnits: discount, currency: currency),
+            total: Money(minorUnits: lineTotal, currency: currency),
+            cost: Money(minorUnits: lineCost, currency: currency),
+            unitName: _analyticsNullableString(line['unitName']),
+            isService: line['isService'] == true,
+          ));
+        }
+
+        if (verifiedSubtotal != subtotal || verifiedCost != cost) {
+          return FailureResult<List<SalesInvoiceDocument>>(
+            ValidationFailure(
+              'Sale $invoiceId lines do not reconcile to posted totals.',
+            ),
+          );
+        }
+
+        documents.add(SalesInvoiceDocument(
+          invoice: invoice,
+          lines: List.unmodifiable(lines),
+        ));
+      }
+
+      return Success<List<SalesInvoiceDocument>>(
+        List.unmodifiable(documents),
+      );
+    } on FirebaseException catch (error) {
+      return FailureResult<List<SalesInvoiceDocument>>(
+        InfrastructureFailure(error.message ?? error.code),
+      );
+    } catch (error) {
+      return FailureResult<List<SalesInvoiceDocument>>(
+        InfrastructureFailure(error.toString()),
+      );
+    }
+  }
+
+  @override
   Future<Result<SalesAnalytics>> getSalesAnalytics({
     required StoreContext context,
     required DateTime from,

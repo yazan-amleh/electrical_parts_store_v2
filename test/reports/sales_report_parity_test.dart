@@ -86,6 +86,43 @@ class _Reports implements ReportsRepository {
       ));
 
   @override
+  Future<Result<List<SalesInvoiceDocument>>> getSalesInvoiceDocuments({
+    required StoreContext context,
+    required List<String> invoiceIds,
+    int maxInvoices = 100,
+  }) async =>
+      Success([
+        for (final id in invoiceIds)
+          SalesInvoiceDocument(
+            invoice: SalesInvoiceSummary(
+              id: id,
+              storeId: context.storeId,
+              postedAt: DateTime.utc(2026, 10, 26),
+              customerId: 'customer-1',
+              paymentMethod: 'credit',
+              subtotal: const Money(minorUnits: 10000),
+              tax: const Money(minorUnits: 1700),
+              total: const Money(minorUnits: 11700),
+              cost: const Money(minorUnits: 5000),
+              journalEntryId: '$id-journal',
+            ),
+            lines: const [
+              SalesInvoiceLineSummary(
+                id: 'line-1',
+                productId: 'product-1',
+                description: 'كابل كهربائي',
+                quantityMilliUnits: 1000,
+                unitPrice: Money(minorUnits: 10000),
+                discount: Money(minorUnits: 0),
+                total: Money(minorUnits: 10000),
+                cost: Money(minorUnits: 5000),
+                unitName: 'متر',
+              ),
+            ],
+          ),
+      ]);
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -118,6 +155,8 @@ void main() {
     expect(find.widgetWithText(Tab, 'ملخص العملاء'), findsOneWidget);
     expect(find.text('sale-100'), findsOneWidget);
     expect(find.text('sale-100-journal'), findsOneWidget);
+    expect(find.byTooltip('طباعة الفاتورة sale-100'), findsOneWidget);
+    expect(find.byTooltip('مشاركة PDF للفاتورة sale-100'), findsOneWidget);
 
     await tester.tap(find.text('اختيار عدة فواتير'));
     await tester.pumpAndSettle();

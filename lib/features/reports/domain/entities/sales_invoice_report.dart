@@ -39,3 +39,39 @@ class SalesInvoiceReport {
   final List<SalesInvoiceSummary> invoices;
   final bool mayBeTruncated;
 }
+
+class SalesInvoiceLineSummary {
+  const SalesInvoiceLineSummary({
+    required this.id,
+    required this.productId,
+    required this.description,
+    required this.quantityMilliUnits,
+    required this.unitPrice,
+    required this.discount,
+    required this.total,
+    required this.cost,
+    this.unitName,
+    this.isService = false,
+  });
+
+  final String id;
+  final String productId;
+  final String description;
+  final int quantityMilliUnits;
+  final Money unitPrice;
+  final Money discount;
+  final Money total;
+  final Money cost;
+  final String? unitName;
+  final bool isService;
+}
+
+class SalesInvoiceDocument {
+  const SalesInvoiceDocument({
+    required this.invoice,
+    required this.lines,
+  });
+
+  final SalesInvoiceSummary invoice;
+  final List<SalesInvoiceLineSummary> lines;
+}
