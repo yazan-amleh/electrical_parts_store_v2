@@ -183,14 +183,6 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
                   value: InventoryMovementType.adjustment,
                   child: Text('تسوية مخزون'),
                 ),
-                DropdownMenuItem(
-                  value: InventoryMovementType.saleReturn,
-                  child: Text('مرتجع بيع / إدخال'),
-                ),
-                DropdownMenuItem(
-                  value: InventoryMovementType.purchaseReturn,
-                  child: Text('مرتجع شراء / إخراج'),
-                ),
               ],
               onChanged: _isPosting
                   ? null
@@ -458,6 +450,8 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
       quantity.milliUnits * direction,
     );
     final now = DateTime.now().toUtc().microsecondsSinceEpoch;
+    final fullyDepletesStock = signedQuantity.isNegative &&
+        signedQuantity.milliUnits.abs() == product.quantityOnHand.milliUnits;
     final movement = InventoryMovement(
       id: ['inventory-movement-', now].join(),
       storeId: widget.membership.storeId,
@@ -465,6 +459,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
       type: _movementType,
       quantityDelta: signedQuantity,
       unitCost: unitCost,
+      totalCost: fullyDepletesStock ? product.inventoryValue : null,
       idempotencyKey: IdempotencyKey(['inventory-', now].join()),
       sourceType: 'manual_inventory',
       sourceId: null,

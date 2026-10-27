@@ -63,6 +63,10 @@ const {
   matchesLegacyPurchaseOrderJournalLines,
 } = require('./accounting/purchase_order_receipt_integrity');
 const {
+  fingerprintInventoryMovement,
+  matchesLegacyInventoryMovement,
+} = require('./accounting/inventory_movement_integrity');
+const {
   MAX_AUDIT_DOCS_PER_COLLECTION,
   MAX_AUDIT_TOTAL_DOCS,
   readAuditPages,
@@ -243,8 +247,6 @@ const PURCHASE_ORDER_ROLES = new Set([
 const INVENTORY_MOVEMENT_TYPES = new Set([
   'openingBalance',
   'adjustment',
-  'saleReturn',
-  'purchaseReturn',
 ]);
 const INVENTORY_POSTING_ROLES = new Set(['owner', 'admin', 'warehouse']);
 
@@ -921,16 +923,33 @@ async function postInventoryMovementInTransaction(
     INVENTORY_POSTING_ROLES,
   );
 
+  const fingerprint = fingerprintInventoryMovement(command);
   const idempotencySnapshot = await transaction.get(idempotencyRef);
   if (idempotencySnapshot.exists) {
-    const existingMovementId = idempotencySnapshot.data().movementId;
-    if (existingMovementId === command.movement.id) {
-      return {
-        status: 'already_posted',
-        movementId: command.movement.id,
-      };
+    const marker = idempotencySnapshot.data();
+    if (marker.storeId !== command.storeId ||
+        marker.movementId !== command.movement.id) {
+      conflict('The inventory idempotency key is already assigned.');
     }
-    conflict('The inventory idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict(
+          'Inventory movement retry differs from the original request.',
+        );
+      }
+    } else {
+      const oldMovement = await transaction.get(movementRef);
+      if (!oldMovement.exists ||
+          !matchesLegacyInventoryMovement(oldMovement.data(), command)) {
+        conflict(
+          'Historical inventory movement cannot be verified for retry.',
+        );
+      }
+    }
+    return {
+      status: 'already_posted',
+      movementId: command.movement.id,
+    };
   }
 
   const existingMovementSnapshot = await transaction.get(movementRef);
@@ -956,20 +975,32 @@ async function postInventoryMovementInTransaction(
     invalid('Movement currency does not match the product.');
   }
 
-  const currentQuantity = storedInt(
-    product.quantityOnHandMilliUnits,
-    0,
-  );
-  const currentInventoryValue = Number.isSafeInteger(
-    product.inventoryValueMinorUnits,
-  )
-    ? product.inventoryValueMinorUnits
-    : multiplyAndRound(
-      storedInt(product.purchasePriceMinorUnits, 0),
-      currentQuantity,
+  const currentQuantity = product.quantityOnHandMilliUnits ?? 0;
+  const currentUnitCost = product.purchasePriceMinorUnits ?? 0;
+  if (!Number.isSafeInteger(currentQuantity) || currentQuantity < 0 ||
+      !Number.isSafeInteger(currentUnitCost) || currentUnitCost < 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Inventory product quantity or purchase cost is corrupt.',
     );
-  const nextQuantity =
-    currentQuantity + command.movement.quantityDeltaMilliUnits;
+  }
+
+  const currentInventoryValue = product.inventoryValueMinorUnits ??
+    multiplyAndRound(currentUnitCost, currentQuantity);
+  if (!Number.isSafeInteger(currentInventoryValue) ||
+      currentInventoryValue < 0 ||
+      (currentQuantity === 0 && currentInventoryValue !== 0)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Inventory product valuation is corrupt.',
+    );
+  }
+
+  const nextQuantity = checkedMinorAdd(
+    currentQuantity,
+    command.movement.quantityDeltaMilliUnits,
+    'Inventory movement quantity',
+  );
   if (nextQuantity < 0) {
     throw new HttpsError(
       'failed-precondition',
@@ -977,13 +1008,24 @@ async function postInventoryMovementInTransaction(
     );
   }
 
-  const nextInventoryValue = command.movement.quantityDeltaMilliUnits < 0
-    ? currentInventoryValue - command.movement.totalCostMinorUnits
-    : currentInventoryValue + command.movement.totalCostMinorUnits;
+  const inventoryDelta = command.movement.quantityDeltaMilliUnits < 0
+    ? -command.movement.totalCostMinorUnits
+    : command.movement.totalCostMinorUnits;
+  const nextInventoryValue = checkedMinorAdd(
+    currentInventoryValue,
+    inventoryDelta,
+    'Inventory movement value',
+  );
   if (nextInventoryValue < 0) {
     throw new HttpsError(
       'failed-precondition',
       'The movement would create negative inventory value.',
+    );
+  }
+  if (nextQuantity === 0 && nextInventoryValue !== 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'A full stock depletion must remove the exact remaining inventory value.',
     );
   }
 
@@ -1016,6 +1058,7 @@ async function postInventoryMovementInTransaction(
     storeId: command.storeId,
     movementId: command.movement.id,
     idempotencyKey: command.movement.idempotencyKey,
+    requestFingerprint: fingerprint,
     createdAt: FieldValue.serverTimestamp(),
   });
 
