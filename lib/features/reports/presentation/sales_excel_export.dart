@@ -95,7 +95,7 @@ class SalesExcelExport {
 
   Sheet _sheet(Excel workbook, String name) {
     final sheet = workbook[name];
-    sheet.rtl = true;
+    sheet.isRTL = true;
     if (name != 'Sheet1' && workbook.tables.containsKey('Sheet1')) {
       workbook.delete('Sheet1');
     }
