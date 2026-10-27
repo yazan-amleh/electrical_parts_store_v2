@@ -84,3 +84,34 @@ That policy must be defined from the intended accounting contract before
 implementation. Do **not** silently invent opening-equity, shrinkage,
 gain/loss or other counter-accounts, and do not rewrite historical balances
 to force reconciliation.
+
+## Opening inventory accounting closure (2026-10-27)
+
+V1's actual posting contract was verified before implementation:
+`postOpeningInventory` debits Inventory `1150` and credits Opening Balance
+Equity `3400`.
+
+On V2, `openingBalance` is now intentionally different from a generic
+`adjustment`:
+
+- it is inbound-only and can be posted only while the product's current
+  quantity and inventory valuation are both zero;
+- Owner/Admin/Accountant may post it; Warehouse cannot create an accounting
+  opening balance;
+- when the opening valuation is greater than zero, stock projection, movement,
+  journal header/lines, `1150` balance, `3400` balance and idempotency
+  evidence are written in **one Firestore transaction**;
+- the journal is `Dr 1150 Inventory / Cr 3400 Opening Balance Equity`;
+- the mutation fence advances exactly once for the whole business posting;
+- an exact retry does not duplicate stock, journal, balances or epoch;
+- missing/incompatible chart prerequisites fail closed. Existing stores must
+  use the explicit chart-v2 upgrade rather than having accounts silently
+  invented during posting.
+
+A zero-valued opening quantity has no monetary journal effect, matching the
+V1 rule that a zero opening amount does not create a journal.
+
+The **generic adjustment** counter-account remains deliberately unresolved:
+until an approved inventory gain/loss/shrinkage policy exists, adjustments
+continue to be inventory-source mutations without an invented GL account and
+are visible to reconciliation through the mutation fence.

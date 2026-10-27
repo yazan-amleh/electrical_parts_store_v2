@@ -263,6 +263,11 @@ const INVENTORY_MOVEMENT_TYPES = new Set([
   'adjustment',
 ]);
 const INVENTORY_POSTING_ROLES = new Set(['owner', 'admin', 'warehouse']);
+const INVENTORY_OPENING_POSTING_ROLES = new Set([
+  'owner',
+  'admin',
+  'accountant',
+]);
 
 exports.sendChatMessageNotification = onDocumentCreated(
   'stores/{storeId}/chatRooms/{roomId}/messages/{messageId}',
@@ -873,6 +878,10 @@ function parseInventoryMovementCommand(rawCommand) {
     invalid('movement.quantityDeltaMilliUnits must be a non-zero integer.');
   }
 
+  if (type === 'openingBalance' && quantityDeltaMilliUnits < 0) {
+    invalid('Opening inventory quantity must be positive.');
+  }
+
   return {
     storeId,
     movement: {
@@ -933,8 +942,12 @@ async function postInventoryMovementInTransaction(
   assertMembership(
     membershipSnapshot,
     command.storeId,
-    'post inventory movements',
-    INVENTORY_POSTING_ROLES,
+    command.movement.type === 'openingBalance'
+      ? 'post opening inventory'
+      : 'post inventory movements',
+    command.movement.type === 'openingBalance'
+      ? INVENTORY_OPENING_POSTING_ROLES
+      : INVENTORY_POSTING_ROLES,
   );
 
   const fingerprint = fingerprintInventoryMovement(command);
@@ -1010,6 +1023,14 @@ async function postInventoryMovementInTransaction(
     );
   }
 
+  if (command.movement.type === 'openingBalance' &&
+      (currentQuantity !== 0 || currentInventoryValue !== 0)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Opening inventory can only be posted to an empty product balance.',
+    );
+  }
+
   const nextQuantity = checkedMinorAdd(
     currentQuantity,
     command.movement.quantityDeltaMilliUnits,
@@ -1043,10 +1064,129 @@ async function postInventoryMovementInTransaction(
     );
   }
 
-  // Inventory-only movements are financial source mutations even when
-  // no GL journal is posted. Fence them in the same transaction.
+  const isOpeningBalance = command.movement.type === 'openingBalance';
+  const openingAmount = command.movement.totalCostMinorUnits;
+  const openingJournalId = command.movement.id + '-opening-journal';
+  const openingJournalKey =
+    command.movement.idempotencyKey + '-opening-journal';
+  let openingJournalRef = null;
+  let openingJournalIdempotencyRef = null;
+  let inventoryAccountRef = null;
+  let openingEquityAccountRef = null;
+  let inventoryBalanceRef = null;
+  let openingEquityBalanceRef = null;
+  let inventoryBalanceSnapshot = null;
+  let openingEquityBalanceSnapshot = null;
+  let openingJournalFingerprint = null;
+
+  if (isOpeningBalance && openingAmount > 0) {
+    openingJournalRef = storeRef.collection('journal_entries')
+      .doc(openingJournalId);
+    openingJournalIdempotencyRef = storeRef.collection('idempotency_keys')
+      .doc(openingJournalKey);
+    inventoryAccountRef = storeRef.collection('accounts').doc('1150');
+    openingEquityAccountRef = storeRef.collection('accounts').doc('3400');
+    inventoryBalanceRef = storeRef.collection('account_balances').doc('1150');
+    openingEquityBalanceRef = storeRef.collection('account_balances')
+      .doc('3400');
+
+    const [
+      existingOpeningJournal,
+      existingOpeningJournalKey,
+      inventoryAccountSnapshot,
+      openingEquityAccountSnapshot,
+      inventoryProjectionSnapshot,
+      openingEquityProjectionSnapshot,
+    ] = await Promise.all([
+      transaction.get(openingJournalRef),
+      transaction.get(openingJournalIdempotencyRef),
+      transaction.get(inventoryAccountRef),
+      transaction.get(openingEquityAccountRef),
+      transaction.get(inventoryBalanceRef),
+      transaction.get(openingEquityBalanceRef),
+    ]);
+
+    if (existingOpeningJournal.exists || existingOpeningJournalKey.exists) {
+      conflict('Opening inventory journal identity is already in use.');
+    }
+
+    assertAccount(
+      inventoryAccountSnapshot,
+      '1150',
+      command.storeId,
+      command.movement.currency,
+      'asset',
+      'inventory',
+    );
+    assertAccount(
+      openingEquityAccountSnapshot,
+      '3400',
+      command.storeId,
+      command.movement.currency,
+      'equity',
+      'none',
+    );
+    if (inventoryAccountSnapshot.data().normalSide !== 'debit' ||
+        openingEquityAccountSnapshot.data().normalSide !== 'credit') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Opening inventory accounts have incompatible normal sides.',
+      );
+    }
+
+    inventoryBalanceSnapshot = inventoryProjectionSnapshot;
+    openingEquityBalanceSnapshot = openingEquityProjectionSnapshot;
+    // Validate projections before the first write in this transaction.
+    readBalanceForPosting(inventoryBalanceSnapshot, {
+      storeId: command.storeId,
+      accountId: '1150',
+      currency: command.movement.currency,
+    });
+    readBalanceForPosting(openingEquityBalanceSnapshot, {
+      storeId: command.storeId,
+      accountId: '3400',
+      currency: command.movement.currency,
+    });
+
+    openingJournalFingerprint = fingerprintJournal({
+      id: openingJournalId,
+      idempotencyKey: openingJournalKey,
+      postedAt: command.movement.occurredAt,
+      sourceType: 'openingInventory',
+      description: command.movement.description || 'Opening inventory',
+      currency: command.movement.currency,
+      totalDebitMinorUnits: openingAmount,
+      totalCreditMinorUnits: openingAmount,
+      lines: [
+        {
+          id: command.movement.id + '-opening-inventory',
+          accountId: '1150',
+          description: 'Opening inventory',
+          lineNumber: 1,
+          debitMinorUnits: openingAmount,
+          creditMinorUnits: 0,
+        },
+        {
+          id: command.movement.id + '-opening-equity',
+          accountId: '3400',
+          description: 'Opening balance equity',
+          lineNumber: 2,
+          debitMinorUnits: 0,
+          creditMinorUnits: openingAmount,
+        },
+      ],
+    });
+  }
+
+  // One business mutation advances the fence exactly once. Opening balances
+  // use their GL journal identity; inventory-only adjustments use movement id.
   markJournalPosting(
-    transaction, storeRef, 'inventory:' + movementRef.id, FieldValue,
+    transaction,
+    storeRef,
+    isOpeningBalance && openingAmount > 0
+      ? openingJournalId
+      : 'inventory:' + movementRef.id,
+    FieldValue,
   );
   transaction.update(productRef, {
     quantityOnHandMilliUnits: nextQuantity,
@@ -1066,19 +1206,137 @@ async function postInventoryMovementInTransaction(
     sourceId: command.movement.sourceId,
     description: command.movement.description,
     occurredAt: Timestamp.fromDate(command.movement.occurredAt),
+    journalEntryId: isOpeningBalance && openingAmount > 0
+      ? openingJournalId
+      : null,
     createdAt: FieldValue.serverTimestamp(),
   });
+
+  if (isOpeningBalance && openingAmount > 0) {
+    const description =
+      command.movement.description || 'Opening inventory';
+    transaction.set(openingJournalRef, {
+      storeId: command.storeId,
+      idempotencyKey: openingJournalKey,
+      sourceType: 'openingInventory',
+      sourceId: command.movement.productId,
+      description,
+      status: 'posted',
+      currency: command.movement.currency,
+      requestFingerprint: openingJournalFingerprint,
+      totalDebitMinorUnits: openingAmount,
+      totalCreditMinorUnits: openingAmount,
+      postedAt: Timestamp.fromDate(command.movement.occurredAt),
+    });
+    transaction.set(
+      openingJournalRef.collection('lines')
+        .doc(command.movement.id + '-opening-inventory'),
+      {
+        storeId: command.storeId,
+        entryId: openingJournalId,
+        accountId: '1150',
+        description: 'Opening inventory',
+        lineNumber: 1,
+        currency: command.movement.currency,
+        debitMinorUnits: openingAmount,
+        creditMinorUnits: 0,
+        postedAt: Timestamp.fromDate(command.movement.occurredAt),
+      },
+    );
+    transaction.set(
+      openingJournalRef.collection('lines')
+        .doc(command.movement.id + '-opening-equity'),
+      {
+        storeId: command.storeId,
+        entryId: openingJournalId,
+        accountId: '3400',
+        description: 'Opening balance equity',
+        lineNumber: 2,
+        currency: command.movement.currency,
+        debitMinorUnits: 0,
+        creditMinorUnits: openingAmount,
+        postedAt: Timestamp.fromDate(command.movement.occurredAt),
+      },
+    );
+
+    const priorInventory = readBalanceForPosting(inventoryBalanceSnapshot, {
+      storeId: command.storeId,
+      accountId: '1150',
+      currency: command.movement.currency,
+    });
+    const nextInventoryDebit = checkedMinorAdd(
+      priorInventory.debit,
+      openingAmount,
+      'Opening inventory account debit',
+    );
+    const nextInventoryNet = checkedMinorAdd(
+      nextInventoryDebit,
+      -priorInventory.credit,
+      'Opening inventory account net',
+    );
+    transaction.set(inventoryBalanceRef, {
+      storeId: command.storeId,
+      accountId: '1150',
+      currency: command.movement.currency,
+      debitMinorUnits: nextInventoryDebit,
+      creditMinorUnits: priorInventory.credit,
+      balanceMinorUnits: nextInventoryNet,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    const priorOpeningEquity = readBalanceForPosting(
+      openingEquityBalanceSnapshot,
+      {
+        storeId: command.storeId,
+        accountId: '3400',
+        currency: command.movement.currency,
+      },
+    );
+    const nextOpeningCredit = checkedMinorAdd(
+      priorOpeningEquity.credit,
+      openingAmount,
+      'Opening balance equity credit',
+    );
+    const nextOpeningNet = checkedMinorAdd(
+      priorOpeningEquity.debit,
+      -nextOpeningCredit,
+      'Opening balance equity net',
+    );
+    transaction.set(openingEquityBalanceRef, {
+      storeId: command.storeId,
+      accountId: '3400',
+      currency: command.movement.currency,
+      debitMinorUnits: priorOpeningEquity.debit,
+      creditMinorUnits: nextOpeningCredit,
+      balanceMinorUnits: nextOpeningNet,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(openingJournalIdempotencyRef, {
+      storeId: command.storeId,
+      entryId: openingJournalId,
+      idempotencyKey: openingJournalKey,
+      requestFingerprint: openingJournalFingerprint,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  }
+
   transaction.set(idempotencyRef, {
     storeId: command.storeId,
     movementId: command.movement.id,
     idempotencyKey: command.movement.idempotencyKey,
     requestFingerprint: fingerprint,
+    journalEntryId: isOpeningBalance && openingAmount > 0
+      ? openingJournalId
+      : null,
     createdAt: FieldValue.serverTimestamp(),
   });
 
   return {
     status: 'posted',
     movementId: command.movement.id,
+    journalEntryId: isOpeningBalance && openingAmount > 0
+      ? openingJournalId
+      : null,
   };
 }
 
