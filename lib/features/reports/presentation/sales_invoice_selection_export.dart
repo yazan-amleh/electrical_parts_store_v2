@@ -53,9 +53,7 @@ class SalesInvoiceSelectionExport {
           invoice.journalEntryId,
         ],
     ];
-    return rows
-        .map((row) => row.map(escaped).join(','))
-        .join('\r\n');
+    return rows.map((row) => row.map(escaped).join(',')).join('\r\n');
   }
 
   Future<Uint8List> pdf({
