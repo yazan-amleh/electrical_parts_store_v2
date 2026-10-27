@@ -145,8 +145,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
             if (_selectedTab == 0) ...[
               _buildInvoiceSelectionToolbar(context, analytics),
               _buildInvoiceDetails(context, analytics),
-            ]
-            else if (_selectedTab == 1) ...[
+            ] else if (_selectedTab == 1) ...[
               _buildRanking(
                 context,
                 title: 'الأصناف الأكثر مبيعاً',
@@ -457,12 +456,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                       _selectionMode = !_selectionMode;
                       if (!_selectionMode) _selectedInvoiceIds.clear();
                     }),
-            icon: Icon(_selectionMode
-                ? Icons.close
-                : Icons.checklist_outlined),
-            label: Text(_selectionMode
-                ? 'إنهاء التحديد'
-                : 'اختيار عدة فواتير'),
+            icon: Icon(_selectionMode ? Icons.close : Icons.checklist_outlined),
+            label: Text(_selectionMode ? 'إنهاء التحديد' : 'اختيار عدة فواتير'),
           ),
           if (_selectionMode) ...[
             Text('$chosenCount فاتورة مختارة'),
@@ -650,24 +645,25 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                   rows: [
                     for (final item in invoices.take(100))
                       DataRow(
-                        selected: _selectedInvoiceIds.contains(item.id),
-                        onSelectChanged: !_selectionMode
-                            ? null
-                            : (value) => _toggleInvoice(item.id, value == true),
-                        cells: [
-                        DataCell(SelectableText(item.id)),
-                        DataCell(Text(_formatDate(item.postedAt))),
-                        DataCell(Text(
-                          customerNames[item.customerId] ??
-                              item.customerId ??
-                              'بدون عميل',
-                        )),
-                        DataCell(Text(_paymentLabel(item.paymentMethod))),
-                        DataCell(Text(item.subtotal.formatted)),
-                        DataCell(Text(item.tax.formatted)),
-                        DataCell(Text(item.total.formatted)),
-                        DataCell(SelectableText(item.journalEntryId)),
-                      ]),
+                          selected: _selectedInvoiceIds.contains(item.id),
+                          onSelectChanged: !_selectionMode
+                              ? null
+                              : (value) =>
+                                  _toggleInvoice(item.id, value == true),
+                          cells: [
+                            DataCell(SelectableText(item.id)),
+                            DataCell(Text(_formatDate(item.postedAt))),
+                            DataCell(Text(
+                              customerNames[item.customerId] ??
+                                  item.customerId ??
+                                  'بدون عميل',
+                            )),
+                            DataCell(Text(_paymentLabel(item.paymentMethod))),
+                            DataCell(Text(item.subtotal.formatted)),
+                            DataCell(Text(item.tax.formatted)),
+                            DataCell(Text(item.total.formatted)),
+                            DataCell(SelectableText(item.journalEntryId)),
+                          ]),
                   ],
                 ),
               ),
