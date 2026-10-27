@@ -62,6 +62,7 @@ class SalesInvoiceSelectionExport {
     if (documents.isEmpty) {
       throw ArgumentError('At least one invoice is required.');
     }
+
     final font = pw.Font.ttf(
       await rootBundle.load('assets/fonts/Rubik-Regular.ttf'),
     );
@@ -72,6 +73,10 @@ class SalesInvoiceSelectionExport {
 
     for (final document in documents) {
       final invoice = document.invoice;
+      final customerName = customerNames[invoice.customerId] ??
+          invoice.customerId ??
+          'بدون عميل';
+
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
@@ -94,9 +99,7 @@ class SalesInvoiceSelectionExport {
                   pw.Text(
                     'التاريخ: ${invoice.postedAt.toLocal().toIso8601String()}',
                   ),
-                  pw.Text(
-                    'العميل: ${customerNames[invoice.customerId] ?? invoice.customerId ?? 'بدون عميل'}',
-                  ),
+                  pw.Text('العميل: $customerName'),
                   pw.Text('طريقة الدفع: ${invoice.paymentMethod}'),
                   if ((invoice.description ?? '').trim().isNotEmpty)
                     pw.Text('ملاحظات: ${invoice.description}'),
@@ -167,88 +170,11 @@ class SalesInvoiceSelectionExport {
     if (remainder == 0) {
       return '$whole';
     }
-    final fraction = remainder.toString().padLeft(3, '0').replaceFirst(
-          RegExp(r'0+
-    required List<SalesInvoiceSummary> invoices,
-    required Map<String, String> customerNames,
-    required String storeLabel,
-  }) async {
-    final font = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/Rubik-Regular.ttf'),
-    );
-    final bold = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/Rubik-Bold.ttf'),
-    );
-    final document = pw.Document();
-    document.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
-        theme: pw.ThemeData.withFont(base: font, bold: bold),
-        build: (_) => [
-          pw.Directionality(
-            textDirection: pw.TextDirection.rtl,
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  'ملخص الفواتير المرحّلة المختارة',
-                  style: pw.TextStyle(font: bold, fontSize: 19),
-                ),
-                pw.SizedBox(height: 5),
-                pw.Text('المتجر: $storeLabel'),
-                pw.Text('عدد الفواتير المختارة: ${invoices.length}'),
-                pw.SizedBox(height: 5),
-                pw.Text(
-                  'هذه طباعة لملخص رؤوس الفواتير المحمّلة؛ '
-                  'ليست فاتورة تفصيلية بالأصناف أو شهادة ضريبية.',
-                  style: const pw.TextStyle(fontSize: 9),
-                ),
-                pw.SizedBox(height: 12),
-              ],
-            ),
-          ),
-          pw.Table.fromTextArray(
-            headers: const [
-              'معرف الفاتورة',
-              'التاريخ UTC',
-              'العميل',
-              'الدفع',
-              'قبل الضريبة',
-              'الضريبة',
-              'الإجمالي',
-              'مرجع القيد',
-            ],
-            data: [
-              for (final invoice in invoices)
-                [
-                  invoice.id,
-                  invoice.postedAt.toUtc().toIso8601String().split('T').first,
-                  customerNames[invoice.customerId] ??
-                      invoice.customerId ??
-                      'بدون عميل',
-                  invoice.paymentMethod,
-                  invoice.subtotal.formatted,
-                  invoice.tax.formatted,
-                  invoice.total.formatted,
-                  invoice.journalEntryId,
-                ],
-            ],
-            cellStyle: const pw.TextStyle(fontSize: 8),
-            headerStyle: pw.TextStyle(font: bold, fontSize: 9),
-            headerDecoration: const pw.BoxDecoration(
-              color: PdfColors.grey200,
-            ),
-            cellAlignment: pw.Alignment.centerRight,
-          ),
-        ],
-      ),
-    );
-    return document.save();
-  }
-}
-),
-          '',
-        );
+
+    var fraction = remainder.toString().padLeft(3, '0');
+    while (fraction.endsWith('0')) {
+      fraction = fraction.substring(0, fraction.length - 1);
+    }
     return '$whole.$fraction';
   }
 
