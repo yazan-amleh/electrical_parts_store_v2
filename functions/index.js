@@ -4537,6 +4537,79 @@ async function postSaleInTransaction(
         'The sale would create negative stock for ' + productId + '.',
       );
     }
+
+    // purchasePriceMinorUnits is a rounded average while
+    // inventoryValueMinorUnits is the authoritative accumulated valuation.
+    // On full depletion only, allocate the residual rounding difference to
+    // the sale lines/COGS so zero stock can never retain (or overdraw) value.
+    if (nextQuantity === 0 && issued.cost !== currentInventoryValue) {
+      const adjustment = checkedMinorAdd(
+        currentInventoryValue,
+        -issued.cost,
+        'Sale full-depletion cost adjustment',
+      );
+      const productLines = storedLines.filter(
+        (line) => !line.isService && line.productId === productId,
+      );
+      if (productLines.length === 0) {
+        throw new HttpsError(
+          'internal',
+          'Sale depletion adjustment has no matching inventory line.',
+        );
+      }
+
+      if (adjustment > 0) {
+        const line = productLines[productLines.length - 1];
+        line.costTotalMinorUnits = checkedMinorAdd(
+          line.costTotalMinorUnits,
+          adjustment,
+          'Sale line depletion cost',
+        );
+        line.costAllocationAdjustmentMinorUnits = checkedMinorAdd(
+          line.costAllocationAdjustmentMinorUnits ?? 0,
+          adjustment,
+          'Sale line depletion adjustment',
+        );
+      } else if (adjustment < 0) {
+        let remainingReduction = -adjustment;
+        for (let index = productLines.length - 1;
+          index >= 0 && remainingReduction > 0;
+          index--) {
+          const line = productLines[index];
+          const reduction = Math.min(
+            line.costTotalMinorUnits,
+            remainingReduction,
+          );
+          line.costTotalMinorUnits -= reduction;
+          line.costAllocationAdjustmentMinorUnits = checkedMinorAdd(
+            line.costAllocationAdjustmentMinorUnits ?? 0,
+            -reduction,
+            'Sale line depletion adjustment',
+          );
+          remainingReduction -= reduction;
+        }
+        if (remainingReduction !== 0) {
+          throw new HttpsError(
+            'internal',
+            'Sale depletion adjustment exceeds provisional COGS.',
+          );
+        }
+      }
+
+      costTotalMinorUnits = checkedMinorAdd(
+        costTotalMinorUnits,
+        adjustment,
+        'Sale COGS depletion adjustment',
+      );
+      if (costTotalMinorUnits < 0) {
+        throw new HttpsError(
+          'internal',
+          'Sale depletion adjustment produced negative COGS.',
+        );
+      }
+      issued.cost = currentInventoryValue;
+    }
+
     const nextInventoryValue = checkedMinorAdd(
       currentInventoryValue, -issued.cost, 'Sale stock value',
     );
@@ -4545,6 +4618,12 @@ async function postSaleInTransaction(
         'failed-precondition',
         'The sale would create negative inventory value for ' +
           productId + '.',
+      );
+    }
+    if (nextQuantity === 0 && nextInventoryValue !== 0) {
+      throw new HttpsError(
+        'internal',
+        'A fully depleted product retained an inventory value.',
       );
     }
     nextProducts.set(productId, {

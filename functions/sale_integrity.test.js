@@ -30,7 +30,7 @@ function request(storeId, id, key, options = {}) {
           id: 'line-a',
           productId: 'product-a',
           description: 'Electrical component',
-          quantityMilliUnits: 1000,
+          quantityMilliUnits: options.quantity ?? 1000,
           unitFactorToBaseMilliUnits: 1000,
           unitPriceMinorUnits: options.price ?? 900,
           unitCostMinorUnits: options.service ? 0 : 400,
@@ -179,6 +179,78 @@ describe('sales inventory, journal and receivable integrity', () => {
       .doc('sale-service-journal').collection('lines').get()).size, 2);
     assert.equal((await store.collection('account_balances').doc('5110').get())
       .data().balanceMinorUnits, 0);
+    await db.recursiveDelete(store);
+  });
+
+  it('allocates a positive valuation remainder to COGS on full depletion', async () => {
+    const store = await seed('sale-full-depletion-positive-rounding', {
+      inventoryValueMinorUnits: 1201,
+    });
+    const response = await invoke(request(
+      store.id,
+      'sale-full-positive',
+      'sale-full-positive-key',
+      { quantity: 3000 },
+    ));
+    assert.equal(response.status, 'posted');
+
+    const product = (await store.collection('products')
+      .doc('product-a').get()).data();
+    assert.equal(product.quantityOnHandMilliUnits, 0);
+    assert.equal(product.inventoryValueMinorUnits, 0);
+
+    const sale = (await store.collection('sales')
+      .doc('sale-full-positive').get()).data();
+    assert.equal(sale.costTotalMinorUnits, 1201);
+    assert.equal(sale.lines[0].costTotalMinorUnits, 1201);
+    assert.equal(sale.lines[0].costAllocationAdjustmentMinorUnits, 1);
+
+    const movement = (await store.collection('inventory_movements')
+      .doc('sale-full-positive-inventory-line-a').get()).data();
+    assert.equal(movement.totalCostMinorUnits, 1201);
+
+    const cogs = (await store.collection('account_balances')
+      .doc('5110').get()).data();
+    const inventory = (await store.collection('account_balances')
+      .doc('1150').get()).data();
+    assert.equal(cogs.debitMinorUnits, 1201);
+    assert.equal(inventory.creditMinorUnits, 1201);
+    await db.recursiveDelete(store);
+  });
+
+  it('reduces rounded COGS to exact inventory value on full depletion', async () => {
+    const store = await seed('sale-full-depletion-negative-rounding', {
+      inventoryValueMinorUnits: 1199,
+    });
+    const response = await invoke(request(
+      store.id,
+      'sale-full-negative',
+      'sale-full-negative-key',
+      { quantity: 3000 },
+    ));
+    assert.equal(response.status, 'posted');
+
+    const product = (await store.collection('products')
+      .doc('product-a').get()).data();
+    assert.equal(product.quantityOnHandMilliUnits, 0);
+    assert.equal(product.inventoryValueMinorUnits, 0);
+
+    const sale = (await store.collection('sales')
+      .doc('sale-full-negative').get()).data();
+    assert.equal(sale.costTotalMinorUnits, 1199);
+    assert.equal(sale.lines[0].costTotalMinorUnits, 1199);
+    assert.equal(sale.lines[0].costAllocationAdjustmentMinorUnits, -1);
+
+    const movement = (await store.collection('inventory_movements')
+      .doc('sale-full-negative-inventory-line-a').get()).data();
+    assert.equal(movement.totalCostMinorUnits, 1199);
+
+    const cogs = (await store.collection('account_balances')
+      .doc('5110').get()).data();
+    const inventory = (await store.collection('account_balances')
+      .doc('1150').get()).data();
+    assert.equal(cogs.debitMinorUnits, 1199);
+    assert.equal(inventory.creditMinorUnits, 1199);
     await db.recursiveDelete(store);
   });
 
