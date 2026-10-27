@@ -12,6 +12,7 @@ import '../domain/entities/sales_analytics.dart';
 import '../domain/entities/sales_invoice_report.dart';
 import '../domain/repositories/reports_repository.dart';
 import '../domain/services/report_document_builder.dart';
+import 'sales_invoice_selection_export.dart';
 
 class SalesAnalyticsPage extends StatefulWidget {
   const SalesAnalyticsPage({
@@ -38,6 +39,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
   SalesInvoiceReport? _invoices;
   String? _invoiceError;
   final _searchController = TextEditingController();
+  final _selectedInvoiceIds = <String>{};
+  final _invoiceSelectionExport = const SalesInvoiceSelectionExport();
+  bool _selectionMode = false;
   int _selectedTab = 0;
   int _reportEpoch = 0;
   bool _isLoading = true;
@@ -68,6 +72,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       _analytics = null;
       _invoices = null;
       _searchController.clear();
+      _selectedInvoiceIds.clear();
+      _selectionMode = false;
       _load();
     }
   }
@@ -136,8 +142,10 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
               ),
             ),
             const SizedBox(height: 12),
-            if (_selectedTab == 0)
-              _buildInvoiceDetails(context, analytics)
+            if (_selectedTab == 0) ...[
+              _buildInvoiceSelectionToolbar(context, analytics),
+              _buildInvoiceDetails(context, analytics),
+            ]
             else if (_selectedTab == 1) ...[
               _buildRanking(
                 context,
@@ -395,6 +403,181 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     );
   }
 
+  List<SalesInvoiceSummary> _matchingInvoices(
+    SalesInvoiceReport report,
+    SalesAnalytics analytics,
+  ) {
+    final names = {
+      for (final row in analytics.customerRows) row.key: row.label,
+    };
+    final query = _searchController.text.trim().toLowerCase();
+    return report.invoices.where((invoice) {
+      final customer =
+          names[invoice.customerId] ?? invoice.customerId ?? 'بدون عميل';
+      return query.isEmpty ||
+          invoice.id.toLowerCase().contains(query) ||
+          customer.toLowerCase().contains(query) ||
+          (invoice.description?.toLowerCase().contains(query) ?? false);
+    }).toList(growable: false);
+  }
+
+  void _toggleInvoice(String id, bool selected) {
+    setState(() {
+      if (selected) {
+        if (_selectedInvoiceIds.length >= 100) {
+          _showMessage('يمكن اختيار 100 فاتورة كحد أقصى لكل عملية طباعة.');
+          return;
+        }
+        _selectedInvoiceIds.add(id);
+      } else {
+        _selectedInvoiceIds.remove(id);
+      }
+    });
+  }
+
+  Widget _buildInvoiceSelectionToolbar(
+    BuildContext context,
+    SalesAnalytics analytics,
+  ) {
+    final report = _invoices;
+    if (report == null) return const SizedBox.shrink();
+    final matching = _matchingInvoices(report, analytics);
+    final chosenCount = _selectedInvoiceIds.length;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _isExporting
+                ? null
+                : () => setState(() {
+                      _selectionMode = !_selectionMode;
+                      if (!_selectionMode) _selectedInvoiceIds.clear();
+                    }),
+            icon: Icon(_selectionMode
+                ? Icons.close
+                : Icons.checklist_outlined),
+            label: Text(_selectionMode
+                ? 'إنهاء التحديد'
+                : 'اختيار عدة فواتير'),
+          ),
+          if (_selectionMode) ...[
+            Text('$chosenCount فاتورة مختارة'),
+            TextButton(
+              onPressed: _isExporting
+                  ? null
+                  : () => setState(() {
+                        _selectedInvoiceIds.addAll(
+                          matching.take(100).map((item) => item.id),
+                        );
+                      }),
+              child: const Text('تحديد أول 100 مطابقة'),
+            ),
+            TextButton(
+              onPressed: _isExporting || chosenCount == 0
+                  ? null
+                  : () => setState(_selectedInvoiceIds.clear),
+              child: const Text('إلغاء التحديد'),
+            ),
+            FilledButton.icon(
+              onPressed: _isExporting || chosenCount == 0
+                  ? null
+                  : () => _exportSelectedInvoices(print: true),
+              icon: const Icon(Icons.print_outlined),
+              label: const Text('طباعة المحدد'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _isExporting || chosenCount == 0
+                  ? null
+                  : () => _exportSelectedInvoices(print: false),
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: const Text('مشاركة PDF للمحدد'),
+            ),
+            TextButton.icon(
+              onPressed: _isExporting || chosenCount == 0
+                  ? null
+                  : _copySelectedInvoices,
+              icon: const Icon(Icons.copy_all_outlined),
+              label: const Text('نسخ CSV للمحدد'),
+            ),
+          ],
+          if (report.mayBeTruncated)
+            const Text(
+              'التحديد لا يشمل الفواتير خارج سقف التحميل.',
+              style: TextStyle(color: Colors.deepOrange),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<SalesInvoiceSummary> _selectedInvoices() {
+    final report = _invoices;
+    if (report == null) return const [];
+    return report.invoices
+        .where((invoice) => _selectedInvoiceIds.contains(invoice.id))
+        .take(100)
+        .toList(growable: false);
+  }
+
+  Map<String, String> _customerNames() => {
+        for (final row in _analytics?.customerRows ?? <SalesAnalyticsRow>[])
+          row.key: row.label,
+      };
+
+  Future<void> _exportSelectedInvoices({required bool print}) async {
+    final invoices = _selectedInvoices();
+    if (_isExporting || invoices.isEmpty) return;
+    setState(() => _isExporting = true);
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
+    try {
+      final bytes = await _invoiceSelectionExport.pdf(
+        invoices: invoices,
+        customerNames: _customerNames(),
+        storeLabel: requestedStore,
+      );
+      if (!mounted ||
+          requestedStore != widget.membership.storeId ||
+          requestedUser != widget.user.id) {
+        return;
+      }
+      if (print) {
+        await Printing.layoutPdf(onLayout: (_) async => bytes);
+      } else {
+        await Printing.sharePdf(
+          bytes: bytes,
+          filename: 'selected_sale_summaries.pdf',
+        );
+      }
+    } catch (_) {
+      if (mounted) _showMessage('تعذر تجهيز ملخص الفواتير المحددة.');
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  Future<void> _copySelectedInvoices() async {
+    final invoices = _selectedInvoices();
+    if (invoices.isEmpty) return;
+    try {
+      await Clipboard.setData(
+        ClipboardData(
+          text: _invoiceSelectionExport.csv(
+            invoices: invoices,
+            customerNames: _customerNames(),
+          ),
+        ),
+      );
+      if (mounted) _showMessage('تم نسخ الفواتير المختارة بصيغة CSV.');
+    } catch (_) {
+      if (mounted) _showMessage('تعذر نسخ الفواتير المختارة.');
+    }
+  }
+
   Widget _buildInvoiceDetails(
     BuildContext context,
     SalesAnalytics analytics,
@@ -418,15 +601,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       for (final row in analytics.customerRows) row.key: row.label,
     };
     final query = _searchController.text.trim().toLowerCase();
-    final invoices = report.invoices.where((invoice) {
-      final customer = customerNames[invoice.customerId] ??
-          invoice.customerId ??
-          'بدون عميل';
-      return query.isEmpty ||
-          invoice.id.toLowerCase().contains(query) ||
-          customer.toLowerCase().contains(query) ||
-          (invoice.description?.toLowerCase().contains(query) ?? false);
-    }).toList(growable: false);
+    final invoices = _matchingInvoices(report, analytics);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -461,6 +636,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
+                  showCheckboxColumn: _selectionMode,
                   columns: const [
                     DataColumn(label: Text('رقم الفاتورة')),
                     DataColumn(label: Text('التاريخ')),
@@ -473,7 +649,12 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                   ],
                   rows: [
                     for (final item in invoices.take(100))
-                      DataRow(cells: [
+                      DataRow(
+                        selected: _selectedInvoiceIds.contains(item.id),
+                        onSelectChanged: !_selectionMode
+                            ? null
+                            : (value) => _toggleInvoice(item.id, value == true),
+                        cells: [
                         DataCell(SelectableText(item.id)),
                         DataCell(Text(_formatDate(item.postedAt))),
                         DataCell(Text(
@@ -609,6 +790,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       _errorMessage = null;
       _invoiceError = null;
       _invoices = null;
+      _selectedInvoiceIds.clear();
+      _selectionMode = false;
     });
     final invoiceFuture = repository.getSalesInvoices(
       context: _context,
