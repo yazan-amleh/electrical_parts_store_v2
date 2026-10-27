@@ -119,6 +119,22 @@ void main() {
     expect(find.text('sale-100'), findsOneWidget);
     expect(find.text('sale-100-journal'), findsOneWidget);
 
+    await tester.tap(find.text('اختيار عدة فواتير'));
+    await tester.pumpAndSettle();
+    expect(find.text('0 فاتورة مختارة'), findsOneWidget);
+    await tester.tap(find.text('تحديد أول 100 مطابقة'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 فاتورة مختارة'), findsOneWidget);
+    expect(find.text('طباعة المحدد'), findsOneWidget);
+    expect(find.text('مشاركة PDF للمحدد'), findsOneWidget);
+    expect(find.text('نسخ CSV للمحدد'), findsOneWidget);
+    await tester.tap(find.text('إلغاء التحديد'));
+    await tester.pumpAndSettle();
+    expect(find.text('0 فاتورة مختارة'), findsOneWidget);
+    await tester.tap(find.text('إنهاء التحديد'));
+    await tester.pumpAndSettle();
+    expect(find.text('طباعة المحدد'), findsNothing);
+
     await tester.tap(find.widgetWithText(Tab, 'الأصناف الأكثر مبيعاً'));
     await tester.pumpAndSettle();
     expect(find.text('كابل كهربائي'), findsOneWidget);
