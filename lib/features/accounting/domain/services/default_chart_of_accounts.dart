@@ -185,6 +185,16 @@ abstract final class DefaultChartOfAccounts {
       ),
       _posting(
         storeId: storeId,
+        id: '3400',
+        code: '3400',
+        name: 'حساب الأرصدة الافتتاحية',
+        parentId: '3100',
+        section: StatementSection.equity,
+        normalSide: NormalSide.credit,
+        sortOrder: 420,
+      ),
+      _posting(
+        storeId: storeId,
         id: '4100',
         code: '4100',
         name: 'المبيعات',
@@ -200,6 +210,15 @@ abstract final class DefaultChartOfAccounts {
         section: StatementSection.revenue,
         normalSide: NormalSide.credit,
         sortOrder: 510,
+      ),
+      _posting(
+        storeId: storeId,
+        id: '4200',
+        code: '4200',
+        name: 'مردودات المبيعات',
+        section: StatementSection.revenue,
+        normalSide: NormalSide.debit,
+        sortOrder: 520,
       ),
       _posting(
         storeId: storeId,

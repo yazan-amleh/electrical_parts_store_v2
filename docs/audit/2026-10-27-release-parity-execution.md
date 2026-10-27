@@ -78,3 +78,25 @@ Remaining sales release requirements: V1 all screens and report export parity; a
 ## Mandatory rollout gate
 
 Do not deploy or merge merely because CI succeeds. Verify roles, privileged service accounts, close-period writer boundaries and real backup/restore recovery in an **isolated V2** environment. Obtain an explicit deployment decision from the owner. The existing manual deploy workflow checks out `v2/port-v1-complete`, not this audit branch; approving a separate deployment action requires a deliberate branch/release review.
+
+## V1 return contract discovery and chart prerequisite (2026-10-27)
+
+A deeper V1 branch scan found the actual return workflows that the earlier
+pathname audit had missed:
+
+- Sales return: records a `sales_return` document linked to the original sale
+  when available, restores product stock, refunds cash or adjusts customer
+  balance, debits Sales Returns and credits the settlement/receivable account,
+  then reverses COGS by debiting Inventory and crediting COGS.
+- Purchase return: reduces stock, updates supplier activity/balance, optionally
+  receives cash/bank/cheque refund, debits supplier payable and credits
+  Inventory, then records the cash/bank refund against supplier payable when
+  applicable.
+- V1 also uses account `3400` as Opening Balance Equity and `4200` as Sales
+  Returns.
+
+V2's default chart previously lacked both accounts. Chart template version 2
+adds `3400` and debit-normal contra-revenue `4200` for **new stores only**.
+No existing store is backfilled or rebalanced automatically. The next return
+implementation must be a single atomic, idempotent server posting contract;
+the non-atomic V1 sequence is a behavioral reference, not architecture to copy.

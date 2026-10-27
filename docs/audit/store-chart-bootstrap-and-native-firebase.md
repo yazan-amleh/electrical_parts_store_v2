@@ -2,11 +2,11 @@
 
 ## Bootstrap change: new stores only
 
-The server-only callable `createStore` now validates the 25-account default chart and uses a **single Firestore transaction** to create:
+The server-only callable `createStore` now validates the **version 2, 27-account** default chart and uses a **single Firestore transaction** to create:
 
-1. `stores/{autoId}` with owner, name, currency ILS, `initialChartVersion = 1` and `initialChartAccountCount = 25`;
+1. `stores/{autoId}` with owner, name, currency ILS, `initialChartVersion = 2` and `initialChartAccountCount = 27`;
 2. `stores/{autoId}/members/{uid}` with active owner membership;
-3. `stores/{autoId}/accounts/{accountId}` for the 25 definitions in `functions/default_chart_of_accounts.json`;
+3. `stores/{autoId}/accounts/{accountId}` for the 27 definitions in `functions/default_chart_of_accounts.json`;
 4. `user_store_preferences/{uid}` for selection and replay protection.
 
 Accounts are non-posted definitions only. **No journal entries, account balances, opening capital, cash or inventory values are invented.** The trial balance query intentionally resolves absent balances as zero. All writes either commit together or roll back together.
@@ -14,6 +14,23 @@ Accounts are non-posted definitions only. **No journal entries, account balances
 Manifest validation rejects duplicate IDs/codes, missing or non-header parents, mismatched parent/child types, duplicate control account types, malformed currencies and invalid account shapes. A JavaScript test compares the backend manifest **account-for-account** to the current Flutter `DefaultChartOfAccounts.forStore` definitions. Changes to either side must keep them in sync and pass CI.
 
 Repeat `createStore` calls by the same account return the previously created `createdStoreId`, with no re-seeding or resetting existing chart definitions. This change does **not** backfill existing stores, alter historic journals, or repair existing balance differences.
+
+### Chart version 2 — return/opening prerequisites (2026-10-27)
+
+The template now also contains two posting accounts proven by the V1 posting
+contract:
+
+- `3400` — **حساب الأرصدة الافتتاحية**, equity, credit-normal, child of
+  `3100`. V1 uses it as the counter-account for opening inventory/cash.
+- `4200` — **مردودات المبيعات**, revenue/contra-revenue, **debit-normal**.
+  V1 debits it when a sales return is posted.
+
+This version bump only changes future store provisioning. Existing stores are
+**not** silently mutated. Before return/opening workflows are enabled for an
+existing V2 store, a separate explicit chart-upgrade gate must verify that
+codes/IDs `3400` and `4200` are absent or compatible; it must never reset
+balances or overwrite a conflicting account.
+
 
 ### Limitations / validation gates
 

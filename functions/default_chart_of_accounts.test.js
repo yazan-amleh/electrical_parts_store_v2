@@ -59,14 +59,14 @@ function readFlutterChart() {
 describe('V2 default chart contract', () => {
   it('matches the canonical Flutter chart account-for-account', () => {
     const chart = getDefaultChart();
-    assert.equal(chart.version, 1);
-    assert.equal(chart.accounts.length, 25);
+    assert.equal(chart.version, 2);
+    assert.equal(chart.accounts.length, 27);
     assert.deepEqual(chart.accounts, readFlutterChart());
   });
 
   it('generates the same tenant-scoped, non-posted chart with no balances', () => {
     const accounts = buildDefaultChartDocuments('store-a');
-    assert.equal(accounts.length, 25);
+    assert.equal(accounts.length, 27);
     assert.equal(accounts.every((a) => a.storeId === 'store-a'), true);
     assert.equal(accounts.every((a) => a.currency === 'ILS'), true);
     assert.equal(accounts.some((a) => 'balanceMinorUnits' in a), false);
@@ -74,6 +74,10 @@ describe('V2 default chart contract', () => {
     assert.equal(accounts.some((a) => a.id === '1150' && a.controlType === 'inventory'), true);
     assert.equal(accounts.some((a) => a.id === '1140' && a.controlType === 'customerReceivable'), true);
     assert.equal(accounts.some((a) => a.id === '2110' && a.controlType === 'supplierPayable'), true);
+    assert.equal(accounts.some((a) => a.id === '3400' &&
+      a.type === 'equity' && a.normalSide === 'credit'), true);
+    assert.equal(accounts.some((a) => a.id === '4200' &&
+      a.type === 'revenue' && a.normalSide === 'debit'), true);
   });
 
   it('fails closed for duplicates, dangling parents and mismatched currencies', () => {

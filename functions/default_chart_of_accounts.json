@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "baseCurrency": "ILS",
   "accounts": [
     {
@@ -255,6 +255,20 @@
       "isActive": true
     },
     {
+      "id": "3400",
+      "code": "3400",
+      "name": "حساب الأرصدة الافتتاحية",
+      "type": "equity",
+      "normalSide": "credit",
+      "controlType": "none",
+      "statementSection": "equity",
+      "parentId": "3100",
+      "currency": "ILS",
+      "isHeader": false,
+      "sortOrder": 420,
+      "isActive": true
+    },
+    {
       "id": "4100",
       "code": "4100",
       "name": "المبيعات",
@@ -280,6 +294,20 @@
       "currency": "ILS",
       "isHeader": false,
       "sortOrder": 510,
+      "isActive": true
+    },
+    {
+      "id": "4200",
+      "code": "4200",
+      "name": "مردودات المبيعات",
+      "type": "revenue",
+      "normalSide": "debit",
+      "controlType": "none",
+      "statementSection": "revenue",
+      "parentId": null,
+      "currency": "ILS",
+      "isHeader": false,
+      "sortOrder": 520,
       "isActive": true
     },
     {
