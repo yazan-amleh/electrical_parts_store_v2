@@ -542,59 +542,20 @@ class _PurchaseReturnsPanelState extends State<PurchaseReturnsPanel> {
     await _submitReturn(invoice, command);
   }
 
-  Future<void> _startRemainingReturn(PurchaseInvoiceDocument document) async {
+  Future<void> _startRemainingReturn(
+    PurchaseInvoiceDocument document,
+  ) async {
     final invoice = document.invoice;
-    final reasonController = TextEditingController(
-      text: invoice.isPartiallyReturned
-          ? 'إرجاع المتبقي من فاتورة الشراء ${invoice.id}'
-          : 'إرجاع كامل لفاتورة الشراء ${invoice.id}',
-    );
     final reason = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(
-          invoice.isPartiallyReturned
-              ? 'تأكيد إرجاع كل الكمية المتبقية'
-              : 'تأكيد إرجاع فاتورة الشراء بالكامل',
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'سيتم احتساب رد المورد من الفاتورة الأصلية، بينما يخرج '
-              'المخزون بقيمته الدفترية الحالية. أي فرق تقييم يظهر في '
-              'الحساب 5200 بشكل صريح.',
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: reasonController,
-              maxLength: 250,
-              decoration: const InputDecoration(labelText: 'سبب المردود'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('إلغاء'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.of(dialogContext).pop(
-              reasonController.text.trim(),
-            ),
-            icon: const Icon(Icons.undo),
-            label: const Text('تأكيد المردود'),
-          ),
-        ],
+      builder: (_) => _PurchaseReturnReasonDialog(
+        invoiceId: invoice.id,
+        isPartial: invoice.isPartiallyReturned,
       ),
     );
     if (!mounted || reason == null) {
-      reasonController.dispose();
       return;
     }
-    final normalizedReason = reasonController.text.trim();
-    reasonController.dispose();
 
     final now = DateTime.now().toUtc();
     final returnId =
@@ -605,7 +566,7 @@ class _PurchaseReturnsPanelState extends State<PurchaseReturnsPanel> {
       idempotencyKey: IdempotencyKey(returnId),
       originalPurchaseId: invoice.id,
       postedAt: now,
-      reason: normalizedReason.isEmpty ? null : normalizedReason,
+      reason: reason.isEmpty ? null : reason,
     );
     _pendingReturns[invoice.id] = command;
     await _submitReturn(invoice, command);
@@ -732,6 +693,83 @@ class _PurchaseReturnsPanelState extends State<PurchaseReturnsPanel> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _PurchaseReturnReasonDialog extends StatefulWidget {
+  const _PurchaseReturnReasonDialog({
+    required this.invoiceId,
+    required this.isPartial,
+  });
+
+  final String invoiceId;
+  final bool isPartial;
+
+  @override
+  State<_PurchaseReturnReasonDialog> createState() =>
+      _PurchaseReturnReasonDialogState();
+}
+
+class _PurchaseReturnReasonDialogState
+    extends State<_PurchaseReturnReasonDialog> {
+  late final TextEditingController _reasonController;
+
+  @override
+  void initState() {
+    super.initState();
+    _reasonController = TextEditingController(
+      text: widget.isPartial
+          ? 'إرجاع المتبقي من فاتورة الشراء ${widget.invoiceId}'
+          : 'إرجاع كامل لفاتورة الشراء ${widget.invoiceId}',
+    );
+  }
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        widget.isPartial
+            ? 'تأكيد إرجاع كل الكمية المتبقية'
+            : 'تأكيد إرجاع فاتورة الشراء بالكامل',
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'سيتم احتساب رد المورد من الفاتورة الأصلية، بينما يخرج '
+            'المخزون بقيمته الدفترية الحالية. أي فرق تقييم يظهر في '
+            'الحساب 5200 بشكل صريح.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            key: const ValueKey('purchase-return-full-reason'),
+            controller: _reasonController,
+            maxLength: 250,
+            decoration: const InputDecoration(labelText: 'سبب المردود'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('إلغاء'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.of(context).pop(
+            _reasonController.text.trim(),
+          ),
+          icon: const Icon(Icons.undo),
+          label: const Text('تأكيد المردود'),
+        ),
+      ],
+    );
   }
 }
 
