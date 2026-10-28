@@ -68,6 +68,13 @@ class FirestoreReportsRepository implements ReportsRepository {
           pageSize: limit,
           maxDocuments: maxDocuments,
         ),
+        _readPeriodDocuments(
+          collection: FirebasePaths.salesReturns(_firestore, context.storeId),
+          start: start,
+          end: end,
+          pageSize: limit,
+          maxDocuments: maxDocuments,
+        ),
       ]);
 
       final transactions = <ReportTransaction>[];
@@ -98,6 +105,16 @@ class FirestoreReportsRepository implements ReportsRepository {
           transactions.add(transaction);
         }
       }
+      for (final document in pages[3].documents) {
+        final transaction = ReportFirestoreMapper.tryTransaction(
+          document,
+          source: 'saleReturn',
+          sign: -1,
+        );
+        if (transaction != null) {
+          transactions.add(transaction);
+        }
+      }
 
       String? currency;
       for (final transaction in transactions) {
@@ -119,19 +136,24 @@ class FirestoreReportsRepository implements ReportsRepository {
       final salesByPaymentMethod = <String, int>{};
       final expensesByPaymentMethod = <String, int>{};
       var salesCount = 0;
+      var salesReturnCount = 0;
       var purchasesCount = 0;
       var expensesCount = 0;
 
       for (final transaction in transactions) {
         switch (transaction.source) {
           case 'sale':
-            salesRevenue += transaction.amount;
+            salesRevenue += transaction.amountBeforeTax;
             salesCost += transaction.cost;
             salesCount++;
             _increment(
               salesByPaymentMethod,
               transaction.paymentMethod ?? 'unknown',
             );
+          case 'saleReturn':
+            salesRevenue += transaction.amountBeforeTax;
+            salesCost += transaction.cost;
+            salesReturnCount++;
           case 'purchase':
             purchasesTotal += transaction.amount;
             purchasesCount++;
@@ -158,6 +180,7 @@ class FirestoreReportsRepository implements ReportsRepository {
           purchasesTotal: purchasesTotal,
           expensesTotal: expensesTotal,
           salesCount: salesCount,
+          salesReturnCount: salesReturnCount,
           purchasesCount: purchasesCount,
           expensesCount: expensesCount,
           salesByPaymentMethod: Map.unmodifiable(salesByPaymentMethod),
