@@ -5629,6 +5629,7 @@ async function postSaleReturnInTransaction(
 
   const productUpdates = [];
   const movementWrites = [];
+  const returnedLines = [];
   let verifiedSubtotal = 0;
   let verifiedCost = 0;
   for (const rawLine of rawLines) {
@@ -5653,6 +5654,39 @@ async function postSaleReturnInTransaction(
       lineCost,
       'Returned sale cost',
     );
+    returnedLines.push({
+      id: lineId,
+      productId,
+      description: stringValue(
+        line.description,
+        'stored sale line description',
+      ),
+      quantityMilliUnits: storedSaleReturnInt(
+        line.quantityMilliUnits,
+        'line.quantityMilliUnits',
+      ),
+      baseQuantityMilliUnits: storedSaleReturnInt(
+        line.baseQuantityMilliUnits,
+        'line.baseQuantityMilliUnits',
+      ),
+      unitPriceMinorUnits: storedSaleReturnInt(
+        line.unitPriceMinorUnits,
+        'line.unitPriceMinorUnits',
+      ),
+      discountMinorUnits: storedSaleReturnInt(
+        line.discountMinorUnits,
+        'line.discountMinorUnits',
+      ),
+      totalMinorUnits: lineTotal,
+      unitCostMinorUnits: storedSaleReturnInt(
+        line.unitCostMinorUnits,
+        'line.unitCostMinorUnits',
+      ),
+      costTotalMinorUnits: lineCost,
+      unitId: line.unitId ?? null,
+      unitName: line.unitName ?? null,
+      isService: line.isService === true,
+    });
     if (line.isService === true) {
       if (lineCost !== 0) {
         throw new HttpsError(
@@ -5986,6 +6020,7 @@ async function postSaleReturnInTransaction(
     journalEntryId,
     status: 'posted',
     returnType: 'full',
+    lines: returnedLines,
     createdAt: FieldValue.serverTimestamp(),
   });
   transaction.update(originalSaleRef, {
