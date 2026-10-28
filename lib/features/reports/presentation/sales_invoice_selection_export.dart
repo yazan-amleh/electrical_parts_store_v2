@@ -108,7 +108,9 @@ class SalesInvoiceSelectionExport {
                   pw.Text(
                     invoice.isFullyReturned
                         ? 'الحالة: مُرجعة بالكامل'
-                        : 'الحالة: مرحّلة',
+                        : invoice.isPartiallyReturned
+                            ? 'الحالة: مُرجعة جزئيًا'
+                            : 'الحالة: مرحّلة',
                     style: invoice.isFullyReturned
                         ? pw.TextStyle(font: bold)
                         : null,
@@ -255,7 +257,11 @@ class SalesInvoiceSelectionExport {
                   invoice.subtotal.formatted,
                   invoice.tax.formatted,
                   invoice.total.formatted,
-                  invoice.isFullyReturned ? 'مُرجعة بالكامل' : 'مرحّلة',
+                  invoice.isFullyReturned
+                      ? 'مُرجعة بالكامل'
+                      : invoice.isPartiallyReturned
+                          ? 'مُرجعة جزئيًا'
+                          : 'مرحّلة',
                   invoice.journalEntryId,
                 ],
             ],
