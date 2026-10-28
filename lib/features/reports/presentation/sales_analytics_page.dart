@@ -211,8 +211,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'التجميع مبني على فواتير البيع المرحّلة. الربح الإجمالي '
-              'يستخدم تكلفة السطور المسجلة وقت البيع.',
+              'التجميع مبني على فواتير البيع والمردودات المرحّلة ضمن '
+              'الفترة. المردود يخفض صافي المبيعات والتكلفة في تاريخ '
+              'ترحيل الإرجاع دون تغيير فترة البيع الأصلية.',
             ),
             const SizedBox(height: 14),
             Wrap(
@@ -320,23 +321,23 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       children: [
         _metricCard(
           context,
-          title: 'إجمالي المبيعات',
+          title: 'صافي المبيعات',
           value: analytics.salesRevenue,
-          subtitle: '${analytics.salesCount} فاتورة',
+          subtitle: '${analytics.salesCount} فاتورة بيع قبل احتساب المردودات',
           icon: Icons.point_of_sale_outlined,
         ),
         _metricCard(
           context,
-          title: 'التكلفة',
+          title: 'صافي تكلفة المبيعات',
           value: analytics.salesCost,
-          subtitle: 'من تكلفة السطور',
+          subtitle: 'بعد عكس تكلفة الأصناف المرتجعة',
           icon: Icons.inventory_2_outlined,
         ),
         _metricCard(
           context,
           title: 'مجمل الربح',
           value: analytics.grossProfit,
-          subtitle: 'المبيعات ناقص التكلفة',
+          subtitle: 'صافي المبيعات ناقص صافي التكلفة',
           icon: Icons.trending_up_outlined,
         ),
       ],
