@@ -358,6 +358,57 @@ describe('atomic full sale returns', () => {
     await db.recursiveDelete(store);
   });
 
+  it('aggregates returned inventory when one product appears on multiple sale lines', async () => {
+    const store = await seed('sale-return-duplicate-product-lines');
+    await functions.postSale.run(saleRequest(store.id, {
+      lines: [
+        {
+          id: 'line-a',
+          productId: 'product-a',
+          description: 'Electrical component A',
+          quantityMilliUnits: 1000,
+          unitFactorToBaseMilliUnits: 1000,
+          unitPriceMinorUnits: 900,
+          unitCostMinorUnits: 400,
+          discountMinorUnits: 0,
+          unitId: null,
+          unitName: null,
+          isService: false,
+        },
+        {
+          id: 'line-b',
+          productId: 'product-a',
+          description: 'Electrical component B',
+          quantityMilliUnits: 1000,
+          unitFactorToBaseMilliUnits: 1000,
+          unitPriceMinorUnits: 900,
+          unitCostMinorUnits: 400,
+          discountMinorUnits: 0,
+          unitId: null,
+          unitName: null,
+          isService: false,
+        },
+      ],
+    }));
+
+    const afterSale = (await store.collection('products')
+      .doc('product-a').get()).data();
+    assert.equal(afterSale.quantityOnHandMilliUnits, 1000);
+    assert.equal(afterSale.inventoryValueMinorUnits, 400);
+
+    await functions.postSaleReturn.run(returnRequest(store.id));
+    const product = (await store.collection('products')
+      .doc('product-a').get()).data();
+    assert.equal(product.quantityOnHandMilliUnits, 3000);
+    assert.equal(product.inventoryValueMinorUnits, 1200);
+    assert.equal(product.purchasePriceMinorUnits, 400);
+
+    const returnMovements = await store.collection('inventory_movements')
+      .where('sourceType', '==', 'saleReturn').get();
+    assert.equal(returnMovements.size, 2);
+    await db.recursiveDelete(store);
+  });
+
   it('is idempotent under concurrent retries', async () => {
     const store = await seed('sale-return-concurrent');
     await functions.postSale.run(saleRequest(store.id));
