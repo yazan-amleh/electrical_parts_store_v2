@@ -37,6 +37,7 @@ class OperationalReport {
     required this.salesCount,
     this.salesReturnCount = 0,
     required this.purchasesCount,
+    this.purchaseReturnCount = 0,
     required this.expensesCount,
     required this.salesByPaymentMethod,
     required this.expensesByPaymentMethod,
@@ -53,6 +54,7 @@ class OperationalReport {
   final int salesCount;
   final int salesReturnCount;
   final int purchasesCount;
+  final int purchaseReturnCount;
   final int expensesCount;
   final Map<String, int> salesByPaymentMethod;
   final Map<String, int> expensesByPaymentMethod;
@@ -64,5 +66,9 @@ class OperationalReport {
   Money get operatingResult => grossProfit - expensesTotal;
 
   int get transactionCount =>
-      salesCount + salesReturnCount + purchasesCount + expensesCount;
+      salesCount +
+      salesReturnCount +
+      purchasesCount +
+      purchaseReturnCount +
+      expensesCount;
 }
