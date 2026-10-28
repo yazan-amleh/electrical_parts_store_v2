@@ -59,6 +59,7 @@ class SalesInvoiceLineSummary {
     required this.discount,
     required this.total,
     required this.cost,
+    this.returnedQuantityMilliUnits = 0,
     this.unitName,
     this.isService = false,
   });
@@ -71,8 +72,15 @@ class SalesInvoiceLineSummary {
   final Money discount;
   final Money total;
   final Money cost;
+  final int returnedQuantityMilliUnits;
   final String? unitName;
   final bool isService;
+
+  int get remainingQuantityMilliUnits =>
+      quantityMilliUnits - returnedQuantityMilliUnits;
+
+  bool get isFullyReturned =>
+      remainingQuantityMilliUnits <= 0;
 }
 
 class SalesInvoiceDocument {
