@@ -5530,13 +5530,11 @@ async function receivePurchaseOrderInTransaction(
         conflict('Receipt retry differs from the original financial request.');
       }
     } else {
-      const historicalOrderRef = storeRef.collection('purchase_orders')
-        .doc(command.orderId);
       const historicalPurchaseRef = storeRef.collection('purchases')
         .doc(command.receiptId);
       const historicalJournalRef = storeRef.collection('journal_entries')
         .doc(command.receiptId + '-journal');
-      const historicalOrder = await transaction.get(historicalOrderRef);
+      const historicalOrder = await transaction.get(orderRef);
       const historicalPurchase = await transaction.get(historicalPurchaseRef);
       const historicalJournal = await transaction.get(historicalJournalRef);
       if (!historicalOrder.exists ||
@@ -5566,11 +5564,14 @@ async function receivePurchaseOrderInTransaction(
         conflict('Historical receipt journal accounts do not match replay.');
       }
     }
+    const orderStatus = previous.orderStatus || 'completed';
     return {
       status: 'already_received',
       orderId: command.orderId,
       purchaseId: command.receiptId,
       journalEntryId: command.receiptId + '-journal',
+      orderStatus,
+      completed: orderStatus === 'completed',
     };
   }
 
@@ -5582,8 +5583,6 @@ async function receivePurchaseOrderInTransaction(
   if (order.storeId !== command.storeId) {
     deny('Purchase order belongs to another store.');
   }
-  // Without the receipt marker there is no safe way to distinguish an
-  // identical retry from a conflicting request: never acknowledge it.
   if (order.status !== 'pending') {
     conflict('Only pending purchase orders can be received.');
   }
@@ -5595,25 +5594,39 @@ async function receivePurchaseOrderInTransaction(
   if (rawLines.length === 0 || rawLines.length > MAX_LINES) {
     invalid('The purchase order has no receivable lines.');
   }
-  const purchaseLines = rawLines.map((rawLine, index) => {
+
+  const normalizedLines = [];
+  const lineById = new Map();
+  for (let index = 0; index < rawLines.length; index++) {
+    const rawLine = rawLines[index];
     const line = asObject(rawLine, 'stored order line ' + index);
-    const receivedQuantity = line.receivedQuantityMilliUnits ?? 0;
-    if (!Number.isSafeInteger(receivedQuantity) || receivedQuantity < 0) {
+    const id = safeId(line.id, 'stored order line id');
+    if (lineById.has(id)) {
       throw new HttpsError(
-        'failed-precondition', 'Purchase order received quantity is corrupt.',
+        'failed-precondition',
+        'Purchase order contains duplicate line ids.',
       );
     }
-    if (receivedQuantity !== 0) {
-      invalid('Partial purchase order receipts are not supported yet.');
+    const orderedQuantity = positiveInt(
+      line.quantityMilliUnits,
+      'stored order quantityMilliUnits',
+    );
+    const receivedQuantity = line.receivedQuantityMilliUnits ?? 0;
+    if (!Number.isSafeInteger(receivedQuantity) ||
+        receivedQuantity < 0 ||
+        receivedQuantity > orderedQuantity) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Purchase order received quantity is corrupt.',
+      );
     }
-    return {
-      id: safeId(line.id, 'stored order line id'),
+    const normalized = {
+      rawLine,
+      id,
       productId: safeId(line.productId, 'stored order product id'),
       description: stringValue(line.productName, 'stored product name'),
-      quantityMilliUnits: positiveInt(
-        line.quantityMilliUnits,
-        'stored order quantityMilliUnits',
-      ),
+      quantityMilliUnits: orderedQuantity,
+      receivedQuantityMilliUnits: receivedQuantity,
       unitFactorToBaseMilliUnits: positiveInt(
         line.unitFactorToBaseMilliUnits,
         'stored order unitFactorToBaseMilliUnits',
@@ -5622,13 +5635,84 @@ async function receivePurchaseOrderInTransaction(
         line.unitCostMinorUnits,
         'stored order unitCostMinorUnits',
       ),
-      discountMinorUnits: 0,
       unitId: optionalSafeId(line.unitId, 'stored order unitId'),
       unitName: line.unitName == null
         ? null
         : stringValue(line.unitName, 'stored order unitName'),
     };
-  });
+    normalizedLines.push(normalized);
+    lineById.set(id, normalized);
+  }
+
+  const requested = new Map();
+  if (command.lines == null) {
+    for (const line of normalizedLines) {
+      const remaining =
+        line.quantityMilliUnits - line.receivedQuantityMilliUnits;
+      if (remaining > 0) {
+        requested.set(line.id, remaining);
+      }
+    }
+  } else {
+    for (const requestLine of command.lines) {
+      const source = lineById.get(requestLine.lineId);
+      if (!source) {
+        invalid('Receipt references a line outside the purchase order.');
+      }
+      const remaining =
+        source.quantityMilliUnits - source.receivedQuantityMilliUnits;
+      if (requestLine.quantityMilliUnits > remaining) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Receipt quantity exceeds the remaining ordered quantity.',
+        );
+      }
+      requested.set(requestLine.lineId, requestLine.quantityMilliUnits);
+    }
+  }
+  if (requested.size === 0) {
+    conflict('The purchase order has no remaining quantity to receive.');
+  }
+
+  const purchaseLines = [];
+  const updatedLines = [];
+  for (const line of normalizedLines) {
+    const receiveQuantity = requested.get(line.id) ?? 0;
+    const nextReceived = checkedMinorAdd(
+      line.receivedQuantityMilliUnits,
+      receiveQuantity,
+      'Purchase order received quantity',
+    );
+    if (nextReceived > line.quantityMilliUnits) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Receipt would exceed the ordered quantity.',
+      );
+    }
+
+    updatedLines.push({
+      ...line.rawLine,
+      receivedQuantityMilliUnits: nextReceived,
+    });
+
+    if (receiveQuantity <= 0) {
+      continue;
+    }
+    purchaseLines.push({
+      id: line.id,
+      productId: line.productId,
+      description: line.description,
+      quantityMilliUnits: receiveQuantity,
+      unitFactorToBaseMilliUnits: line.unitFactorToBaseMilliUnits,
+      unitCostMinorUnits: line.unitCostMinorUnits,
+      discountMinorUnits: 0,
+      unitId: line.unitId,
+      unitName: line.unitName,
+    });
+  }
+  if (purchaseLines.length === 0) {
+    invalid('Receipt must contain at least one positive line quantity.');
+  }
 
   const purchaseCommand = {
     storeId: command.storeId,
@@ -5652,18 +5736,23 @@ async function receivePurchaseOrderInTransaction(
     PURCHASE_ORDER_ROLES,
   );
 
-  const completedLines = rawLines.map((rawLine) => ({
-    ...rawLine,
-    receivedQuantityMilliUnits: rawLine.quantityMilliUnits,
-  }));
-  transaction.update(orderRef, {
-    status: 'completed',
+  const completed = updatedLines.every((line) =>
+    line.receivedQuantityMilliUnits === line.quantityMilliUnits,
+  );
+  const orderStatus = completed ? 'completed' : 'pending';
+  const orderUpdate = {
+    status: orderStatus,
     receiptId: command.receiptId,
+    receiptIds: FieldValue.arrayUnion(command.receiptId),
     journalEntryId: result.journalEntryId,
-    completedAt: Timestamp.fromDate(command.postedAt),
-    lines: completedLines,
+    lines: updatedLines,
+    lastReceivedAt: Timestamp.fromDate(command.postedAt),
     updatedAt: FieldValue.serverTimestamp(),
-  });
+  };
+  if (completed) {
+    orderUpdate.completedAt = Timestamp.fromDate(command.postedAt);
+  }
+  transaction.update(orderRef, orderUpdate);
   transaction.set(receiptIdempotencyRef, {
     storeId: command.storeId,
     orderId: command.orderId,
@@ -5672,6 +5761,7 @@ async function receivePurchaseOrderInTransaction(
     requestFingerprint: fingerprint,
     purchaseId: result.purchaseId,
     journalEntryId: result.journalEntryId,
+    orderStatus,
     createdAt: FieldValue.serverTimestamp(),
   });
 
@@ -5680,6 +5770,8 @@ async function receivePurchaseOrderInTransaction(
     orderId: command.orderId,
     purchaseId: result.purchaseId,
     journalEntryId: result.journalEntryId,
+    orderStatus,
+    completed,
   };
 }
 
