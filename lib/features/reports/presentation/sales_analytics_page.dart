@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 
+import '../../../core/errors/failure.dart';
 import '../../../core/idempotency/idempotency_key.dart';
 import '../../../core/money/money.dart';
 import '../../../core/quantity/quantity.dart';
