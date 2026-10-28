@@ -1034,6 +1034,327 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     );
   }
 
+  Future<void> _returnPartialInvoice(SalesInvoiceSummary invoice) async {
+    final reportRepository = widget.repository;
+    final saleRepository = widget.saleRepository;
+    if (reportRepository == null ||
+        saleRepository == null ||
+        !_canReturnPartialInvoice(invoice)) {
+      return;
+    }
+
+    final pending = _pendingPartialReturns[invoice.id];
+    if (pending != null) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('إعادة محاولة المردود الجزئي'),
+          content: Text(
+            'يوجد مردود جزئي سابق لم نتمكن من تأكيد نتيجته. '
+            'ستُعاد نفس العملية حرفيًا (${pending.lines?.length ?? 0} سطر).',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('إعادة المحاولة'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true) {
+        return;
+      }
+      await _submitPartialReturn(invoice, pending);
+      return;
+    }
+
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
+    setState(() => _returningInvoiceId = invoice.id);
+    final Result<List<SalesInvoiceDocument>> result;
+    try {
+      result = await reportRepository.getSalesInvoiceDocuments(
+        context: _context,
+        invoiceIds: [invoice.id],
+        maxInvoices: 1,
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() => _returningInvoiceId = null);
+        _showMessage('تعذر تحميل الكميات المتبقية للفاتورة.');
+      }
+      return;
+    }
+    if (!mounted ||
+        requestedStore != widget.membership.storeId ||
+        requestedUser != widget.user.id) {
+      return;
+    }
+    setState(() => _returningInvoiceId = null);
+    if (result is FailureResult<List<SalesInvoiceDocument>>) {
+      _showMessage('تعذر تحميل الفاتورة: ${result.failure.message}');
+      return;
+    }
+
+    final documents = (result as Success<List<SalesInvoiceDocument>>).value;
+    if (documents.length != 1) {
+      _showMessage('تعذر تحديد الفاتورة المطلوبة بشكل موثوق.');
+      return;
+    }
+    final document = documents.single;
+    final returnableLines = document.lines
+        .where((line) => line.remainingQuantityMilliUnits > 0)
+        .toList(growable: false);
+    if (returnableLines.isEmpty) {
+      _showMessage('لا توجد كمية متبقية قابلة للإرجاع في هذه الفاتورة.');
+      await _load();
+      return;
+    }
+
+    final controllers = <String, TextEditingController>{
+      for (final line in returnableLines)
+        line.id: TextEditingController(),
+    };
+    final reasonController = TextEditingController(
+      text: 'مردود جزئي للفاتورة ${invoice.id}',
+    );
+    String? validationMessage;
+    final draft = await showDialog<_PartialReturnDraft>(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('مردود جزئي من الفاتورة'),
+            content: SizedBox(
+              width: 620,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'اختر الكمية المراد إرجاعها فقط. السعر والخصم '
+                      'والضريبة والتكلفة تُشتق من الفاتورة الأصلية على الخادم.',
+                    ),
+                    const SizedBox(height: 12),
+                    for (final line in returnableLines)
+                      Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                line.description,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'المباع: '
+                                '${Quantity.fromMilliUnits(line.quantityMilliUnits).formatted} • '
+                                'مرتجع سابقًا: '
+                                '${Quantity.fromMilliUnits(line.returnedQuantityMilliUnits).formatted} • '
+                                'المتبقي: '
+                                '${Quantity.fromMilliUnits(line.remainingQuantityMilliUnits).formatted} '
+                                '${line.unitName ?? ''}',
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: controllers[line.id],
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                      decoration: InputDecoration(
+                                        labelText: 'كمية الإرجاع',
+                                        suffixText: line.unitName,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  TextButton(
+                                    onPressed: () {
+                                      controllers[line.id]!.text =
+                                          Quantity.fromMilliUnits(
+                                        line.remainingQuantityMilliUnits,
+                                      ).formatted;
+                                    },
+                                    child: const Text('كل المتبقي'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    TextField(
+                      controller: reasonController,
+                      maxLength: 250,
+                      decoration: const InputDecoration(
+                        labelText: 'سبب المردود',
+                      ),
+                    ),
+                    if (validationMessage != null)
+                      Text(
+                        validationMessage!,
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('إلغاء'),
+              ),
+              FilledButton.icon(
+                onPressed: () {
+                  final requestedLines = <SaleReturnLineRequest>[];
+                  for (final line in returnableLines) {
+                    final raw = controllers[line.id]!.text.trim();
+                    if (raw.isEmpty) {
+                      continue;
+                    }
+                    Quantity quantity;
+                    try {
+                      quantity = Quantity.fromString(raw);
+                    } catch (_) {
+                      setDialogState(() {
+                        validationMessage =
+                            'الكمية المدخلة للصنف ${line.description} غير صحيحة.';
+                      });
+                      return;
+                    }
+                    if (quantity.milliUnits <= 0) {
+                      continue;
+                    }
+                    if (quantity.milliUnits >
+                        line.remainingQuantityMilliUnits) {
+                      setDialogState(() {
+                        validationMessage =
+                            'كمية ${line.description} تتجاوز الكمية المتبقية.';
+                      });
+                      return;
+                    }
+                    requestedLines.add(
+                      SaleReturnLineRequest(
+                        lineId: line.id,
+                        quantityMilliUnits: quantity.milliUnits,
+                      ),
+                    );
+                  }
+                  if (requestedLines.isEmpty) {
+                    setDialogState(() {
+                      validationMessage =
+                          'أدخل كمية موجبة لصنف واحد على الأقل.';
+                    });
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(
+                    _PartialReturnDraft(
+                      lines: requestedLines,
+                      reason: reasonController.text.trim(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.undo),
+                label: const Text('ترحيل المردود الجزئي'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    for (final controller in controllers.values) {
+      controller.dispose();
+    }
+    reasonController.dispose();
+    if (!mounted || draft == null) {
+      return;
+    }
+
+    final now = DateTime.now().toUtc();
+    final returnId =
+        'partial-return-${invoice.id}-${now.microsecondsSinceEpoch}';
+    final saleReturn = SaleReturn(
+      id: returnId,
+      storeId: requestedStore,
+      idempotencyKey: IdempotencyKey(returnId),
+      originalSaleId: invoice.id,
+      postedAt: now,
+      reason: draft.reason.isEmpty ? null : draft.reason,
+      lines: draft.lines,
+    );
+    _pendingPartialReturns[invoice.id] = saleReturn;
+    await _submitPartialReturn(invoice, saleReturn);
+  }
+
+  Future<void> _submitPartialReturn(
+    SalesInvoiceSummary invoice,
+    SaleReturn saleReturn,
+  ) async {
+    final repository = widget.saleRepository;
+    if (repository == null) {
+      return;
+    }
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
+    setState(() => _returningInvoiceId = invoice.id);
+    try {
+      final result = await repository.postFullSaleReturn(
+        context: _context,
+        saleReturn: saleReturn,
+        accounts: _returnAccounts(invoice),
+      );
+      if (!mounted ||
+          requestedStore != widget.membership.storeId ||
+          requestedUser != widget.user.id) {
+        return;
+      }
+      if (result is FailureResult<SaleReturnPostingResult>) {
+        if (result.failure is! InfrastructureFailure) {
+          _pendingPartialReturns.remove(invoice.id);
+        }
+        _showMessage('تعذر ترحيل المردود الجزئي: ${result.failure.message}');
+        return;
+      }
+      final posted = (result as Success<SaleReturnPostingResult>).value;
+      _pendingPartialReturns.remove(invoice.id);
+      _showMessage(
+        posted.alreadyReturned
+            ? 'تم تأكيد نفس المردود الجزئي السابق دون تكراره.'
+            : posted.returnStatus == 'full'
+                ? 'تم ترحيل المردود وأصبحت الفاتورة مُرجعة بالكامل.'
+                : 'تم ترحيل المردود الجزئي بنجاح.',
+      );
+      await _load();
+    } catch (_) {
+      if (mounted) {
+        _showMessage(
+          'تعذر التأكد من نتيجة المردود الجزئي. أعد المحاولة من نفس '
+          'الفاتورة ليُستخدم الطلب نفسه حرفيًا.',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _returningInvoiceId = null);
+      }
+    }
+  }
   Future<void> _returnFullInvoice(SalesInvoiceSummary invoice) async {
     final repository = widget.saleRepository;
     if (repository == null || !_canReturnRemainingInvoice(invoice)) {
@@ -1403,4 +1724,13 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
         return value;
     }
   }
+}
+class _PartialReturnDraft {
+  const _PartialReturnDraft({
+    required this.lines,
+    required this.reason,
+  });
+
+  final List<SaleReturnLineRequest> lines;
+  final String reason;
 }
