@@ -4,7 +4,7 @@ const {getDefaultChart} = require('../default_chart_of_accounts');
 const {markJournalPosting} = require('./posting_epoch');
 const {assertAccountingWritesOpen} = require('./period_close');
 
-const REQUIRED_ACCOUNT_IDS = Object.freeze(['3400', '4200']);
+const REQUIRED_ACCOUNT_IDS = Object.freeze(['3400', '4200', '5200']);
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const SEMANTIC_FIELDS = Object.freeze([
   'id',
