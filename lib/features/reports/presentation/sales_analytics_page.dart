@@ -1171,6 +1171,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                                 children: [
                                   Expanded(
                                     child: TextField(
+                                      key: ValueKey(
+                                        'partial-return-qty-${line.id}',
+                                      ),
                                       controller: controllers[line.id],
                                       keyboardType:
                                           const TextInputType.numberWithOptions(
@@ -1199,6 +1202,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                         ),
                       ),
                     TextField(
+                      key: const ValueKey('partial-return-reason'),
                       controller: reasonController,
                       maxLength: 250,
                       decoration: const InputDecoration(
