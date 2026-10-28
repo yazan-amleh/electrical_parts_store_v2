@@ -252,9 +252,10 @@ void main() {
 
     expect(returns.submissions, hasLength(1));
     expect(returns.submissions.single.id, 'full-return-sale-100');
-    expect(returns.submissions.single.idempotencyKey.value,
-        'full-return-sale-100');
+    expect(
+      returns.submissions.single.idempotencyKey.value,
+      'full-return-sale-100',
+    );
     expect(returns.submissions.single.originalSaleId, 'sale-100');
   });
-
 }
