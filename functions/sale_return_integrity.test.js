@@ -50,6 +50,42 @@ function saleRequest(storeId, {credit = false, tax = 0} = {}) {
   };
 }
 
+function purchaseRequest(storeId) {
+  return {
+    auth: {uid: USER, token: {uid: USER}},
+    data: {
+      storeId,
+      purchase: {
+        id: 'purchase-after-sale',
+        idempotencyKey: 'purchase-after-sale-key',
+        postedAt: '2026-10-27T12:00:00.000Z',
+        paymentMethod: 'cash',
+        supplierId: null,
+        description: 'Intervening stock receipt',
+        currency: 'ILS',
+        taxMinorUnits: 0,
+        lines: [{
+          id: 'purchase-line-a',
+          productId: 'product-a',
+          description: 'Electrical component',
+          quantityMilliUnits: 1000,
+          unitFactorToBaseMilliUnits: 1000,
+          unitCostMinorUnits: 700,
+          discountMinorUnits: 0,
+          unitId: null,
+          unitName: null,
+        }],
+      },
+      postingAccounts: {
+        settlementAccountId: '1110',
+        inventoryAccountId: '1150',
+        supplierPayableAccountId: null,
+        inputTaxAccountId: null,
+      },
+    },
+  };
+}
+
 function returnRequest(storeId, {
   id = 'return-1',
   key = 'return-key-1',
@@ -157,6 +193,26 @@ describe('atomic full sale returns', () => {
       .doc('return-1-journal').get()).data();
     assert.equal(returnJournal.totalDebitMinorUnits, 1300);
     assert.equal(returnJournal.totalCreditMinorUnits, 1300);
+    await db.recursiveDelete(store);
+  });
+
+  it('recomputes weighted average cost after an intervening purchase', async () => {
+    const store = await seed('sale-return-weighted-average');
+    await functions.postSale.run(saleRequest(store.id));
+    await functions.postPurchase.run(purchaseRequest(store.id));
+
+    const beforeReturn = (await store.collection('products')
+      .doc('product-a').get()).data();
+    assert.equal(beforeReturn.quantityOnHandMilliUnits, 3000);
+    assert.equal(beforeReturn.inventoryValueMinorUnits, 1500);
+    assert.equal(beforeReturn.purchasePriceMinorUnits, 500);
+
+    await functions.postSaleReturn.run(returnRequest(store.id));
+    const product = (await store.collection('products')
+      .doc('product-a').get()).data();
+    assert.equal(product.quantityOnHandMilliUnits, 4000);
+    assert.equal(product.inventoryValueMinorUnits, 1900);
+    assert.equal(product.purchasePriceMinorUnits, 475);
     await db.recursiveDelete(store);
   });
 
