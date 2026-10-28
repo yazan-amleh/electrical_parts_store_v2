@@ -56,6 +56,25 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
       StoreContext(storeId: widget.membership.storeId, userId: widget.user.id);
 
   @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant PurchaseOrdersPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId) {
+      _orders = const <PurchaseOrder>[];
+      _products = const <Product>[];
+      _suppliers = const <Party>[];
+      _pendingReceipts.clear();
+      _load();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final search = _searchController.text.trim().toLowerCase();
     final orders = _orders.where((order) {
