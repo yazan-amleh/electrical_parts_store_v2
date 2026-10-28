@@ -848,9 +848,10 @@ class FirestoreReportsRepository implements ReportsRepository {
       // reversed using the exact posted revenue and COGS amounts.
       for (final document in returnsPage.documents) {
         final data = document.data() ?? const <String, dynamic>{};
+        final returnType = data['returnType'];
         if (data['storeId'] != context.storeId ||
             data['status'] != 'posted' ||
-            data['returnType'] != 'full' ||
+            (returnType != 'full' && returnType != 'partial') ||
             _analyticsDate(data['postedAt']) == null) {
           return FailureResult<SalesAnalytics>(
             ValidationFailure(
