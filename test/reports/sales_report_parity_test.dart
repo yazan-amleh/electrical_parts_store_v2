@@ -8,6 +8,8 @@ import 'package:electrical_parts_store_v2/features/reports/domain/entities/sales
 import 'package:electrical_parts_store_v2/features/reports/domain/entities/sales_invoice_report.dart';
 import 'package:electrical_parts_store_v2/features/reports/domain/repositories/reports_repository.dart';
 import 'package:electrical_parts_store_v2/features/reports/presentation/sales_analytics_page.dart';
+import 'package:electrical_parts_store_v2/features/sales/domain/entities/sale_return.dart';
+import 'package:electrical_parts_store_v2/features/sales/domain/repositories/sale_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -126,6 +128,30 @@ class _Reports implements ReportsRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+class _Returns implements SaleRepository {
+  final submissions = <SaleReturn>[];
+
+  @override
+  Future<Result<SaleReturnPostingResult>> postFullSaleReturn({
+    required StoreContext context,
+    required SaleReturn saleReturn,
+    required SaleReturnPostingAccounts accounts,
+  }) async {
+    submissions.add(saleReturn);
+    return Success(
+      SaleReturnPostingResult(
+        returnId: saleReturn.id,
+        originalSaleId: saleReturn.originalSaleId,
+        journalEntryId: '${saleReturn.id}-journal',
+        alreadyReturned: false,
+      ),
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
   testWidgets('sales report has V1 detail, product and customer tabs',
       (tester) async {
@@ -191,4 +217,44 @@ void main() {
         findsOneWidget);
     expect(find.text('sale-100'), findsNothing);
   });
+
+  testWidgets('full return action reuses deterministic invoice identity',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1300, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final returns = _Returns();
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SalesAnalyticsPage(
+          repository: _Reports(),
+          documentBuilder: null,
+          saleRepository: returns,
+          user: const AuthenticatedUser(
+            id: 'user-1',
+            email: 'test@example.com',
+          ),
+          membership: const StoreMembership(
+            storeId: 'store-1',
+            userId: 'user-1',
+            role: StoreRole.owner,
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('إرجاع الفاتورة بالكامل'), findsOneWidget);
+    await tester.tap(find.byTooltip('إرجاع الفاتورة بالكامل'));
+    await tester.pumpAndSettle();
+    expect(find.text('تأكيد إرجاع الفاتورة بالكامل'), findsOneWidget);
+    await tester.tap(find.text('تأكيد الإرجاع الكامل'));
+    await tester.pumpAndSettle();
+
+    expect(returns.submissions, hasLength(1));
+    expect(returns.submissions.single.id, 'full-return-sale-100');
+    expect(returns.submissions.single.idempotencyKey.value,
+        'full-return-sale-100');
+    expect(returns.submissions.single.originalSaleId, 'sale-100');
+  });
+
 }
