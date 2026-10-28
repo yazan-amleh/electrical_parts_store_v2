@@ -233,23 +233,23 @@ class _ReportsPageState extends State<ReportsPage> {
       children: [
         _metricCard(
           context,
-          title: 'المبيعات',
+          title: 'صافي المبيعات',
           value: report.salesRevenue,
-          subtitle: '${report.salesCount} فاتورة',
+          subtitle: '${report.salesCount} فاتورة بيع • ${report.salesReturnCount} مردود',
           icon: Icons.point_of_sale_outlined,
         ),
         _metricCard(
           context,
-          title: 'تكلفة المبيعات',
+          title: 'صافي تكلفة المبيعات',
           value: report.salesCost,
-          subtitle: 'من تكلفة الأصناف المرحّلة',
+          subtitle: 'بعد عكس تكلفة الأصناف المرتجعة',
           icon: Icons.inventory_2_outlined,
         ),
         _metricCard(
           context,
           title: 'مجمل الربح',
           value: report.grossProfit,
-          subtitle: 'المبيعات ناقص التكلفة',
+          subtitle: 'صافي المبيعات ناقص صافي التكلفة',
           icon: Icons.trending_up_outlined,
         ),
         _metricCard(
@@ -673,6 +673,8 @@ class _ReportsPageState extends State<ReportsPage> {
     switch (source) {
       case 'sale':
         return 'مبيعات';
+      case 'saleReturn':
+        return 'مردود مبيعات';
       case 'purchase':
         return 'مشتريات';
       case 'expense':
