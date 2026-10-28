@@ -79,8 +79,7 @@ class SalesInvoiceLineSummary {
   int get remainingQuantityMilliUnits =>
       quantityMilliUnits - returnedQuantityMilliUnits;
 
-  bool get isFullyReturned =>
-      remainingQuantityMilliUnits <= 0;
+  bool get isFullyReturned => remainingQuantityMilliUnits <= 0;
 }
 
 class SalesInvoiceDocument {
