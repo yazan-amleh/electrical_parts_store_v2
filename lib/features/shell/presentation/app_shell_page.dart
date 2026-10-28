@@ -1151,6 +1151,7 @@ class _ModuleLandingPage extends StatelessWidget {
     if (module.id == 'party-payments') {
       return PartyPaymentsPage(
         repository: partyPaymentRepository,
+        partyRepository: partyRepository,
         user: user,
         membership: membership,
       );
