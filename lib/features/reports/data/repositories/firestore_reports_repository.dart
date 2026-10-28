@@ -403,6 +403,52 @@ class FirestoreReportsRepository implements ReportsRepository {
           returnedAt: _analyticsDate(data['returnedAt']),
         );
 
+        final returnedQuantityByLine = <String, int>{};
+        final returnStatus = _analyticsNullableString(data['returnStatus']);
+        final rawReturnedLines = data['returnedLines'];
+        if (rawReturnedLines != null) {
+          if (rawReturnedLines is! List) {
+            return FailureResult<List<SalesInvoiceDocument>>(
+              ValidationFailure(
+                'Sale $invoiceId has malformed return projection.',
+              ),
+            );
+          }
+          for (final rawProjection in rawReturnedLines) {
+            if (rawProjection is! Map) {
+              return FailureResult<List<SalesInvoiceDocument>>(
+                ValidationFailure(
+                  'Sale $invoiceId has malformed returned line data.',
+                ),
+              );
+            }
+            final projection = Map<String, dynamic>.from(rawProjection);
+            final lineId = _analyticsString(projection['lineId'], '');
+            final returnedQuantity = _analyticsInt(
+              projection['returnedQuantityMilliUnits'],
+              -1,
+            );
+            if (lineId.isEmpty ||
+                lineId.contains('/') ||
+                returnedQuantity <= 0 ||
+                returnedQuantityByLine.containsKey(lineId)) {
+              return FailureResult<List<SalesInvoiceDocument>>(
+                ValidationFailure(
+                  'Sale $invoiceId has invalid returned line projection.',
+                ),
+              );
+            }
+            returnedQuantityByLine[lineId] = returnedQuantity;
+          }
+        }
+        if (returnStatus == 'partial' && returnedQuantityByLine.isEmpty) {
+          return FailureResult<List<SalesInvoiceDocument>>(
+            ValidationFailure(
+              'Sale $invoiceId is partially returned without line projection.',
+            ),
+          );
+        }
+
         final embeddedLines = data['lines'];
         final rawLines = <Map<String, dynamic>>[];
         if (embeddedLines is List && embeddedLines.isNotEmpty) {
@@ -466,7 +512,8 @@ class FirestoreReportsRepository implements ReportsRepository {
               lineTotal < 0 ||
               lineCost < 0 ||
               discount > gross ||
-              gross - discount != lineTotal) {
+              gross - discount != lineTotal ||
+              (returnedQuantityByLine[id] ?? 0) > quantity) {
             return FailureResult<List<SalesInvoiceDocument>>(
               ValidationFailure(
                 'Sale $invoiceId contains invalid invoice line data.',
@@ -485,6 +532,10 @@ class FirestoreReportsRepository implements ReportsRepository {
             discount: Money(minorUnits: discount, currency: currency),
             total: Money(minorUnits: lineTotal, currency: currency),
             cost: Money(minorUnits: lineCost, currency: currency),
+            returnedQuantityMilliUnits: returnStatus == 'full' &&
+                    returnedQuantityByLine.isEmpty
+                ? quantity
+                : (returnedQuantityByLine[id] ?? 0),
             unitName: _analyticsNullableString(line['unitName']),
             isService: line['isService'] == true,
           ));
