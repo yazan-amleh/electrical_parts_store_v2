@@ -13,6 +13,14 @@ abstract final class SaleReturnCommandMapper {
         'originalSaleId': saleReturn.originalSaleId,
         'postedAt': saleReturn.postedAt.toIso8601String(),
         'reason': saleReturn.reason,
+        if (saleReturn.lines != null)
+          'lines': [
+            for (final line in saleReturn.lines!)
+              {
+                'lineId': line.lineId,
+                'quantityMilliUnits': line.quantityMilliUnits,
+              },
+          ],
       },
       'postingAccounts': {
         'settlementAccountId': accounts.settlementAccountId,
