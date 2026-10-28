@@ -282,12 +282,13 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
   }
 
   Future<void> _showDetails(PurchaseOrder order) async {
+    final pendingReceipt = _pendingReceipts[order.id];
     final action = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
         title: Text('طلب ${order.orderNumber}'),
         content: SizedBox(
-          width: 520,
+          width: 560,
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -295,15 +296,24 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
                 Text('المورد: ${order.supplierName}'),
                 Text('الحالة: ${order.status.arabicLabel}'),
                 Text('الإجمالي: ${order.total.formatted}'),
+                if (pendingReceipt != null) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'هناك دفعة استلام سابقة لم تُحسم نتيجتها. '
+                    'لا يمكن إنشاء دفعة جديدة قبل إعادة نفس الطلب.',
+                  ),
+                ],
                 const Divider(),
                 for (final line in order.lines)
                   ListTile(
                     dense: true,
                     title: Text(line.productName),
                     subtitle: Text(
-                      '${line.quantity.formatted} × ${line.unitCost.formatted}',
+                      'المطلوب: ${line.quantity.formatted} • '
+                      'المستلم: ${line.receivedQuantity.formatted} • '
+                      'المتبقي: ${line.remainingQuantity.formatted}',
                     ),
-                    trailing: Text(line.total.formatted),
+                    trailing: Text(line.unitCost.formatted),
                   ),
                 if (order.notes?.trim().isNotEmpty == true) ...[
                   const Divider(),
@@ -318,16 +328,30 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
             onPressed: () => Navigator.pop(context),
             child: const Text('إغلاق'),
           ),
-          if (order.canCancel)
-            TextButton(
-              onPressed: () => Navigator.pop(context, 'cancel'),
-              child: const Text('إلغاء الطلب'),
-            ),
-          if (order.canReceive)
-            FilledButton(
-              onPressed: () => Navigator.pop(context, 'receive'),
-              child: const Text('استلام وترحيل'),
-            ),
+          if (pendingReceipt != null)
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(context, 'retry-receipt'),
+              icon: const Icon(Icons.refresh),
+              label: const Text('إعادة نفس الاستلام'),
+            )
+          else ...[
+            if (order.canCancel)
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'cancel'),
+                child: const Text('إلغاء الطلب'),
+              ),
+            if (order.canReceive)
+              FilledButton(
+                onPressed: () => Navigator.pop(context, 'receive'),
+                child: Text(
+                  order.lines.any(
+                    (line) => !line.receivedQuantity.isZero,
+                  )
+                      ? 'استلام كمية إضافية'
+                      : 'استلام وترحيل',
+                ),
+              ),
+          ],
         ],
       ),
     );
@@ -339,6 +363,8 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
       await _cancel(order);
     } else if (action == 'receive') {
       await _receive(order);
+    } else if (action == 'retry-receipt' && pendingReceipt != null) {
+      await _submitReceipt(order, pendingReceipt);
     }
   }
 
@@ -347,12 +373,24 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
     if (repository == null) {
       return;
     }
+    if (_pendingReceipts.containsKey(order.id)) {
+      _showMessage(
+        'لا يمكن إلغاء الطلب قبل حسم دفعة الاستلام المعلقة.',
+      );
+      return;
+    }
+    final hasReceipts = order.lines.any(
+      (line) => !line.receivedQuantity.isZero,
+    );
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('إلغاء طلب الشراء؟'),
-        content: const Text(
-          'سيتم إلغاء الطلب فقط، ولن يتغير المخزون أو رصيد المورد.',
+        content: Text(
+          hasReceipts
+              ? 'سيتم إلغاء الكمية المتبقية فقط. الكميات التي تم '
+                  'استلامها وترحيلها سابقًا ستبقى كما هي.'
+              : 'سيتم إلغاء الطلب فقط، ولن يتغير المخزون أو رصيد المورد.',
         ),
         actions: [
           TextButton(
@@ -377,7 +415,12 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
     if (!mounted) {
       return;
     }
-    _showResult(result, successMessage: 'تم إلغاء طلب الشراء.');
+    _showResult(
+      result,
+      successMessage: hasReceipts
+          ? 'تم إلغاء الكمية المتبقية من طلب الشراء.'
+          : 'تم إلغاء طلب الشراء.',
+    );
     if (result is Success<void>) {
       await _load();
     }
@@ -388,10 +431,15 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
     if (repository == null) {
       return;
     }
+    final pending = _pendingReceipts[order.id];
+    if (pending != null) {
+      await _submitReceipt(order, pending);
+      return;
+    }
 
     final draft = await showDialog<_ReceiveDraft>(
       context: context,
-      builder: (_) => const _ReceivePurchaseOrderDialog(),
+      builder: (_) => _ReceivePurchaseOrderDialog(order: order),
     );
     if (draft == null || !mounted) {
       return;
@@ -411,23 +459,69 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
           draft.paymentMethod == PurchasePaymentMethod.credit ? '2110' : null,
       inputTaxAccountId: draft.taxMinorUnits > 0 ? '1170' : null,
     );
-    final result = await repository.receivePurchaseOrder(
-      context: _context,
-      order: order,
+    final now = DateTime.now().toUtc();
+    final receiptId =
+        'po-receipt-${order.id}-${now.microsecondsSinceEpoch}';
+    final receipt = PurchaseOrderReceiptRequest(
+      receiptId: receiptId,
+      idempotencyKey: IdempotencyKey(receiptId),
+      postedAt: now,
+      lines: draft.lines,
+    );
+    final pendingReceipt = _PendingReceipt(
+      receipt: receipt,
       paymentMethod: draft.paymentMethod,
       accounts: accounts,
       taxMinorUnits: draft.taxMinorUnits,
     );
+    _pendingReceipts[order.id] = pendingReceipt;
+    await _submitReceipt(order, pendingReceipt);
+  }
+
+  Future<void> _submitReceipt(
+    PurchaseOrder order,
+    _PendingReceipt pending,
+  ) async {
+    final repository = widget.repository;
+    if (repository == null) {
+      return;
+    }
+
+    final result = await repository.receivePurchaseOrder(
+      context: _context,
+      order: order,
+      receipt: pending.receipt,
+      paymentMethod: pending.paymentMethod,
+      accounts: pending.accounts,
+      taxMinorUnits: pending.taxMinorUnits,
+    );
     if (!mounted) {
       return;
     }
-    _showResult(
-      result,
-      successMessage: 'تم استلام الطلب وترحيل القيد والمخزون.',
-    );
-    if (result is Success<PurchaseOrderReceipt>) {
-      await _load();
+
+    if (result is FailureResult<PurchaseOrderReceipt>) {
+      final keepPending = result.failure is InfrastructureFailure ||
+          result.failure is QueuedFailure;
+      if (!keepPending) {
+        _pendingReceipts.remove(order.id);
+      }
+      _showMessage(
+        result.failure is QueuedFailure
+            ? 'تم حفظ نفس دفعة الاستلام للطابور. '
+                'لن يسمح النظام بإنشاء دفعة أخرى حتى تُحسم هذه العملية.'
+            : result.failure.message,
+      );
+      return;
     }
+
+    _pendingReceipts.remove(order.id);
+    final receipt = (result as Success<PurchaseOrderReceipt>).value;
+    _showMessage(
+      receipt.completed
+          ? 'تم استلام آخر الكميات واكتمال طلب الشراء.'
+          : 'تم ترحيل الاستلام الجزئي، والطلب ما زال مفتوحًا.',
+    );
+    await _load();
   }
 
   void _showResult<T>(Result<T> result, {required String successMessage}) {
@@ -436,6 +530,10 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
             ? 'تم حفظ العملية للطابور وستُنفذ عند عودة الاتصال.'
             : result.failure.message
         : successMessage;
+    _showMessage(message);
+  }
+
+  void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -448,18 +546,36 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
   }
 }
 
+class _PendingReceipt {
+  const _PendingReceipt({
+    required this.receipt,
+    required this.paymentMethod,
+    required this.accounts,
+    required this.taxMinorUnits,
+  });
+
+  final PurchaseOrderReceiptRequest receipt;
+  final PurchasePaymentMethod paymentMethod;
+  final PurchasePostingAccounts accounts;
+  final int taxMinorUnits;
+}
+
 class _ReceiveDraft {
   const _ReceiveDraft({
     required this.paymentMethod,
     required this.taxMinorUnits,
+    required this.lines,
   });
 
   final PurchasePaymentMethod paymentMethod;
   final int taxMinorUnits;
+  final List<PurchaseOrderReceiptLine> lines;
 }
 
 class _ReceivePurchaseOrderDialog extends StatefulWidget {
-  const _ReceivePurchaseOrderDialog();
+  const _ReceivePurchaseOrderDialog({required this.order});
+
+  final PurchaseOrder order;
 
   @override
   State<_ReceivePurchaseOrderDialog> createState() =>
@@ -469,45 +585,97 @@ class _ReceivePurchaseOrderDialog extends StatefulWidget {
 class _ReceivePurchaseOrderDialogState
     extends State<_ReceivePurchaseOrderDialog> {
   final _taxController = TextEditingController();
+  late final Map<String, TextEditingController> _quantityControllers;
   PurchasePaymentMethod _paymentMethod = PurchasePaymentMethod.cash;
+  String? _error;
+
+  List<PurchaseOrderLine> get _remainingLines => widget.order.lines
+      .where((line) => !line.remainingQuantity.isZero)
+      .toList(growable: false);
+
+  @override
+  void initState() {
+    super.initState();
+    _quantityControllers = <String, TextEditingController>{
+      for (final line in _remainingLines)
+        line.id: TextEditingController(text: line.remainingQuantity.formatted),
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('استلام طلب الشراء'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DropdownButtonFormField<PurchasePaymentMethod>(
-              value: _paymentMethod,
-              decoration: const InputDecoration(labelText: 'طريقة الدفع'),
-              items: PurchasePaymentMethod.values
-                  .map(
-                    (method) => DropdownMenuItem(
-                      value: method,
-                      child: Text(_paymentLabel(method)),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _paymentMethod = value);
-                }
-              },
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _taxController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+      content: SizedBox(
+        width: 620,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final line in _remainingLines) ...[
+                Text(
+                  line.productName,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'المطلوب: ${line.quantity.formatted} • '
+                  'المستلم: ${line.receivedQuantity.formatted} • '
+                  'المتبقي: ${line.remainingQuantity.formatted}',
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  key: ValueKey('po-receipt-qty-${line.id}'),
+                  controller: _quantityControllers[line.id],
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'كمية الاستلام',
+                    suffixText: line.unitName,
+                  ),
+                ),
+                const Divider(height: 24),
+              ],
+              DropdownButtonFormField<PurchasePaymentMethod>(
+                value: _paymentMethod,
+                decoration: const InputDecoration(labelText: 'طريقة الدفع'),
+                items: PurchasePaymentMethod.values
+                    .map(
+                      (method) => DropdownMenuItem(
+                        value: method,
+                        child: Text(_paymentLabel(method)),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _paymentMethod = value);
+                  }
+                },
               ),
-              decoration: const InputDecoration(
-                labelText: 'ضريبة المدخلات (اختياري)',
-                hintText: '0.00',
+              const SizedBox(height: 12),
+              TextField(
+                controller: _taxController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'ضريبة المدخلات لهذه الدفعة (اختياري)',
+                  hintText: '0.00',
+                ),
               ),
-            ),
-          ],
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _error!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
       actions: [
@@ -516,28 +684,69 @@ class _ReceivePurchaseOrderDialogState
           child: const Text('رجوع'),
         ),
         FilledButton(
-          onPressed: () {
-            final tax = _parseMinorUnits(_taxController.text);
-            if (tax == null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('قيمة الضريبة غير صحيحة.')),
-              );
-              return;
-            }
-            Navigator.pop(
-              context,
-              _ReceiveDraft(paymentMethod: _paymentMethod, taxMinorUnits: tax),
-            );
-          },
+          onPressed: _submit,
           child: const Text('استلام وترحيل'),
         ),
       ],
     );
   }
 
+  void _submit() {
+    final tax = _parseMinorUnits(_taxController.text);
+    if (tax == null) {
+      setState(() => _error = 'قيمة الضريبة غير صحيحة.');
+      return;
+    }
+
+    final lines = <PurchaseOrderReceiptLine>[];
+    for (final line in _remainingLines) {
+      final raw = _quantityControllers[line.id]!.text.trim();
+      if (raw.isEmpty) {
+        continue;
+      }
+      final quantity = _parseQuantity(raw);
+      if (quantity == null || quantity.isNegative) {
+        setState(() => _error = 'كمية ${line.productName} غير صحيحة.');
+        return;
+      }
+      if (quantity.isZero) {
+        continue;
+      }
+      if (quantity.milliUnits > line.remainingQuantity.milliUnits) {
+        setState(
+          () => _error =
+              'كمية ${line.productName} تتجاوز الكمية المتبقية.',
+        );
+        return;
+      }
+      lines.add(
+        PurchaseOrderReceiptLine(
+          lineId: line.id,
+          quantityMilliUnits: quantity.milliUnits,
+        ),
+      );
+    }
+    if (lines.isEmpty) {
+      setState(() => _error = 'أدخل كمية موجبة لسطر واحد على الأقل.');
+      return;
+    }
+
+    Navigator.pop(
+      context,
+      _ReceiveDraft(
+        paymentMethod: _paymentMethod,
+        taxMinorUnits: tax,
+        lines: lines,
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _taxController.dispose();
+    for (final controller in _quantityControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 }
