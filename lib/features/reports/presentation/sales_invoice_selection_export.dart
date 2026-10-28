@@ -24,6 +24,8 @@ class SalesInvoiceSelectionExport {
       'cost_minor_units',
       'currency',
       'journal_entry_id',
+      'return_status',
+      'return_id',
     ];
     String escaped(String value) {
       final trimmed = value.trimLeft();
@@ -49,6 +51,8 @@ class SalesInvoiceSelectionExport {
           invoice.cost.minorUnits.toString(),
           invoice.total.currency,
           invoice.journalEntryId,
+          invoice.returnStatus ?? '',
+          invoice.returnId ?? '',
         ],
     ];
     return rows.map((row) => row.map(escaped).join(',')).join('\r\n');
@@ -101,6 +105,16 @@ class SalesInvoiceSelectionExport {
                   ),
                   pw.Text('العميل: $customerName'),
                   pw.Text('طريقة الدفع: ${invoice.paymentMethod}'),
+                  pw.Text(
+                    invoice.isFullyReturned
+                        ? 'الحالة: مُرجعة بالكامل'
+                        : 'الحالة: مرحّلة',
+                    style: invoice.isFullyReturned
+                        ? pw.TextStyle(font: bold)
+                        : null,
+                  ),
+                  if (invoice.returnId != null)
+                    pw.Text('مرجع المردود: ${invoice.returnId}'),
                   if ((invoice.description ?? '').trim().isNotEmpty)
                     pw.Text('ملاحظات: ${invoice.description}'),
                   pw.SizedBox(height: 14),
@@ -226,6 +240,7 @@ class SalesInvoiceSelectionExport {
               'قبل الضريبة',
               'الضريبة',
               'الإجمالي',
+              'الحالة',
               'مرجع القيد',
             ],
             data: [
@@ -240,6 +255,7 @@ class SalesInvoiceSelectionExport {
                   invoice.subtotal.formatted,
                   invoice.tax.formatted,
                   invoice.total.formatted,
+                  invoice.isFullyReturned ? 'مُرجعة بالكامل' : 'مرحّلة',
                   invoice.journalEntryId,
                 ],
             ],
