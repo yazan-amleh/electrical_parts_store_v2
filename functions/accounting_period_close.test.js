@@ -49,6 +49,16 @@ async function fixture(id) {
       currency: 'ILS', debitMinorUnits: debit, creditMinorUnits: credit,
     });
   }
+  batch.set(store.collection('accounts').doc('1150'), {
+    storeId: id, id: '1150', code: '1150', name: 'Inventory',
+    currency: 'ILS', isHeader: false, isActive: true,
+    type: 'asset', normalSide: 'debit', controlType: 'inventory',
+  });
+  batch.set(store.collection('accounts').doc('3400'), {
+    storeId: id, id: '3400', code: '3400', name: 'Opening Balance Equity',
+    currency: 'ILS', isHeader: false, isActive: true,
+    type: 'equity', normalSide: 'credit', controlType: 'none',
+  });
   batch.set(store.collection('products').doc('stock'), {
     storeId: id, id: 'stock', isService: false, currency: 'ILS',
     quantityOnHandMilliUnits: 0, inventoryValueMinorUnits: 0,
