@@ -269,9 +269,10 @@ class _ReportsPageState extends State<ReportsPage> {
         ),
         _metricCard(
           context,
-          title: 'المشتريات',
+          title: 'صافي المشتريات',
           value: report.purchasesTotal,
-          subtitle: '${report.purchasesCount} فاتورة',
+          subtitle:
+              '${report.purchasesCount} فاتورة شراء • ${report.purchaseReturnCount} مردود',
           icon: Icons.shopping_cart_outlined,
         ),
       ],
@@ -678,6 +679,8 @@ class _ReportsPageState extends State<ReportsPage> {
         return 'مردود مبيعات';
       case 'purchase':
         return 'مشتريات';
+      case 'purchaseReturn':
+        return 'مردود مشتريات';
       case 'expense':
         return 'مصروف';
       default:
