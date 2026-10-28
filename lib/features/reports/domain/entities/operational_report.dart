@@ -7,6 +7,7 @@ class ReportTransaction {
     required this.source,
     required this.amount,
     required this.cost,
+    this.tax,
     required this.description,
     required this.paymentMethod,
   });
@@ -16,7 +17,12 @@ class ReportTransaction {
   final String source;
   final Money amount;
   final Money cost;
+  final Money? tax;
   final String? description;
+
+  Money get amountBeforeTax {
+    return amount - (tax ?? Money.zero(currency: amount.currency));
+  }
   final String? paymentMethod;
 }
 
@@ -29,6 +35,7 @@ class OperationalReport {
     required this.purchasesTotal,
     required this.expensesTotal,
     required this.salesCount,
+    this.salesReturnCount = 0,
     required this.purchasesCount,
     required this.expensesCount,
     required this.salesByPaymentMethod,
@@ -44,6 +51,7 @@ class OperationalReport {
   final Money purchasesTotal;
   final Money expensesTotal;
   final int salesCount;
+  final int salesReturnCount;
   final int purchasesCount;
   final int expensesCount;
   final Map<String, int> salesByPaymentMethod;
@@ -55,5 +63,6 @@ class OperationalReport {
 
   Money get operatingResult => grossProfit - expensesTotal;
 
-  int get transactionCount => salesCount + purchasesCount + expensesCount;
+  int get transactionCount =>
+      salesCount + salesReturnCount + purchasesCount + expensesCount;
 }
