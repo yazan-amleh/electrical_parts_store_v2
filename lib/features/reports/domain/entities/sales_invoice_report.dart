@@ -14,6 +14,9 @@ class SalesInvoiceSummary {
     required this.cost,
     required this.journalEntryId,
     this.description,
+    this.returnStatus,
+    this.returnId,
+    this.returnedAt,
   });
 
   final String id;
@@ -27,6 +30,11 @@ class SalesInvoiceSummary {
   final Money cost;
   final String journalEntryId;
   final String? description;
+  final String? returnStatus;
+  final String? returnId;
+  final DateTime? returnedAt;
+
+  bool get isFullyReturned => returnStatus == 'full';
 }
 
 class SalesInvoiceReport {
