@@ -17,6 +17,20 @@ function fingerprintPurchaseOrderReceipt(command) {
   })).digest('hex');
 }
 
+function legacyFingerprintPurchaseOrderReceipt(command) {
+  return crypto.createHash('sha256').update(JSON.stringify({
+    storeId: command.storeId,
+    orderId: command.orderId,
+    receiptId: command.receiptId,
+    idempotencyKey: command.idempotencyKey,
+    postedAt: command.postedAt.toISOString(),
+    paymentMethod: command.paymentMethod,
+    currency: command.currency,
+    taxMinorUnits: command.taxMinorUnits,
+    accounts: command.accounts,
+  })).digest('hex');
+}
+
 // The original V2 receipts did not store the posting account IDs. Verify the
 // historical purchase and journal, including account identities in the lines.
 function matchesLegacyPurchaseOrderReceipt(marker, order, purchase, journal, command) {
@@ -91,6 +105,7 @@ function matchesLegacyPurchaseOrderJournalLines(lines, purchase, command) {
 
 module.exports = {
   fingerprintPurchaseOrderReceipt,
+  legacyFingerprintPurchaseOrderReceipt,
   matchesLegacyPurchaseOrderReceipt,
   matchesLegacyPurchaseOrderJournalLines,
 };
