@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/errors/failure.dart';
+import '../../../core/idempotency/idempotency_key.dart';
 import '../../../core/money/money.dart';
 import '../../../core/quantity/quantity.dart';
 import '../../../core/result/result.dart';
@@ -48,6 +49,8 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
   PurchaseOrderStatus? _statusFilter;
   bool _isLoading = true;
   String? _errorMessage;
+  final Map<String, _PendingReceipt> _pendingReceipts =
+      <String, _PendingReceipt>{};
 
   StoreContext get _context =>
       StoreContext(storeId: widget.membership.storeId, userId: widget.user.id);
