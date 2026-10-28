@@ -35,6 +35,7 @@ class SalesInvoiceSummary {
   final DateTime? returnedAt;
 
   bool get isFullyReturned => returnStatus == 'full';
+  bool get isPartiallyReturned => returnStatus == 'partial';
 }
 
 class SalesInvoiceReport {
