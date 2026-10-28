@@ -161,7 +161,9 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
           ['مجمل الربح', report.grossProfit.formatted],
           ['عدد فواتير البيع', report.salesCount.toString()],
           ['عدد مردودات البيع', report.salesReturnCount.toString()],
-          ['المشتريات', report.purchasesTotal.formatted],
+          ['صافي المشتريات', report.purchasesTotal.formatted],
+          ['عدد فواتير الشراء', report.purchasesCount.toString()],
+          ['عدد مردودات المشتريات', report.purchaseReturnCount.toString()],
           ['المصروفات', report.expensesTotal.formatted],
           ['نتيجة التشغيل', report.operatingResult.formatted],
         ],
@@ -586,6 +588,8 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
         return 'مردود بيع';
       case 'purchase':
         return 'شراء';
+      case 'purchaseReturn':
+        return 'مردود شراء';
       case 'expense':
         return 'مصروف';
       default:
