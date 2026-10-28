@@ -1144,6 +1144,7 @@ class _ModuleLandingPage extends StatelessWidget {
         paymentRepository: partyPaymentRepository,
         voucherQueryRepository: voucherQueryRepository,
         draftRepository: voucherDraftRepository,
+        partyRepository: partyRepository,
         user: user,
         membership: membership,
       );
