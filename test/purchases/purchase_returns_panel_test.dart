@@ -145,7 +145,8 @@ void main() {
     expect(find.text('purchase-100'), findsOneWidget);
   });
 
-  testWidgets('partial purchase return submits only selected remaining quantity',
+  testWidgets(
+      'partial purchase return submits only selected remaining quantity',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1300, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
