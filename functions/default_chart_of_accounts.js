@@ -13,7 +13,7 @@ function getDefaultChart() {
 }
 
 function validateDefaultChart(manifest) {
-  if (!manifest || manifest.version !== 2 || manifest.baseCurrency !== 'ILS' ||
+  if (!manifest || manifest.version !== 3 || manifest.baseCurrency !== 'ILS' ||
       !Array.isArray(manifest.accounts) || manifest.accounts.length === 0) {
     throw new Error('Invalid default accounting chart manifest.');
   }
