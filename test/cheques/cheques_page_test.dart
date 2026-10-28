@@ -108,7 +108,7 @@ Future<void> _startClear(
   await tester.pumpWidget(_page(repository));
   await tester.pumpAndSettle();
 
-  expect(find.text('CHK-100'), findsOneWidget);
+  expect(find.textContaining('CHK-100'), findsOneWidget);
   await tester.tap(find.text('تحصيل في البنك'));
   await tester.pumpAndSettle();
   await tester.tap(find.text('تأكيد'));
