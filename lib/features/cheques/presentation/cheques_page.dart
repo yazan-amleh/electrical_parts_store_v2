@@ -341,8 +341,7 @@ class _ChequesPageState extends State<ChequesPage> {
       action: action,
       idempotencyKey: IdempotencyKey(key),
       postedAt: now,
-      bankAccountId:
-          action == ChequeSettlementAction.clear ? '1121' : null,
+      bankAccountId: action == ChequeSettlementAction.clear ? '1121' : null,
     );
     final pending = _PendingChequeSettlement(request: request);
     _pendingSettlements[cheque.id] = pending;
