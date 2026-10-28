@@ -10,7 +10,13 @@ const USER = 'sale-return-accountant';
 const SALE_DATE = '2026-10-27T10:00:00.000Z';
 const RETURN_DATE = '2026-10-28T10:00:00.000Z';
 
-function saleRequest(storeId, {credit = false, tax = 0} = {}) {
+function saleRequest(storeId, {
+  credit = false,
+  tax = 0,
+  quantity = 1000,
+  price = 900,
+  lines = null,
+} = {}) {
   return {
     auth: {uid: USER, token: {uid: USER}},
     data: {
@@ -24,13 +30,13 @@ function saleRequest(storeId, {credit = false, tax = 0} = {}) {
         description: 'Original sale',
         currency: 'ILS',
         taxMinorUnits: tax,
-        lines: [{
+        lines: lines ?? [{
           id: 'line-a',
           productId: 'product-a',
           description: 'Electrical component',
-          quantityMilliUnits: 1000,
+          quantityMilliUnits: quantity,
           unitFactorToBaseMilliUnits: 1000,
-          unitPriceMinorUnits: 900,
+          unitPriceMinorUnits: price,
           unitCostMinorUnits: 400,
           discountMinorUnits: 0,
           unitId: null,
