@@ -91,6 +91,11 @@ async function seedStore() {
       storeId: STORE_ID,
       status: 'posted',
     });
+    await setDoc(storeDoc(db, 'purchase_returns', 'purchase-return-1'), {
+      storeId: STORE_ID,
+      status: 'posted',
+      returnType: 'full',
+    });
     await setDoc(storeDoc(db, 'purchase_orders', 'order-1'), {
       storeId: STORE_ID,
       status: 'pending',
@@ -219,6 +224,15 @@ describe('Firestore security rules', function () {
     );
     await assertFails(
       setDoc(storeDoc(salesDb, 'sales_returns', 'return-client'), {
+        storeId: STORE_ID,
+        status: 'posted',
+      }),
+    );
+    await assertSucceeds(
+      getDoc(storeDoc(salesDb, 'purchase_returns', 'purchase-return-1')),
+    );
+    await assertFails(
+      setDoc(storeDoc(salesDb, 'purchase_returns', 'purchase-return-client'), {
         storeId: STORE_ID,
         status: 'posted',
       }),
@@ -632,6 +646,7 @@ describe('Firestore security rules', function () {
     const idempotencyCollections = [
       'sale_idempotency',
       'purchase_idempotency',
+      'purchase_return_idempotency',
       'expense_idempotency',
       'party_payment_idempotency',
       'account_transfer_idempotency',
