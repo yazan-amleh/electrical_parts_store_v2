@@ -5961,7 +5961,7 @@ async function postSaleReturnInTransaction(
     conflict('The original sale has no remaining quantity to return.');
   }
 
-  const productUpdates = [];
+  const productUpdates = new Map();
   const movementWrites = [];
   const returnedLines = [];
   const nextProjection = new Map(priorProjection);
@@ -6064,31 +6064,41 @@ async function postSaleReturnInTransaction(
       );
     }
 
-    const productRef = storeRef.collection('products').doc(line.productId);
-    const productSnapshot = await transaction.get(productRef);
-    if (!productSnapshot.exists) {
-      throw new HttpsError(
-        'failed-precondition',
-        'Returned product no longer exists: ' + line.productId,
+    const existingProductUpdate = productUpdates.get(line.productId);
+    let productRef;
+    let currentQuantity;
+    let currentValue;
+    if (existingProductUpdate) {
+      productRef = existingProductUpdate.productRef;
+      currentQuantity = existingProductUpdate.nextQuantity;
+      currentValue = existingProductUpdate.nextValue;
+    } else {
+      productRef = storeRef.collection('products').doc(line.productId);
+      const productSnapshot = await transaction.get(productRef);
+      if (!productSnapshot.exists) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Returned product no longer exists: ' + line.productId,
+        );
+      }
+      const product = productSnapshot.data();
+      if (product.storeId !== command.storeId ||
+          product.currency !== currency ||
+          product.isService === true) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Returned product projection is incompatible.',
+        );
+      }
+      currentQuantity = storedSaleReturnInt(
+        product.quantityOnHandMilliUnits,
+        'product.quantityOnHandMilliUnits',
+      );
+      currentValue = storedSaleReturnInt(
+        product.inventoryValueMinorUnits,
+        'product.inventoryValueMinorUnits',
       );
     }
-    const product = productSnapshot.data();
-    if (product.storeId !== command.storeId ||
-        product.currency !== currency ||
-        product.isService === true) {
-      throw new HttpsError(
-        'failed-precondition',
-        'Returned product projection is incompatible.',
-      );
-    }
-    const currentQuantity = storedSaleReturnInt(
-      product.quantityOnHandMilliUnits,
-      'product.quantityOnHandMilliUnits',
-    );
-    const currentValue = storedSaleReturnInt(
-      product.inventoryValueMinorUnits,
-      'product.inventoryValueMinorUnits',
-    );
     const nextQuantity = checkedMinorAdd(
       currentQuantity,
       baseAllocation.allocated,
@@ -6100,7 +6110,7 @@ async function postSaleReturnInTransaction(
       'Sale return inventory value',
     );
     const nextUnitCost = divideAndRound(nextValue, nextQuantity);
-    productUpdates.push({
+    productUpdates.set(line.productId, {
       productRef,
       nextQuantity,
       nextValue,
@@ -6381,7 +6391,7 @@ async function postSaleReturnInTransaction(
     'Sale return journal total',
   );
 
-  for (const item of productUpdates) {
+  for (const item of productUpdates.values()) {
     transaction.update(item.productRef, {
       quantityOnHandMilliUnits: item.nextQuantity,
       purchasePriceMinorUnits: item.nextUnitCost,
