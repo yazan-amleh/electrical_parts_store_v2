@@ -715,7 +715,7 @@ class FirestoreReportsRepository implements ReportsRepository {
           ensureCurrency(saleCurrency);
         } on FormatException catch (error) {
           return FailureResult<SalesAnalytics>(
-            ValidationFailure(error.message),
+            ValidationFailure(error.message.toString()),
           );
         }
 
@@ -840,7 +840,7 @@ class FirestoreReportsRepository implements ReportsRepository {
           ensureCurrency(returnCurrency);
         } on FormatException catch (error) {
           return FailureResult<SalesAnalytics>(
-            ValidationFailure(error.message),
+            ValidationFailure(error.message.toString()),
           );
         }
 
@@ -957,7 +957,7 @@ class FirestoreReportsRepository implements ReportsRepository {
       );
     } on FormatException catch (error) {
       return FailureResult<SalesAnalytics>(
-        ValidationFailure(error.message),
+        ValidationFailure(error.message.toString()),
       );
     } catch (error) {
       return FailureResult<SalesAnalytics>(
