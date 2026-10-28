@@ -65,6 +65,7 @@ const {
 } = require('./accounting/sale_return_allocation');
 const {
   fingerprintPurchaseOrderReceipt,
+  legacyFingerprintPurchaseOrderReceipt,
   matchesLegacyPurchaseOrderReceipt,
   matchesLegacyPurchaseOrderJournalLines,
 } = require('./accounting/purchase_order_receipt_integrity');
@@ -5526,7 +5527,11 @@ async function receivePurchaseOrderInTransaction(
       conflict('The purchase order receipt key is already assigned.');
     }
     if (previous.requestFingerprint != null) {
-      if (previous.requestFingerprint !== fingerprint) {
+      const legacyFingerprint = command.lines == null
+        ? legacyFingerprintPurchaseOrderReceipt(command)
+        : null;
+      if (previous.requestFingerprint !== fingerprint &&
+          previous.requestFingerprint !== legacyFingerprint) {
         conflict('Receipt retry differs from the original financial request.');
       }
     } else {
