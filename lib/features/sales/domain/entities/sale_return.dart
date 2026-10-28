@@ -13,7 +13,9 @@ class SaleReturn {
     _safeId(storeId, 'Store id');
     _safeId(originalSaleId, 'Original sale id');
     if (idempotencyKey.value.contains('/')) {
-      throw ArgumentError('Sale return idempotency key cannot contain a slash.');
+      throw ArgumentError(
+        'Sale return idempotency key cannot contain a slash.',
+      );
     }
   }
 
