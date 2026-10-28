@@ -5433,6 +5433,20 @@ async function postSaleReturnInTransaction(
   if (original.returnStatus === 'full' || original.returnId) {
     conflict('The original sale has already been fully returned.');
   }
+  const originalPostedAt = original.postedAt?.toDate?.();
+  if (!(originalPostedAt instanceof Date) ||
+      Number.isNaN(originalPostedAt.getTime())) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale posting date is invalid.',
+    );
+  }
+  if (command.saleReturn.postedAt.getTime() < originalPostedAt.getTime()) {
+    throw new HttpsError(
+      'failed-precondition',
+      'A sale return cannot be posted before the original sale.',
+    );
+  }
 
   const currency = stringValue(original.currency, 'stored sale currency');
   const subtotal = storedSaleReturnInt(
@@ -5466,9 +5480,18 @@ async function postSaleReturnInTransaction(
     .collection('journal_entries')
     .doc(originalJournalId);
   const originalJournal = await transaction.get(originalJournalRef);
+  const originalJournalData = originalJournal.data();
+  const expectedOriginalJournalTotal = checkedMinorAdd(
+    total,
+    cost,
+    'Original sale journal total',
+  );
   if (!originalJournal.exists ||
-      originalJournal.data().sourceType !== 'sale' ||
-      originalJournal.data().status !== 'posted') {
+      originalJournalData.sourceType !== 'sale' ||
+      originalJournalData.status !== 'posted' ||
+      originalJournalData.currency !== currency ||
+      originalJournalData.totalDebitMinorUnits !== expectedOriginalJournalTotal ||
+      originalJournalData.totalCreditMinorUnits !== expectedOriginalJournalTotal) {
     throw new HttpsError(
       'failed-precondition',
       'Original sale journal is missing or invalid.',
@@ -5513,6 +5536,24 @@ async function postSaleReturnInTransaction(
       originalSettlement.accountId !== paymentAccountId) {
     invalid('Return settlement account must match the original sale.');
   }
+  if (originalSettlement.debitMinorUnits !== total ||
+      originalSettlement.creditMinorUnits !== 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale settlement line does not reconcile to the invoice.',
+    );
+  }
+  const originalSales = originalLineById.get(
+    command.saleReturn.originalSaleId + '-sales',
+  );
+  if (!originalSales ||
+      originalSales.debitMinorUnits !== 0 ||
+      originalSales.creditMinorUnits !== subtotal) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale revenue line does not reconcile to the invoice.',
+    );
+  }
   const originalInventory = originalLineById.get(
     command.saleReturn.originalSaleId + '-inventory',
   );
@@ -5526,6 +5567,16 @@ async function postSaleReturnInTransaction(
        originalCost.accountId !== command.accounts.costOfSalesAccountId)) {
     invalid('Return inventory/COGS accounts must match the original sale.');
   }
+  if (cost > 0 &&
+      (originalInventory.debitMinorUnits !== 0 ||
+       originalInventory.creditMinorUnits !== cost ||
+       originalCost.debitMinorUnits !== cost ||
+       originalCost.creditMinorUnits !== 0)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale inventory/COGS lines do not reconcile to the invoice.',
+    );
+  }
   const originalTax = originalLineById.get(
     command.saleReturn.originalSaleId + '-tax',
   );
@@ -5534,6 +5585,14 @@ async function postSaleReturnInTransaction(
        !originalTax ||
        originalTax.accountId !== command.accounts.taxAccountId)) {
     invalid('Return tax account must match the original sale.');
+  }
+  if (tax > 0 &&
+      (originalTax.debitMinorUnits !== 0 ||
+       originalTax.creditMinorUnits !== tax)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale tax line does not reconcile to the invoice.',
+    );
   }
 
   const accountIds = [
