@@ -126,6 +126,9 @@ class FirestoreSaleRepository implements SaleRepository {
           originalSaleId: saleReturn.originalSaleId,
           journalEntryId: data['journalEntryId'] as String,
           alreadyReturned: status == 'already_returned',
+          returnStatus: data['returnStatus'] is String
+              ? data['returnStatus'] as String
+              : null,
         ),
       );
     } on firebase_functions.FirebaseFunctionsException catch (error) {
