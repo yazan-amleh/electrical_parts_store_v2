@@ -252,10 +252,10 @@ class FirestorePurchaseRepository implements PurchaseRepository {
             'Purchase invoice line totals do not reconcile.',
           );
         }
-        final returnedQuantity = invoice.isFullyReturned &&
-                returnedQuantityByLine.isEmpty
-            ? quantity
-            : (returnedQuantityByLine[lineId] ?? 0);
+        final returnedQuantity =
+            invoice.isFullyReturned && returnedQuantityByLine.isEmpty
+                ? quantity
+                : (returnedQuantityByLine[lineId] ?? 0);
         if (returnedQuantity > quantity) {
           throw const FormatException(
             'Purchase invoice returned quantity exceeds source quantity.',
