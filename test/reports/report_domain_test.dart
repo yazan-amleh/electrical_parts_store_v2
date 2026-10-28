@@ -27,7 +27,7 @@ void main() {
   });
 
   test('sale and sale return expose revenue before output tax', () {
-    const sale = ReportTransaction(
+    final sale = ReportTransaction(
       id: 'sale-1',
       postedAt: DateTime.utc(2026, 1, 10),
       source: 'sale',
@@ -37,7 +37,7 @@ void main() {
       description: null,
       paymentMethod: 'cash',
     );
-    const saleReturn = ReportTransaction(
+    final saleReturn = ReportTransaction(
       id: 'return-1',
       postedAt: DateTime.utc(2026, 1, 11),
       source: 'saleReturn',
@@ -72,5 +72,4 @@ void main() {
 
     expect(report.transactionCount, 3);
   });
-
 }
