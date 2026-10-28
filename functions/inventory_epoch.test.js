@@ -18,7 +18,7 @@ const command = (
 ) => {
   const unitCost = options.unitCost ?? 150;
   const totalCost = options.totalCost ?? Math.round(
-    unitCost * quantity / 1000,
+    unitCost * Math.abs(quantity) / 1000,
   );
   const uid = options.uid ?? USER;
   return {
