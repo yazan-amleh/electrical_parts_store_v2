@@ -243,8 +243,11 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip('إرجاع الفاتورة بالكامل'), findsOneWidget);
-    await tester.tap(find.byTooltip('إرجاع الفاتورة بالكامل'));
+    final returnButton = find.byTooltip('إرجاع الفاتورة بالكامل');
+    expect(returnButton, findsOneWidget);
+    await tester.ensureVisible(returnButton);
+    await tester.pumpAndSettle();
+    await tester.tap(returnButton);
     await tester.pumpAndSettle();
     expect(find.text('تأكيد إرجاع الفاتورة بالكامل'), findsOneWidget);
     await tester.tap(find.text('تأكيد الإرجاع الكامل'));
