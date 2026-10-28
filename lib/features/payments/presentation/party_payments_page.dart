@@ -317,9 +317,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
           labelText: isCustomer ? 'معرّف العميل' : 'معرّف المورد',
           hintText: isCustomer ? 'أدخل customerId' : 'أدخل supplierId',
           prefixIcon: Icon(
-            isCustomer
-                ? Icons.person_outline
-                : Icons.local_shipping_outlined,
+            isCustomer ? Icons.person_outline : Icons.local_shipping_outlined,
           ),
         ),
       );
@@ -509,8 +507,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       _selectedParty = selected;
       if (requestedId.isNotEmpty && selected == null) {
         _partyController.clear();
-        _partyLoadError =
-            'الطرف المحدد غير موجود أو غير نشط في المتجر الحالي.';
+        _partyLoadError = 'الطرف المحدد غير موجود أو غير نشط في المتجر الحالي.';
       }
     });
   }
