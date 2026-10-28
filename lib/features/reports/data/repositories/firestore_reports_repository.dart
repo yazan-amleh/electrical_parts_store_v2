@@ -254,6 +254,9 @@ class FirestoreReportsRepository implements ReportsRepository {
           cost: Money(minorUnits: cost, currency: currency),
           journalEntryId: journalId,
           description: _analyticsNullableString(data['description']),
+          returnStatus: _analyticsNullableString(data['returnStatus']),
+          returnId: _analyticsNullableString(data['returnId']),
+          returnedAt: _analyticsDate(data['returnedAt']),
         ));
       }
       invoices.sort((a, b) {
@@ -372,6 +375,9 @@ class FirestoreReportsRepository implements ReportsRepository {
           cost: Money(minorUnits: cost, currency: currency),
           journalEntryId: journalId,
           description: _analyticsNullableString(data['description']),
+          returnStatus: _analyticsNullableString(data['returnStatus']),
+          returnId: _analyticsNullableString(data['returnId']),
+          returnedAt: _analyticsDate(data['returnedAt']),
         );
 
         final embeddedLines = data['lines'];
