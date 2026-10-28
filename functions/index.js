@@ -58,6 +58,7 @@ const {
   matchesLegacySaleJournal,
 } = require('./accounting/sale_integrity');
 const { fingerprintSaleReturn } = require('./accounting/sale_return_integrity');
+const { fingerprintPurchaseReturn } = require('./accounting/purchase_return_integrity');
 const {
   allocateCumulative,
   allocateHeaderBySubtotal,
