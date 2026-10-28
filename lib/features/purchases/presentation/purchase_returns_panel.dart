@@ -119,11 +119,14 @@ class _PurchaseReturnsPanelState extends State<PurchaseReturnsPanel> {
               children: [
                 const Icon(Icons.receipt_long_outlined),
                 const SizedBox(width: 8),
-                Text(
-                  'فواتير الشراء',
-                  style: Theme.of(context).textTheme.titleLarge,
+                Expanded(
+                  child: Text(
+                    'فواتير الشراء',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                 ),
-                const Spacer(),
                 IconButton(
                   tooltip: 'تحديث الفواتير',
                   onPressed: _loadInvoices,
