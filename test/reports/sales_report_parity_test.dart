@@ -136,6 +136,7 @@ void main() {
         body: SalesAnalyticsPage(
           repository: _Reports(),
           documentBuilder: null,
+          saleRepository: null,
           user: const AuthenticatedUser(
             id: 'user-1',
             email: 'test@example.com',
