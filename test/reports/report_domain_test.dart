@@ -52,7 +52,7 @@ void main() {
     expect(saleReturn.amountBeforeTax, const Money(minorUnits: -5000));
   });
 
-  test('operational transaction count includes sale returns', () {
+  test('operational transaction count includes sale and purchase returns', () {
     final report = OperationalReport(
       from: DateTime.utc(2026, 1, 1),
       to: DateTime.utc(2026, 1, 31),
@@ -62,7 +62,8 @@ void main() {
       expensesTotal: const Money(minorUnits: 0),
       salesCount: 2,
       salesReturnCount: 1,
-      purchasesCount: 0,
+      purchasesCount: 2,
+      purchaseReturnCount: 1,
       expensesCount: 0,
       salesByPaymentMethod: const {'cash': 2},
       expensesByPaymentMethod: const {},
@@ -70,6 +71,33 @@ void main() {
       mayBeTruncated: false,
     );
 
-    expect(report.transactionCount, 3);
+    expect(report.transactionCount, 6);
   });
+
+  test('purchase return reduces net purchases in its posting period', () {
+    final purchase = ReportTransaction(
+      id: 'purchase-1',
+      postedAt: DateTime.utc(2026, 1, 10),
+      source: 'purchase',
+      amount: const Money(minorUnits: 11600),
+      cost: const Money(minorUnits: 0),
+      tax: const Money(minorUnits: 1600),
+      description: null,
+      paymentMethod: 'cash',
+    );
+    final purchaseReturn = ReportTransaction(
+      id: 'purchase-return-1',
+      postedAt: DateTime.utc(2026, 1, 12),
+      source: 'purchaseReturn',
+      amount: const Money(minorUnits: -5800),
+      cost: const Money(minorUnits: 0),
+      tax: const Money(minorUnits: -800),
+      description: null,
+      paymentMethod: 'cash',
+    );
+
+    final netPurchases = purchase.amount + purchaseReturn.amount;
+    expect(netPurchases, const Money(minorUnits: 5800));
+  });
+
 }
