@@ -1256,6 +1256,7 @@ class _ModuleLandingPage extends StatelessWidget {
       return SalesAnalyticsPage(
         repository: reportsRepository,
         documentBuilder: reportDocumentBuilder,
+        saleRepository: saleRepository,
         user: user,
         membership: membership,
       );
