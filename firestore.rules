@@ -295,6 +295,15 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      match /purchase_returns/{returnId} {
+        allow read: if canReadStore(storeId);
+        allow create, update, delete: if false;
+      }
+
+      match /purchase_return_idempotency/{key} {
+        allow read, write: if false;
+      }
+
       match /command_outbox/{commandId} {
         allow read: if canReadStore(storeId) &&
           resource.data.createdBy == request.auth.uid;
