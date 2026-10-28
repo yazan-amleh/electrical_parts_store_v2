@@ -528,6 +528,35 @@ exports.postPurchase = onCall(async (request) => {
   }
 });
 
+exports.postPurchaseReturn = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parsePurchaseReturnCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return postPurchaseReturnInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('postPurchaseReturn failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The purchase return could not be posted.',
+    );
+  }
+});
+
 
 
 exports.createOffer = onCall(async (request) => {
