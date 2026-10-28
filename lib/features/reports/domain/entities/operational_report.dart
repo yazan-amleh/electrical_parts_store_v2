@@ -19,11 +19,11 @@ class ReportTransaction {
   final Money cost;
   final Money? tax;
   final String? description;
+  final String? paymentMethod;
 
   Money get amountBeforeTax {
     return amount - (tax ?? Money.zero(currency: amount.currency));
   }
-  final String? paymentMethod;
 }
 
 class OperationalReport {
