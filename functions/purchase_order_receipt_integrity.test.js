@@ -19,6 +19,7 @@ function request(storeId, options = {}) {
       orderId: 'order-1',
       receiptId: options.receiptId ?? 'receipt-1',
       idempotencyKey: options.key ?? 'receipt-key-1',
+      lines: options.lines ?? null,
       postedAt: options.date ?? DATE,
       paymentMethod: credit ? 'credit' : 'cash',
       currency: 'ILS',
@@ -75,11 +76,11 @@ async function seed(storeId, opts = {}) {
       productName: 'Electrical Part',
       unitId: null,
       unitName: null,
-      quantityMilliUnits: 1000,
+      quantityMilliUnits: opts.quantity ?? 1000,
       unitFactorToBaseMilliUnits: 1000,
       unitCostMinorUnits: 700,
       receivedQuantityMilliUnits: opts.receivedQuantity ?? 0,
-      totalMinorUnits: 700,
+      totalMinorUnits: Math.round(700 * (opts.quantity ?? 1000) / 1000),
       currency: 'ILS',
     }],
   });
@@ -112,6 +113,118 @@ describe('purchase order receipt atomicity and replay', () => {
     const marker = (await store.collection('purchase_order_receipt_idempotency')
       .doc('receipt-key-1').get()).data();
     assert.match(marker.requestFingerprint, /^[a-f0-9]{64}$/);
+    await db.recursiveDelete(store);
+  });
+
+  it('receives partial quantities cumulatively and completes on the remainder', async () => {
+    const store = await seed('po-receipt-partial', {quantity: 3000});
+
+    const first = await receive(request(store.id, {
+      receiptId: 'receipt-partial-1',
+      key: 'receipt-partial-key-1',
+      lines: [{lineId: 'line-1', quantityMilliUnits: 1000}],
+    }));
+    assert.equal(first.status, 'received');
+    assert.equal(first.orderStatus, 'pending');
+    assert.equal(first.completed, false);
+
+    let order = (await store.collection('purchase_orders')
+      .doc('order-1').get()).data();
+    assert.equal(order.status, 'pending');
+    assert.equal(order.lines[0].receivedQuantityMilliUnits, 1000);
+    assert.deepEqual(order.receiptIds, ['receipt-partial-1']);
+
+    let product = (await store.collection('products')
+      .doc('product-a').get()).data();
+    assert.equal(product.quantityOnHandMilliUnits, 3000);
+    assert.equal(product.inventoryValueMinorUnits, 1900);
+
+    const firstPurchase = (await store.collection('purchases')
+      .doc('receipt-partial-1').get()).data();
+    assert.equal(firstPurchase.subtotalMinorUnits, 700);
+    const firstLines = await store.collection('purchases')
+      .doc('receipt-partial-1').collection('lines').get();
+    assert.equal(firstLines.docs[0].data().quantityMilliUnits, 1000);
+
+    const second = await receive(request(store.id, {
+      receiptId: 'receipt-partial-2',
+      key: 'receipt-partial-key-2',
+      lines: [{lineId: 'line-1', quantityMilliUnits: 2000}],
+    }));
+    assert.equal(second.orderStatus, 'completed');
+    assert.equal(second.completed, true);
+
+    order = (await store.collection('purchase_orders')
+      .doc('order-1').get()).data();
+    assert.equal(order.status, 'completed');
+    assert.equal(order.lines[0].receivedQuantityMilliUnits, 3000);
+    assert.deepEqual(
+      new Set(order.receiptIds),
+      new Set(['receipt-partial-1', 'receipt-partial-2']),
+    );
+    assert.equal((await store.collection('purchases').get()).size, 2);
+    assert.equal((await store.collection('journal_entries').get()).size, 2);
+
+    product = (await store.collection('products')
+      .doc('product-a').get()).data();
+    assert.equal(product.quantityOnHandMilliUnits, 5000);
+    assert.equal(product.inventoryValueMinorUnits, 3300);
+    await db.recursiveDelete(store);
+  });
+
+  it('serializes competing partial receipts and prevents over-receipt', async () => {
+    const store = await seed('po-receipt-partial-race', {quantity: 3000});
+    const a = request(store.id, {
+      receiptId: 'receipt-race-a',
+      key: 'receipt-race-key-a',
+      lines: [{lineId: 'line-1', quantityMilliUnits: 2000}],
+    });
+    const b = request(store.id, {
+      receiptId: 'receipt-race-b',
+      key: 'receipt-race-key-b',
+      lines: [{lineId: 'line-1', quantityMilliUnits: 2000}],
+    });
+
+    const results = await Promise.allSettled([receive(a), receive(b)]);
+    const fulfilled = results.filter((item) => item.status === 'fulfilled');
+    const rejected = results.filter((item) => item.status === 'rejected');
+    assert.equal(fulfilled.length, 1);
+    assert.equal(rejected.length, 1);
+    assert.equal(rejected[0].reason.code, 'failed-precondition');
+
+    const order = (await store.collection('purchase_orders')
+      .doc('order-1').get()).data();
+    assert.equal(order.status, 'pending');
+    assert.equal(order.lines[0].receivedQuantityMilliUnits, 2000);
+    assert.equal((await store.collection('purchases').get()).size, 1);
+    assert.equal((await store.collection('inventory_movements').get()).size, 1);
+    await db.recursiveDelete(store);
+  });
+
+  it('can cancel only the unreceived remainder after a partial receipt', async () => {
+    const store = await seed('po-receipt-partial-cancel', {quantity: 3000});
+    await receive(request(store.id, {
+      receiptId: 'receipt-before-cancel',
+      key: 'receipt-before-cancel-key',
+      lines: [{lineId: 'line-1', quantityMilliUnits: 1000}],
+    }));
+
+    const result = await functions.cancelPurchaseOrder.run({
+      auth: {uid: USER, token: {uid: USER}},
+      data: {storeId: store.id, orderId: 'order-1'},
+    });
+    assert.equal(result.status, 'cancelled');
+
+    const order = (await store.collection('purchase_orders')
+      .doc('order-1').get()).data();
+    assert.equal(order.status, 'cancelled');
+    assert.equal(order.lines[0].receivedQuantityMilliUnits, 1000);
+    assert.equal((await store.collection('purchases').get()).size, 1);
+
+    const product = (await store.collection('products')
+      .doc('product-a').get()).data();
+    assert.equal(product.quantityOnHandMilliUnits, 3000);
+    assert.equal(product.inventoryValueMinorUnits, 1900);
     await db.recursiveDelete(store);
   });
 
