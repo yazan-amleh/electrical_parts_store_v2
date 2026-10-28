@@ -4,6 +4,7 @@ import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../auth/domain/enums/store_role.dart';
 import '../../parties/domain/enums/party_type.dart';
+import '../../parties/domain/repositories/party_repository.dart';
 import '../domain/repositories/party_payment_repository.dart';
 import '../domain/repositories/voucher_query_repository.dart';
 import '../domain/repositories/voucher_draft_repository.dart';
@@ -18,6 +19,7 @@ class VouchersHubPage extends StatelessWidget {
     required this.paymentRepository,
     required this.voucherQueryRepository,
     this.draftRepository,
+    this.partyRepository,
     required this.user,
     required this.membership,
     super.key,
@@ -26,6 +28,7 @@ class VouchersHubPage extends StatelessWidget {
   final PartyPaymentRepository? paymentRepository;
   final VoucherQueryRepository? voucherQueryRepository;
   final VoucherDraftRepository? draftRepository;
+  final PartyRepository? partyRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -42,6 +45,7 @@ class VouchersHubPage extends StatelessWidget {
             key: ValueKey('receipt-${membership.storeId}'),
             repository: paymentRepository,
             draftRepository: draftRepository,
+            partyRepository: partyRepository,
             user: user,
             membership: membership,
             initialPartyType: PartyType.customer,
