@@ -10,6 +10,7 @@ import 'package:electrical_parts_store_v2/features/inventory/domain/entities/pro
 import 'package:electrical_parts_store_v2/features/inventory/domain/repositories/product_repository.dart';
 import 'package:electrical_parts_store_v2/features/sales/domain/entities/sale.dart';
 import 'package:electrical_parts_store_v2/features/sales/domain/entities/sale_posting_plan.dart';
+import 'package:electrical_parts_store_v2/features/sales/domain/entities/sale_return.dart';
 import 'package:electrical_parts_store_v2/features/sales/domain/repositories/sale_repository.dart';
 import 'package:electrical_parts_store_v2/features/sales/presentation/sales_page.dart';
 import 'package:flutter/material.dart';
@@ -54,6 +55,17 @@ class _Products implements ProductRepository {
 class _Sales implements SaleRepository {
   final List<Sale> submissions = [];
   bool queued = false;
+
+  @override
+  Future<Result<SaleReturnPostingResult>> postFullSaleReturn({
+    required StoreContext context,
+    required SaleReturn saleReturn,
+    required SaleReturnPostingAccounts accounts,
+  }) async {
+    return const FailureResult(
+      InfrastructureFailure('Not used by point-of-sale tests'),
+    );
+  }
 
   @override
   Future<Result<SalePostingPlan>> postSale({
