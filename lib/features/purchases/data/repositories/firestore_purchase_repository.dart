@@ -186,7 +186,7 @@ class FirestorePurchaseRepository implements PurchaseRepository {
             );
           }
           final projection = Map<String, dynamic>.from(rawProjection);
-          final lineId = _requiredString(projection['lineId'], 'return line id');
+          final lineId = _requiredId(projection['lineId'], 'return line id');
           final returnedQuantity = _requiredNonNegativeInt(
             projection['returnedQuantityMilliUnits'],
             'returned quantity',
@@ -217,7 +217,7 @@ class FirestorePurchaseRepository implements PurchaseRepository {
       var verifiedSubtotal = 0;
       for (final lineDocument in linesSnapshot.docs) {
         final line = lineDocument.data();
-        final lineId = _requiredString(line['id'], 'purchase line id');
+        final lineId = _requiredId(line['id'], 'purchase line id');
         if (lineId != lineDocument.id) {
           throw const FormatException(
             'Purchase invoice line identity is inconsistent.',
@@ -265,7 +265,7 @@ class FirestorePurchaseRepository implements PurchaseRepository {
         lines.add(
           PurchaseInvoiceLineSummary(
             id: lineId,
-            productId: _requiredString(
+            productId: _requiredId(
               line['productId'],
               'purchase line product id',
             ),
@@ -434,7 +434,7 @@ class FirestorePurchaseRepository implements PurchaseRepository {
       subtotal: Money(minorUnits: subtotal, currency: currency),
       tax: Money(minorUnits: tax, currency: currency),
       total: Money(minorUnits: total, currency: currency),
-      journalEntryId: _requiredString(
+      journalEntryId: _requiredId(
         data['journalEntryId'],
         'purchase journal id',
       ),
@@ -445,10 +445,18 @@ class FirestorePurchaseRepository implements PurchaseRepository {
   }
 
   static String _requiredString(Object? value, String label) {
-    if (value is! String || value.trim().isEmpty || value.contains('/')) {
+    if (value is! String || value.trim().isEmpty) {
       throw FormatException('$label is invalid.');
     }
     return value.trim();
+  }
+
+  static String _requiredId(Object? value, String label) {
+    final result = _requiredString(value, label);
+    if (result.contains('/')) {
+      throw FormatException('$label is invalid.');
+    }
+    return result;
   }
 
   static String? _nullableString(Object? value) {
