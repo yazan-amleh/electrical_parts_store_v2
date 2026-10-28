@@ -99,5 +99,4 @@ void main() {
     final netPurchases = purchase.amount + purchaseReturn.amount;
     expect(netPurchases, const Money(minorUnits: 5800));
   });
-
 }
