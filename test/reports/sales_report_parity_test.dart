@@ -151,6 +151,7 @@ class _Returns implements SaleRepository {
         originalSaleId: saleReturn.originalSaleId,
         journalEntryId: '${saleReturn.id}-journal',
         alreadyReturned: false,
+        returnStatus: saleReturn.lines == null ? 'full' : 'partial',
       ),
     );
   }
@@ -319,5 +320,53 @@ void main() {
     expect(second.idempotencyKey.value, first.idempotencyKey.value);
     expect(second.postedAt, first.postedAt);
     expect(second.reason, first.reason);
+  });
+  testWidgets('partial return submits only selected verified quantity',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1300, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final returns = _Returns();
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SalesAnalyticsPage(
+          repository: _Reports(),
+          documentBuilder: null,
+          saleRepository: returns,
+          user: const AuthenticatedUser(
+            id: 'user-1',
+            email: 'test@example.com',
+          ),
+          membership: const StoreMembership(
+            storeId: 'store-1',
+            userId: 'user-1',
+            role: StoreRole.owner,
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final partialButton = find.byTooltip('مردود جزئي');
+    expect(partialButton, findsOneWidget);
+    await tester.ensureVisible(partialButton);
+    await tester.pumpAndSettle();
+    await tester.tap(partialButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('مردود جزئي من الفاتورة'), findsOneWidget);
+    final quantityField =
+        find.byKey(const ValueKey('partial-return-qty-line-1'));
+    expect(quantityField, findsOneWidget);
+    await tester.enterText(quantityField, '0.5');
+    await tester.tap(find.text('ترحيل المردود الجزئي'));
+    await tester.pumpAndSettle();
+
+    expect(returns.submissions, hasLength(1));
+    final submitted = returns.submissions.single;
+    expect(submitted.originalSaleId, 'sale-100');
+    expect(submitted.lines, isNotNull);
+    expect(submitted.lines, hasLength(1));
+    expect(submitted.lines!.single.lineId, 'line-1');
+    expect(submitted.lines!.single.quantityMilliUnits, 500);
   });
 }
