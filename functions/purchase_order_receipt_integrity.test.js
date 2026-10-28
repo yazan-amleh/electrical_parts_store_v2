@@ -4,6 +4,9 @@ const assert = require('node:assert/strict');
 const { after, describe, it } = require('node:test');
 const admin = require('firebase-admin');
 const functions = require('./index');
+const {
+  legacyFingerprintPurchaseOrderReceipt,
+} = require('./accounting/purchase_order_receipt_integrity');
 
 const db = admin.firestore();
 const USER = 'po-receiver-1';
@@ -253,6 +256,39 @@ describe('purchase order receipt atomicity and replay', () => {
       (err) => err.code === 'already-exists',
     );
     assert.equal((await store.collection('journal_entries').get()).size, 1);
+    await db.recursiveDelete(store);
+  });
+
+  it('accepts the pre-partial-receipt fingerprint for an unchanged full retry', async () => {
+    const store = await seed('po-receipt-legacy-fingerprint');
+    const req = request(store.id);
+    await receive(req);
+
+    const parsed = {
+      storeId: store.id,
+      orderId: 'order-1',
+      receiptId: 'receipt-1',
+      idempotencyKey: 'receipt-key-1',
+      postedAt: new Date(DATE),
+      paymentMethod: 'cash',
+      currency: 'ILS',
+      taxMinorUnits: 0,
+      lines: null,
+      accounts: {
+        settlementAccountId: '1110',
+        inventoryAccountId: '1150',
+        supplierPayableAccountId: null,
+        inputTaxAccountId: null,
+      },
+    };
+    await store.collection('purchase_order_receipt_idempotency')
+      .doc('receipt-key-1').update({
+        requestFingerprint: legacyFingerprintPurchaseOrderReceipt(parsed),
+      });
+
+    const replay = await receive(req);
+    assert.equal(replay.status, 'already_received');
+    assert.equal((await store.collection('purchases').get()).size, 1);
     await db.recursiveDelete(store);
   });
 
