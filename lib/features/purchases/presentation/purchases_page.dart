@@ -161,8 +161,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
                   )
                 : LayoutBuilder(
                     builder: (context, constraints) {
-                      final products =
-                          _buildProductsPanel(filteredProducts);
+                      final products = _buildProductsPanel(filteredProducts);
                       final cart = _buildCartPanel();
 
                       if (constraints.maxWidth < 900) {
