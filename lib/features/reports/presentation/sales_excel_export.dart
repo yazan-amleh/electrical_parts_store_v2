@@ -24,6 +24,8 @@ class SalesExcelExport {
       'الإجمالي',
       'التكلفة',
       'العملة',
+      'الحالة',
+      'مرجع المردود',
       'مرجع القيد',
     ]);
 
@@ -44,11 +46,22 @@ class SalesExcelExport {
         DoubleCellValue(_major(invoice.total.minorUnits)),
         DoubleCellValue(_major(invoice.cost.minorUnits)),
         TextCellValue(invoice.total.currency),
+        TextCellValue(
+          invoice.isFullyReturned
+              ? 'مُرجعة بالكامل'
+              : invoice.isPartiallyReturned
+                  ? 'مُرجعة جزئيًا'
+                  : 'مرحّلة',
+        ),
+        TextCellValue(_safeText(invoice.returnId ?? '')),
         TextCellValue(_safeText(invoice.journalEntryId)),
       ]);
     }
 
-    _widths(sheet, const [18, 24, 28, 16, 16, 14, 16, 16, 12, 24]);
+    _widths(
+      sheet,
+      const [18, 24, 28, 16, 16, 14, 16, 16, 12, 18, 24, 24],
+    );
     return _encode(workbook);
   }
 
