@@ -164,8 +164,7 @@ void main() {
     expect(find.text('Alice Customer'), findsNothing);
   });
 
-  testWidgets('initial party id resolves to its display name',
-      (tester) async {
+  testWidgets('initial party id resolves to its display name', (tester) async {
     await tester.binding.setSurfaceSize(const Size(1000, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final payments = _Payments();
