@@ -8,6 +8,7 @@ import '../../../../core/tenancy/store_context.dart';
 import '../../../../infrastructure/firebase/firebase_paths.dart';
 import '../../../../infrastructure/queue/cloud_function_queue_fallback.dart';
 import '../../domain/entities/cheque.dart';
+import '../../domain/entities/cheque_settlement_request.dart';
 import '../../domain/entities/cheque_settlement_result.dart';
 import '../../domain/enums/cheque_settlement_action.dart';
 import '../../domain/enums/cheque_status.dart';
@@ -63,29 +64,18 @@ class FirestoreChequeRepository implements ChequeRepository {
   @override
   Future<Result<ChequeSettlementResult>> settleCheque({
     required StoreContext context,
-    required String chequeId,
-    required ChequeSettlementAction action,
-    String? bankAccountId,
+    required ChequeSettlementRequest request,
   }) async {
-    if (chequeId.trim().isEmpty || chequeId.contains('/')) {
-      return const FailureResult<ChequeSettlementResult>(
-        ValidationFailure('Cheque id is invalid.'),
-      );
-    }
-    if (action == ChequeSettlementAction.clear &&
-        (bankAccountId == null || bankAccountId.trim().isEmpty)) {
-      return const FailureResult<ChequeSettlementResult>(
-        ValidationFailure('A bank account is required to clear a cheque.'),
-      );
-    }
-
-    final idempotencyKey = 'cheque-$chequeId-${action.name}';
+    final chequeId = request.chequeId;
+    final action = request.action;
+    final bankAccountId = request.bankAccountId;
+    final idempotencyKey = request.idempotencyKey.value;
     final payload = <String, dynamic>{
       'storeId': context.storeId,
       'chequeId': chequeId,
       'action': action.name,
       'idempotencyKey': idempotencyKey,
-      'postedAt': DateTime.now().toUtc().toIso8601String(),
+      'postedAt': request.postedAt.toIso8601String(),
       'accounts': <String, dynamic>{
         'checksAccountId': '1130',
         'issuedChecksAccountId': '2210',
@@ -99,20 +89,31 @@ class FirestoreChequeRepository implements ChequeRepository {
       final callable = _functions.httpsCallable('settleCheque');
       final response = await callable.call<Map<String, dynamic>>(payload);
       final data = response.data;
-      final statusName = data['status'] is String
-          ? data['status'] as String
-          : action == ChequeSettlementAction.clear
-              ? ChequeStatus.cleared.name
-              : ChequeStatus.bounced.name;
+      final statusName = data['status'];
+      final journalEntryId = data['journalEntryId'];
+      if (statusName is! String || journalEntryId is! String) {
+        return const FailureResult<ChequeSettlementResult>(
+          InfrastructureFailure(
+            'The cheque settlement service returned inconsistent data.',
+          ),
+        );
+      }
       final status = ChequeStatus.values.firstWhere(
         (candidate) => candidate.name == statusName,
         orElse: () => ChequeStatus.pending,
       );
+      if (status == ChequeStatus.pending) {
+        return const FailureResult<ChequeSettlementResult>(
+          InfrastructureFailure(
+            'The cheque settlement service returned an invalid status.',
+          ),
+        );
+      }
       return Success<ChequeSettlementResult>(
         ChequeSettlementResult(
           chequeId: chequeId,
           status: status,
-          journalEntryId: data['journalEntryId'] as String? ?? '',
+          journalEntryId: journalEntryId,
         ),
       );
     } on firebase_functions.FirebaseFunctionsException catch (error) {
