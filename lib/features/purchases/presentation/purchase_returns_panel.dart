@@ -184,9 +184,8 @@ class _PurchaseReturnsPanelState extends State<PurchaseReturnsPanel> {
         final invoice = invoices[index];
         final selected = invoice.id == _selectedInvoiceId;
         return Card(
-          color: selected
-              ? Theme.of(context).colorScheme.primaryContainer
-              : null,
+          color:
+              selected ? Theme.of(context).colorScheme.primaryContainer : null,
           child: ListTile(
             selected: selected,
             title: Row(
@@ -307,9 +306,8 @@ class _PurchaseReturnsPanelState extends State<PurchaseReturnsPanel> {
                     ),
                     actions: [
                       TextButton(
-                        onPressed: busy
-                            ? null
-                            : () => _submitReturn(invoice, pending),
+                        onPressed:
+                            busy ? null : () => _submitReturn(invoice, pending),
                         child: const Text('إعادة نفس الطلب'),
                       ),
                     ],
@@ -452,8 +450,7 @@ class _PurchaseReturnsPanelState extends State<PurchaseReturnsPanel> {
       return;
     }
 
-    final invoices =
-        (result as Success<List<PurchaseInvoiceSummary>>).value;
+    final invoices = (result as Success<List<PurchaseInvoiceSummary>>).value;
     setState(() {
       _invoices = invoices;
       _listError = null;
