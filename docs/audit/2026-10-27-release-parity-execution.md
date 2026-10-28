@@ -75,6 +75,41 @@ Remaining sales release requirements: V1 all screens and report export parity; a
   can detect changes/divergence but do not make a no-journal valuation change
   financially complete.
 
+## Purchase returns and cumulative purchase-order receipts — 2026-10-28
+
+- Purchase returns are now posted through one atomic, idempotent server contract.
+  Full and partial returns are linked to the original posted purchase and can
+  return only the remaining source quantity and no more than current physical
+  stock.
+- Supplier refund/tax amounts are derived cumulatively from the immutable
+  source purchase. Inventory leaves at its current moving-weighted-average
+  carrying value; any difference is posted explicitly to default-chart account
+  `5200` rather than hidden in inventory or COGS.
+- Default chart version 3 adds `5200` for new stores and the explicit chart
+  upgrade adds it to existing stores. Purchase-return client writes remain
+  server-owned/read-only.
+- Purchase Orders now support cumulative partial receipts. Each receipt creates
+  its own posted Purchase/journal/inventory effect, updates each order line's
+  received quantity, and keeps the order pending until every line is fully
+  received.
+- Receipt commands carry stable IDs, timestamps and line quantities. Unknown
+  outcomes reuse the exact same command, legacy full-receipt fingerprints
+  remain replay-compatible, and concurrent over-receipt attempts fail closed.
+- Cancelling a partially received order cancels only the unreceived remainder;
+  already posted receipts and their inventory/financial effects are not
+  reversed or deleted.
+- The Purchase Orders page now loads on entry, resets on tenant/user changes,
+  shows ordered/received/remaining quantities and supports line-level receipt
+  quantities with exact-retry UI.
+- CI on commit `d3ca15a459a66dcaeeef5fb66c42bb1571316354`, run
+  `40740486252`: functions syntax, Dart formatting, Flutter analyze, Flutter
+  tests, Web release build, Firestore/Storage rules and serialized Functions
+  emulator tests all passed.
+
+This closes the automated Purchase Return / partial Purchase Order receipt
+workstream only. Real isolated Firebase E2E, visual comparison and release
+approval remain open and are not implied by green CI.
+
 ## Mandatory rollout gate
 
 Do not deploy or merge merely because CI succeeds. Verify roles, privileged service accounts, close-period writer boundaries and real backup/restore recovery in an **isolated V2** environment. Obtain an explicit deployment decision from the owner. The existing manual deploy workflow checks out `v2/port-v1-complete`, not this audit branch; approving a separate deployment action requires a deliberate branch/release review.
