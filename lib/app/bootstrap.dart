@@ -122,6 +122,7 @@ abstract final class AppBootstrap {
         commandQueue: commandQueue,
       ),
       purchaseRepository: FirestorePurchaseRepository(
+        firestore: firestore,
         functions: functions,
         commandQueue: commandQueue,
       ),
