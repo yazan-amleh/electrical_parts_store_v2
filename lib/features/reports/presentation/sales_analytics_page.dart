@@ -58,6 +58,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
   bool _isExporting = false;
   String? _returningInvoiceId;
   final Map<String, SaleReturn> _pendingFullReturns = <String, SaleReturn>{};
+  final Map<String, SaleReturn> _pendingPartialReturns =
+      <String, SaleReturn>{};
   String? _errorMessage;
 
   StoreContext get _context {
@@ -86,6 +88,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       _searchController.clear();
       _selectedInvoiceIds.clear();
       _pendingFullReturns.clear();
+      _pendingPartialReturns.clear();
       _selectionMode = false;
       _load();
     }
@@ -721,13 +724,17 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                                 avatar: Icon(
                                   item.isFullyReturned
                                       ? Icons.undo
-                                      : Icons.check_circle_outline,
+                                      : item.isPartiallyReturned
+                                          ? Icons.history
+                                          : Icons.check_circle_outline,
                                   size: 16,
                                 ),
                                 label: Text(
                                   item.isFullyReturned
                                       ? 'مُرجعة بالكامل'
-                                      : 'مرحّلة',
+                                      : item.isPartiallyReturned
+                                          ? 'مُرجعة جزئيًا'
+                                          : 'مرحّلة',
                                 ),
                               ),
                             ),
@@ -760,8 +767,21 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                                 IconButton(
                                   tooltip: item.isFullyReturned
                                       ? 'الفاتورة مُرجعة بالكامل'
-                                      : 'إرجاع الفاتورة بالكامل',
-                                  onPressed: _canReturnInvoice(item)
+                                      : 'مردود جزئي',
+                                  onPressed: _canReturnPartialInvoice(item)
+                                      ? () => _returnPartialInvoice(item)
+                                      : null,
+                                  icon: const Icon(
+                                    Icons.playlist_add_check_circle_outlined,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: item.isFullyReturned
+                                      ? 'الفاتورة مُرجعة بالكامل'
+                                      : item.isPartiallyReturned
+                                          ? 'إرجاع الكمية المتبقية بالكامل'
+                                          : 'إرجاع الفاتورة بالكامل',
+                                  onPressed: _canReturnRemainingInvoice(item)
                                       ? () => _returnFullInvoice(item)
                                       : null,
                                   icon: _returningInvoiceId == item.id
@@ -967,17 +987,28 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     }
   }
 
-  bool _canReturnInvoice(SalesInvoiceSummary invoice) {
+  bool _canReturnInvoiceBase(SalesInvoiceSummary invoice) {
     final role = widget.membership.role;
     final authorized = role.canManageSales || role.canPostAccounting;
     final supportedPayment = const {'cash', 'bank', 'card', 'credit'}
         .contains(invoice.paymentMethod);
     return widget.saleRepository != null &&
+        widget.repository != null &&
         authorized &&
         supportedPayment &&
         !invoice.isFullyReturned &&
         _returningInvoiceId == null &&
         !_isExporting;
+  }
+
+  bool _canReturnPartialInvoice(SalesInvoiceSummary invoice) {
+    return _canReturnInvoiceBase(invoice) &&
+        !_pendingFullReturns.containsKey(invoice.id);
+  }
+
+  bool _canReturnRemainingInvoice(SalesInvoiceSummary invoice) {
+    return _canReturnInvoiceBase(invoice) &&
+        !_pendingPartialReturns.containsKey(invoice.id);
   }
 
   SaleReturnPostingAccounts _returnAccounts(SalesInvoiceSummary invoice) {
@@ -1005,13 +1036,16 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
 
   Future<void> _returnFullInvoice(SalesInvoiceSummary invoice) async {
     final repository = widget.saleRepository;
-    if (repository == null || !_canReturnInvoice(invoice)) {
+    if (repository == null || !_canReturnRemainingInvoice(invoice)) {
       return;
     }
 
     final pending = _pendingFullReturns[invoice.id];
     final reasonController = TextEditingController(
-      text: pending?.reason ?? 'إرجاع كامل للفاتورة ${invoice.id}',
+      text: pending?.reason ??
+          (invoice.isPartiallyReturned
+              ? 'إرجاع المتبقي من الفاتورة ${invoice.id}'
+              : 'إرجاع كامل للفاتورة ${invoice.id}'),
     );
     final reason = await showDialog<String>(
       context: context,
@@ -1020,7 +1054,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
         child: AlertDialog(
           title: Text(
             pending == null
-                ? 'تأكيد إرجاع الفاتورة بالكامل'
+                ? invoice.isPartiallyReturned
+                    ? 'تأكيد إرجاع الكمية المتبقية'
+                    : 'تأكيد إرجاع الفاتورة بالكامل'
                 : 'إعادة محاولة الإرجاع الكامل',
           ),
           content: Column(
@@ -1029,8 +1065,11 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
             children: [
               Text(
                 pending == null
-                    ? 'سيتم عكس كامل الفاتورة ${invoice.id} محاسبياً '
-                        'ومخزنياً. هذه العملية لا تحذف البيع الأصلي.'
+                    ? invoice.isPartiallyReturned
+                        ? 'سيتم إرجاع كل الكمية المتبقية من الفاتورة '
+                            '${invoice.id} مع عكس أثرها المحاسبي والمخزني.'
+                        : 'سيتم عكس كامل الفاتورة ${invoice.id} محاسبياً '
+                            'ومخزنياً. هذه العملية لا تحذف البيع الأصلي.'
                     : 'ستُعاد محاولة نفس عملية الإرجاع السابقة بنفس '
                         'المعرّف والتاريخ والسبب لمنع تكرار القيد.',
               ),
@@ -1057,7 +1096,11 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
               ),
               icon: const Icon(Icons.undo),
               label: Text(
-                pending == null ? 'تأكيد الإرجاع الكامل' : 'إعادة المحاولة',
+                pending == null
+                    ? invoice.isPartiallyReturned
+                        ? 'إرجاع المتبقي'
+                        : 'تأكيد الإرجاع الكامل'
+                    : 'إعادة المحاولة',
               ),
             ),
           ],
@@ -1108,7 +1151,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       _showMessage(
         posted.alreadyReturned
             ? 'الفاتورة كانت مُرجعة بالفعل؛ تم تأكيد نفس عملية الإرجاع.'
-            : 'تم إرجاع الفاتورة بالكامل وعكس القيد والمخزون.',
+            : posted.returnStatus == 'partial'
+                ? 'تم ترحيل المردود، وما زالت للفاتورة كمية متبقية.'
+                : 'تم إرجاع الفاتورة بالكامل وعكس القيد والمخزون.',
       );
       await _load();
     } catch (error) {
