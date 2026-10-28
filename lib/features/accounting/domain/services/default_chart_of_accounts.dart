@@ -229,6 +229,15 @@ abstract final class DefaultChartOfAccounts {
         normalSide: NormalSide.debit,
         sortOrder: 600,
       ),
+      _posting(
+        storeId: storeId,
+        id: '5200',
+        code: '5200',
+        name: 'فرق تقييم مردود المشتريات',
+        section: StatementSection.costOfSales,
+        normalSide: NormalSide.debit,
+        sortOrder: 610,
+      ),
       _header(
         storeId: storeId,
         id: '6100',
