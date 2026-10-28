@@ -5800,7 +5800,13 @@ async function postSaleReturnInTransaction(
       lineCost,
       'Sale return inventory value',
     );
-    productUpdates.push({productRef, nextQuantity, nextValue});
+    const nextUnitCost = divideAndRound(nextValue, nextQuantity);
+    productUpdates.push({
+      productRef,
+      nextQuantity,
+      nextValue,
+      nextUnitCost,
+    });
 
     const movementId = command.saleReturn.id + '-inventory-' + lineId;
     const movementKey = command.saleReturn.idempotencyKey + ':inventory:' + lineId;
@@ -5938,6 +5944,7 @@ async function postSaleReturnInTransaction(
   for (const item of productUpdates) {
     transaction.update(item.productRef, {
       quantityOnHandMilliUnits: item.nextQuantity,
+      purchasePriceMinorUnits: item.nextUnitCost,
       inventoryValueMinorUnits: item.nextValue,
       updatedAt: FieldValue.serverTimestamp(),
     });
