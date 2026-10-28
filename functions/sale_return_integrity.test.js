@@ -56,6 +56,7 @@ function returnRequest(storeId, {
   reason = 'Customer return',
   credit = false,
   tax = 0,
+  postedAt = RETURN_DATE,
 } = {}) {
   return {
     auth: {uid: USER, token: {uid: USER}},
@@ -65,7 +66,7 @@ function returnRequest(storeId, {
         id,
         idempotencyKey: key,
         originalSaleId: 'sale-original',
-        postedAt: RETURN_DATE,
+        postedAt,
         reason,
       },
       postingAccounts: {
@@ -196,6 +197,41 @@ describe('atomic full sale returns', () => {
       (error) => error.code === 'already-exists',
     );
     assert.equal((await store.collection('sales_returns').get()).size, 1);
+    await db.recursiveDelete(store);
+  });
+
+  it('rejects a return dated before the original sale', async () => {
+    const store = await seed('sale-return-backdated');
+    await functions.postSale.run(saleRequest(store.id));
+    await assert.rejects(
+      functions.postSaleReturn.run(returnRequest(store.id, {
+        postedAt: '2026-10-26T10:00:00.000Z',
+      })),
+      (error) => error.code === 'failed-precondition',
+    );
+    assert.equal((await store.collection('sales_returns').get()).empty, true);
+    assert.equal((await store.collection('inventory_movements')
+      .where('sourceType', '==', 'saleReturn').get()).empty, true);
+    await db.recursiveDelete(store);
+  });
+
+  it('fails closed when the original sale journal no longer reconciles', async () => {
+    const store = await seed('sale-return-corrupt-journal');
+    await functions.postSale.run(saleRequest(store.id));
+    await store.collection('journal_entries').doc('sale-original-journal')
+      .collection('lines').doc('sale-original-sales').update({
+        creditMinorUnits: 899,
+      });
+
+    await assert.rejects(
+      functions.postSaleReturn.run(returnRequest(store.id)),
+      (error) => error.code === 'failed-precondition',
+    );
+    const product = (await store.collection('products')
+      .doc('product-a').get()).data();
+    assert.equal(product.quantityOnHandMilliUnits, 2000);
+    assert.equal(product.inventoryValueMinorUnits, 800);
+    assert.equal((await store.collection('sales_returns').get()).empty, true);
     await db.recursiveDelete(store);
   });
 
