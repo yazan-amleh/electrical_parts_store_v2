@@ -10,7 +10,6 @@ import '../../../../infrastructure/queue/cloud_function_queue_fallback.dart';
 import '../../domain/entities/cheque.dart';
 import '../../domain/entities/cheque_settlement_request.dart';
 import '../../domain/entities/cheque_settlement_result.dart';
-import '../../domain/enums/cheque_settlement_action.dart';
 import '../../domain/enums/cheque_status.dart';
 import '../../domain/repositories/cheque_repository.dart';
 import '../mappers/cheque_firestore_mapper.dart';
