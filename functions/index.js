@@ -5295,6 +5295,7 @@ async function postSaleInTransaction(
 }
 
 
+
 function parseSaleReturnCommand(rawCommand) {
   const command = asObject(rawCommand, 'command');
   const storeId = safeId(command.storeId, 'storeId');
@@ -5303,6 +5304,35 @@ function parseSaleReturnCommand(rawCommand) {
     command.postingAccounts,
     'postingAccounts',
   );
+
+  let lines = null;
+  if (rawReturn.lines != null) {
+    if (!Array.isArray(rawReturn.lines) ||
+        rawReturn.lines.length === 0 ||
+        rawReturn.lines.length > MAX_LINES) {
+      invalid('Sale return lines must contain between 1 and 100 items.');
+    }
+    lines = rawReturn.lines.map((rawLine, index) => {
+      const line = asObject(
+        rawLine,
+        'saleReturn.lines[' + index + ']',
+      );
+      return {
+        lineId: safeId(
+          line.lineId,
+          'saleReturn.lines[' + index + '].lineId',
+        ),
+        quantityMilliUnits: positiveInt(
+          line.quantityMilliUnits,
+          'saleReturn.lines[' + index + '].quantityMilliUnits',
+        ),
+      };
+    });
+    if (new Set(lines.map((line) => line.lineId)).size !== lines.length) {
+      invalid('Sale return line ids must be unique.');
+    }
+  }
+
   const accounts = {
     settlementAccountId: optionalSafeId(
       postingAccounts.settlementAccountId,
@@ -5343,6 +5373,7 @@ function parseSaleReturnCommand(rawCommand) {
       ),
       postedAt: parseDate(rawReturn.postedAt, 'saleReturn.postedAt'),
       reason: optionalText(rawReturn.reason, 'saleReturn.reason'),
+      lines,
     },
     accounts,
   };
@@ -5356,6 +5387,47 @@ function storedSaleReturnInt(value, label) {
     );
   }
   return value;
+}
+
+function saleReturnAllocation(args) {
+  try {
+    return allocateCumulative(args);
+  } catch (error) {
+    throw new HttpsError(
+      'failed-precondition',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+function saleReturnTaxAllocation(args) {
+  try {
+    return allocateHeaderBySubtotal(args);
+  } catch (error) {
+    throw new HttpsError(
+      'failed-precondition',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+function cumulativeSaleReturnAmount(
+  sourceTotal,
+  sourceQuantity,
+  returnedQuantity,
+  label,
+) {
+  if (returnedQuantity === 0) {
+    return 0;
+  }
+  return saleReturnAllocation({
+    sourceTotal,
+    sourceQuantity,
+    alreadyReturnedQuantity: 0,
+    alreadyAllocated: 0,
+    returnQuantity: returnedQuantity,
+    label,
+  }).nextAllocated;
 }
 
 async function postSaleReturnInTransaction(
@@ -5412,6 +5484,9 @@ async function postSaleReturnInTransaction(
       returnId: command.saleReturn.id,
       originalSaleId: command.saleReturn.originalSaleId,
       journalEntryId,
+      returnStatus: existingReturn.data().completedOriginalSale === true
+        ? 'full'
+        : 'partial',
     };
   }
 
@@ -5437,6 +5512,7 @@ async function postSaleReturnInTransaction(
   if (original.returnStatus === 'full' || original.returnId) {
     conflict('The original sale has already been fully returned.');
   }
+
   const originalPostedAt = original.postedAt?.toDate?.();
   if (!(originalPostedAt instanceof Date) ||
       Number.isNaN(originalPostedAt.getTime())) {
@@ -5469,7 +5545,8 @@ async function postSaleReturnInTransaction(
     original.costTotalMinorUnits,
     'costTotalMinorUnits',
   );
-  if (checkedMinorAdd(subtotal, tax, 'Sale return total') !== total) {
+  if (subtotal <= 0 ||
+      checkedMinorAdd(subtotal, tax, 'Sale return source total') !== total) {
     throw new HttpsError(
       'failed-precondition',
       'Original sale totals do not reconcile.',
@@ -5599,6 +5676,512 @@ async function postSaleReturnInTransaction(
     );
   }
 
+  let rawLines = Array.isArray(original.lines) ? original.lines : null;
+  if (!rawLines || rawLines.length === 0) {
+    const lineSnapshot = await transaction.get(
+      originalSaleRef.collection('lines'),
+    );
+    rawLines = lineSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  }
+  if (!rawLines || rawLines.length === 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale has no verifiable line snapshot.',
+    );
+  }
+
+  const originalLines = [];
+  const originalLinesById = new Map();
+  let verifiedSubtotal = 0;
+  let verifiedCost = 0;
+  for (const rawLine of rawLines) {
+    const line = asObject(rawLine, 'stored sale line');
+    const lineId = safeId(line.id, 'stored sale line id');
+    if (originalLinesById.has(lineId)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Original sale contains duplicate line ids.',
+      );
+    }
+    const quantity = storedSaleReturnInt(
+      line.quantityMilliUnits,
+      'line.quantityMilliUnits',
+    );
+    const baseQuantity = storedSaleReturnInt(
+      line.baseQuantityMilliUnits,
+      'line.baseQuantityMilliUnits',
+    );
+    const lineTotal = storedSaleReturnInt(
+      line.totalMinorUnits,
+      'line.totalMinorUnits',
+    );
+    const lineCost = storedSaleReturnInt(
+      line.costTotalMinorUnits,
+      'line.costTotalMinorUnits',
+    );
+    if (quantity <= 0 || baseQuantity <= 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Original sale line quantity is invalid.',
+      );
+    }
+    if (line.isService === true && lineCost !== 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Service line has inventory cost in original sale.',
+      );
+    }
+
+    const normalized = {
+      id: lineId,
+      productId: safeId(line.productId, 'stored sale product id'),
+      description: stringValue(
+        line.description,
+        'stored sale line description',
+      ),
+      quantityMilliUnits: quantity,
+      baseQuantityMilliUnits: baseQuantity,
+      unitPriceMinorUnits: storedSaleReturnInt(
+        line.unitPriceMinorUnits,
+        'line.unitPriceMinorUnits',
+      ),
+      discountMinorUnits: storedSaleReturnInt(
+        line.discountMinorUnits,
+        'line.discountMinorUnits',
+      ),
+      totalMinorUnits: lineTotal,
+      unitCostMinorUnits: storedSaleReturnInt(
+        line.unitCostMinorUnits,
+        'line.unitCostMinorUnits',
+      ),
+      costTotalMinorUnits: lineCost,
+      unitId: line.unitId ?? null,
+      unitName: line.unitName ?? null,
+      isService: line.isService === true,
+    };
+    originalLines.push(normalized);
+    originalLinesById.set(lineId, normalized);
+    verifiedSubtotal = checkedMinorAdd(
+      verifiedSubtotal,
+      lineTotal,
+      'Original sale line subtotal',
+    );
+    verifiedCost = checkedMinorAdd(
+      verifiedCost,
+      lineCost,
+      'Original sale line cost',
+    );
+  }
+  if (verifiedSubtotal !== subtotal || verifiedCost !== cost) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale lines do not reconcile to its posted totals.',
+    );
+  }
+
+  const priorProjection = new Map();
+  const rawReturnedLines = original.returnedLines;
+  if (rawReturnedLines != null && !Array.isArray(rawReturnedLines)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale return projection is malformed.',
+    );
+  }
+  if (Array.isArray(rawReturnedLines)) {
+    for (const rawProjection of rawReturnedLines) {
+      const projection = asObject(
+        rawProjection,
+        'stored sale returned line projection',
+      );
+      const lineId = safeId(
+        projection.lineId,
+        'stored returned line id',
+      );
+      const sourceLine = originalLinesById.get(lineId);
+      if (!sourceLine || priorProjection.has(lineId)) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Original sale return projection has an invalid line id.',
+        );
+      }
+      const returnedQuantity = storedSaleReturnInt(
+        projection.returnedQuantityMilliUnits,
+        'returnedQuantityMilliUnits',
+      );
+      const returnedBaseQuantity = storedSaleReturnInt(
+        projection.returnedBaseQuantityMilliUnits,
+        'returnedBaseQuantityMilliUnits',
+      );
+      const allocatedSubtotal = storedSaleReturnInt(
+        projection.allocatedSubtotalMinorUnits,
+        'allocatedSubtotalMinorUnits',
+      );
+      const allocatedCost = storedSaleReturnInt(
+        projection.allocatedCostMinorUnits,
+        'allocatedCostMinorUnits',
+      );
+      if (returnedQuantity <= 0 ||
+          returnedQuantity > sourceLine.quantityMilliUnits) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Stored returned quantity exceeds the original sale line.',
+        );
+      }
+      const expectedBase = cumulativeSaleReturnAmount(
+        sourceLine.baseQuantityMilliUnits,
+        sourceLine.quantityMilliUnits,
+        returnedQuantity,
+        'stored return base quantity',
+      );
+      const expectedSubtotal = cumulativeSaleReturnAmount(
+        sourceLine.totalMinorUnits,
+        sourceLine.quantityMilliUnits,
+        returnedQuantity,
+        'stored return subtotal',
+      );
+      const expectedCost = cumulativeSaleReturnAmount(
+        sourceLine.costTotalMinorUnits,
+        sourceLine.quantityMilliUnits,
+        returnedQuantity,
+        'stored return cost',
+      );
+      if (returnedBaseQuantity !== expectedBase ||
+          allocatedSubtotal !== expectedSubtotal ||
+          allocatedCost !== expectedCost) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Stored sale return allocation does not reconcile.',
+        );
+      }
+      priorProjection.set(lineId, {
+        lineId,
+        returnedQuantityMilliUnits: returnedQuantity,
+        returnedBaseQuantityMilliUnits: returnedBaseQuantity,
+        allocatedSubtotalMinorUnits: allocatedSubtotal,
+        allocatedCostMinorUnits: allocatedCost,
+      });
+    }
+  }
+
+  if (original.returnStatus === 'partial' && priorProjection.size === 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Partial return status has no verifiable return projection.',
+    );
+  }
+  if (original.returnStatus == null && priorProjection.size > 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Return projection exists without a return status.',
+    );
+  }
+
+  let priorReturnedSubtotal = 0;
+  let priorReturnedCost = 0;
+  for (const projection of priorProjection.values()) {
+    priorReturnedSubtotal = checkedMinorAdd(
+      priorReturnedSubtotal,
+      projection.allocatedSubtotalMinorUnits,
+      'Stored returned subtotal',
+    );
+    priorReturnedCost = checkedMinorAdd(
+      priorReturnedCost,
+      projection.allocatedCostMinorUnits,
+      'Stored returned cost',
+    );
+  }
+  const storedReturnedSubtotal = original.returnedSubtotalMinorUnits == null
+    ? priorReturnedSubtotal
+    : storedSaleReturnInt(
+        original.returnedSubtotalMinorUnits,
+        'returnedSubtotalMinorUnits',
+      );
+  const storedReturnedCost = original.returnedCostMinorUnits == null
+    ? priorReturnedCost
+    : storedSaleReturnInt(
+        original.returnedCostMinorUnits,
+        'returnedCostMinorUnits',
+      );
+  const priorReturnedTax = original.returnedTaxMinorUnits == null
+    ? 0
+    : storedSaleReturnInt(
+        original.returnedTaxMinorUnits,
+        'returnedTaxMinorUnits',
+      );
+  if (storedReturnedSubtotal !== priorReturnedSubtotal ||
+      storedReturnedCost !== priorReturnedCost ||
+      priorReturnedSubtotal > subtotal ||
+      priorReturnedCost > cost ||
+      priorReturnedTax > tax) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Stored sale return totals do not reconcile.',
+    );
+  }
+  const expectedPriorTax = priorReturnedSubtotal === 0
+    ? 0
+    : saleReturnTaxAllocation({
+        sourceTotal: tax,
+        sourceSubtotal: subtotal,
+        alreadyReturnedSubtotal: 0,
+        alreadyAllocated: 0,
+        returnSubtotal: priorReturnedSubtotal,
+        label: 'stored return tax',
+      }).nextAllocated;
+  if (priorReturnedTax !== expectedPriorTax) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Stored sale return tax allocation does not reconcile.',
+    );
+  }
+
+  const requestedByLine = new Map();
+  if (command.saleReturn.lines == null) {
+    for (const line of originalLines) {
+      const prior = priorProjection.get(line.id);
+      const already = prior?.returnedQuantityMilliUnits ?? 0;
+      const remaining = line.quantityMilliUnits - already;
+      if (remaining > 0) {
+        requestedByLine.set(line.id, remaining);
+      }
+    }
+  } else {
+    for (const line of command.saleReturn.lines) {
+      const source = originalLinesById.get(line.lineId);
+      if (!source) {
+        invalid('Sale return references a line outside the original sale.');
+      }
+      requestedByLine.set(line.lineId, line.quantityMilliUnits);
+    }
+  }
+  if (requestedByLine.size === 0) {
+    conflict('The original sale has no remaining quantity to return.');
+  }
+
+  const productUpdates = [];
+  const movementWrites = [];
+  const returnedLines = [];
+  const nextProjection = new Map(priorProjection);
+  let returnSubtotal = 0;
+  let returnCost = 0;
+
+  for (const [lineId, requestedQuantity] of requestedByLine) {
+    const line = originalLinesById.get(lineId);
+    const prior = priorProjection.get(lineId) || {
+      lineId,
+      returnedQuantityMilliUnits: 0,
+      returnedBaseQuantityMilliUnits: 0,
+      allocatedSubtotalMinorUnits: 0,
+      allocatedCostMinorUnits: 0,
+    };
+
+    const subtotalAllocation = saleReturnAllocation({
+      sourceTotal: line.totalMinorUnits,
+      sourceQuantity: line.quantityMilliUnits,
+      alreadyReturnedQuantity: prior.returnedQuantityMilliUnits,
+      alreadyAllocated: prior.allocatedSubtotalMinorUnits,
+      returnQuantity: requestedQuantity,
+      label: 'sale return line subtotal',
+    });
+    const costAllocation = saleReturnAllocation({
+      sourceTotal: line.costTotalMinorUnits,
+      sourceQuantity: line.quantityMilliUnits,
+      alreadyReturnedQuantity: prior.returnedQuantityMilliUnits,
+      alreadyAllocated: prior.allocatedCostMinorUnits,
+      returnQuantity: requestedQuantity,
+      label: 'sale return line cost',
+    });
+    const baseAllocation = saleReturnAllocation({
+      sourceTotal: line.baseQuantityMilliUnits,
+      sourceQuantity: line.quantityMilliUnits,
+      alreadyReturnedQuantity: prior.returnedQuantityMilliUnits,
+      alreadyAllocated: prior.returnedBaseQuantityMilliUnits,
+      returnQuantity: requestedQuantity,
+      label: 'sale return line base quantity',
+    });
+
+    const priorDiscount = cumulativeSaleReturnAmount(
+      line.discountMinorUnits,
+      line.quantityMilliUnits,
+      prior.returnedQuantityMilliUnits,
+      'stored return discount',
+    );
+    const nextDiscount = cumulativeSaleReturnAmount(
+      line.discountMinorUnits,
+      line.quantityMilliUnits,
+      subtotalAllocation.nextReturnedQuantity,
+      'sale return discount',
+    );
+    const returnedDiscount = nextDiscount - priorDiscount;
+
+    returnSubtotal = checkedMinorAdd(
+      returnSubtotal,
+      subtotalAllocation.allocated,
+      'Sale return subtotal',
+    );
+    returnCost = checkedMinorAdd(
+      returnCost,
+      costAllocation.allocated,
+      'Sale return cost',
+    );
+
+    const projection = {
+      lineId,
+      returnedQuantityMilliUnits:
+        subtotalAllocation.nextReturnedQuantity,
+      returnedBaseQuantityMilliUnits: baseAllocation.nextAllocated,
+      allocatedSubtotalMinorUnits: subtotalAllocation.nextAllocated,
+      allocatedCostMinorUnits: costAllocation.nextAllocated,
+    };
+    nextProjection.set(lineId, projection);
+
+    returnedLines.push({
+      id: line.id,
+      productId: line.productId,
+      description: line.description,
+      quantityMilliUnits: requestedQuantity,
+      baseQuantityMilliUnits: baseAllocation.allocated,
+      unitPriceMinorUnits: line.unitPriceMinorUnits,
+      discountMinorUnits: returnedDiscount,
+      totalMinorUnits: subtotalAllocation.allocated,
+      unitCostMinorUnits: line.unitCostMinorUnits,
+      costTotalMinorUnits: costAllocation.allocated,
+      unitId: line.unitId,
+      unitName: line.unitName,
+      isService: line.isService,
+    });
+
+    if (line.isService) {
+      continue;
+    }
+    if (baseAllocation.allocated <= 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Returned inventory quantity rounded to zero.',
+      );
+    }
+
+    const productRef = storeRef.collection('products').doc(line.productId);
+    const productSnapshot = await transaction.get(productRef);
+    if (!productSnapshot.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Returned product no longer exists: ' + line.productId,
+      );
+    }
+    const product = productSnapshot.data();
+    if (product.storeId !== command.storeId ||
+        product.currency !== currency ||
+        product.isService === true) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Returned product projection is incompatible.',
+      );
+    }
+    const currentQuantity = storedSaleReturnInt(
+      product.quantityOnHandMilliUnits,
+      'product.quantityOnHandMilliUnits',
+    );
+    const currentValue = storedSaleReturnInt(
+      product.inventoryValueMinorUnits,
+      'product.inventoryValueMinorUnits',
+    );
+    const nextQuantity = checkedMinorAdd(
+      currentQuantity,
+      baseAllocation.allocated,
+      'Sale return inventory quantity',
+    );
+    const nextValue = checkedMinorAdd(
+      currentValue,
+      costAllocation.allocated,
+      'Sale return inventory value',
+    );
+    const nextUnitCost = divideAndRound(nextValue, nextQuantity);
+    productUpdates.push({
+      productRef,
+      nextQuantity,
+      nextValue,
+      nextUnitCost,
+    });
+
+    const movementId = command.saleReturn.id + '-inventory-' + lineId;
+    const movementKey =
+      command.saleReturn.idempotencyKey + ':inventory:' + lineId;
+    const movementRef = storeRef
+      .collection('inventory_movements')
+      .doc(movementId);
+    const movementKeyRef = storeRef
+      .collection('inventory_idempotency')
+      .doc(movementKey);
+    if ((await transaction.get(movementRef)).exists ||
+        (await transaction.get(movementKeyRef)).exists) {
+      conflict('Sale return inventory identity already exists.');
+    }
+    movementWrites.push({
+      movementId,
+      movementKey,
+      movementRef,
+      movementKeyRef,
+      productId: line.productId,
+      baseQuantity: baseAllocation.allocated,
+      lineCost: costAllocation.allocated,
+      unitCost: line.unitCostMinorUnits,
+    });
+  }
+
+  if (returnSubtotal === 0 && returnCost === 0) {
+    invalid('The selected return lines have no financial or inventory effect.');
+  }
+
+  const nextReturnedSubtotal = checkedMinorAdd(
+    priorReturnedSubtotal,
+    returnSubtotal,
+    'Cumulative returned subtotal',
+  );
+  const nextReturnedCost = checkedMinorAdd(
+    priorReturnedCost,
+    returnCost,
+    'Cumulative returned cost',
+  );
+  const taxAllocation = returnSubtotal === 0
+    ? {
+        allocated: 0,
+        nextAllocated: priorReturnedTax,
+      }
+    : saleReturnTaxAllocation({
+        sourceTotal: tax,
+        sourceSubtotal: subtotal,
+        alreadyReturnedSubtotal: priorReturnedSubtotal,
+        alreadyAllocated: priorReturnedTax,
+        returnSubtotal,
+        label: 'sale return tax',
+      });
+  const returnTax = taxAllocation.allocated;
+  const nextReturnedTax = taxAllocation.nextAllocated;
+  const returnTotal = checkedMinorAdd(
+    returnSubtotal,
+    returnTax,
+    'Sale return total',
+  );
+
+  const allComplete = originalLines.every((line) => {
+    const projection = nextProjection.get(line.id);
+    return projection?.returnedQuantityMilliUnits ===
+      line.quantityMilliUnits;
+  });
+  if (allComplete &&
+      (nextReturnedSubtotal !== subtotal ||
+       nextReturnedCost !== cost ||
+       nextReturnedTax !== tax)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Completed sale return does not reconcile to the original invoice.',
+    );
+  }
+
   const accountIds = [
     paymentAccountId,
     command.accounts.salesReturnsAccountId,
@@ -5610,7 +6193,10 @@ async function postSaleReturnInTransaction(
     invalid('Sale return posting accounts must be distinct.');
   }
   const accountRefs = new Map(
-    accountIds.map((id) => [id, storeRef.collection('accounts').doc(id)]),
+    accountIds.map((id) => [
+      id,
+      storeRef.collection('accounts').doc(id),
+    ]),
   );
   const accountSnapshots = new Map();
   const balanceRefs = new Map();
@@ -5678,177 +6264,11 @@ async function postSaleReturnInTransaction(
     );
   }
 
-  let rawLines = Array.isArray(original.lines) ? original.lines : null;
-  if (!rawLines || rawLines.length === 0) {
-    const lineSnapshot = await transaction.get(originalSaleRef.collection('lines'));
-    rawLines = lineSnapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
-  }
-  if (!rawLines.length) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Original sale has no verifiable line snapshot.',
-    );
-  }
-
-  const productUpdates = [];
-  const movementWrites = [];
-  const returnedLines = [];
-  let verifiedSubtotal = 0;
-  let verifiedCost = 0;
-  for (const rawLine of rawLines) {
-    const line = asObject(rawLine, 'stored sale line');
-    const lineId = safeId(line.id, 'stored sale line id');
-    const productId = safeId(line.productId, 'stored sale product id');
-    const lineTotal = storedSaleReturnInt(
-      line.totalMinorUnits,
-      'line.totalMinorUnits',
-    );
-    const lineCost = storedSaleReturnInt(
-      line.costTotalMinorUnits,
-      'line.costTotalMinorUnits',
-    );
-    verifiedSubtotal = checkedMinorAdd(
-      verifiedSubtotal,
-      lineTotal,
-      'Returned sale subtotal',
-    );
-    verifiedCost = checkedMinorAdd(
-      verifiedCost,
-      lineCost,
-      'Returned sale cost',
-    );
-    returnedLines.push({
-      id: lineId,
-      productId,
-      description: stringValue(
-        line.description,
-        'stored sale line description',
-      ),
-      quantityMilliUnits: storedSaleReturnInt(
-        line.quantityMilliUnits,
-        'line.quantityMilliUnits',
-      ),
-      baseQuantityMilliUnits: storedSaleReturnInt(
-        line.baseQuantityMilliUnits,
-        'line.baseQuantityMilliUnits',
-      ),
-      unitPriceMinorUnits: storedSaleReturnInt(
-        line.unitPriceMinorUnits,
-        'line.unitPriceMinorUnits',
-      ),
-      discountMinorUnits: storedSaleReturnInt(
-        line.discountMinorUnits,
-        'line.discountMinorUnits',
-      ),
-      totalMinorUnits: lineTotal,
-      unitCostMinorUnits: storedSaleReturnInt(
-        line.unitCostMinorUnits,
-        'line.unitCostMinorUnits',
-      ),
-      costTotalMinorUnits: lineCost,
-      unitId: line.unitId ?? null,
-      unitName: line.unitName ?? null,
-      isService: line.isService === true,
-    });
-    if (line.isService === true) {
-      if (lineCost !== 0) {
-        throw new HttpsError(
-          'failed-precondition',
-          'Service line has inventory cost in original sale.',
-        );
-      }
-      continue;
-    }
-    const baseQuantity = storedSaleReturnInt(
-      line.baseQuantityMilliUnits,
-      'line.baseQuantityMilliUnits',
-    );
-    if (baseQuantity <= 0) {
-      throw new HttpsError(
-        'failed-precondition',
-        'Original sale inventory quantity is invalid.',
-      );
-    }
-    const productRef = storeRef.collection('products').doc(productId);
-    const productSnapshot = await transaction.get(productRef);
-    if (!productSnapshot.exists) {
-      throw new HttpsError(
-        'failed-precondition',
-        'Returned product no longer exists: ' + productId,
-      );
-    }
-    const product = productSnapshot.data();
-    if (product.storeId !== command.storeId ||
-        product.currency !== currency ||
-        product.isService === true) {
-      throw new HttpsError(
-        'failed-precondition',
-        'Returned product projection is incompatible.',
-      );
-    }
-    const currentQuantity = storedSaleReturnInt(
-      product.quantityOnHandMilliUnits,
-      'product.quantityOnHandMilliUnits',
-    );
-    const currentValue = storedSaleReturnInt(
-      product.inventoryValueMinorUnits,
-      'product.inventoryValueMinorUnits',
-    );
-    const nextQuantity = checkedMinorAdd(
-      currentQuantity,
-      baseQuantity,
-      'Sale return inventory quantity',
-    );
-    const nextValue = checkedMinorAdd(
-      currentValue,
-      lineCost,
-      'Sale return inventory value',
-    );
-    const nextUnitCost = divideAndRound(nextValue, nextQuantity);
-    productUpdates.push({
-      productRef,
-      nextQuantity,
-      nextValue,
-      nextUnitCost,
-    });
-
-    const movementId = command.saleReturn.id + '-inventory-' + lineId;
-    const movementKey = command.saleReturn.idempotencyKey + ':inventory:' + lineId;
-    const movementRef = storeRef.collection('inventory_movements').doc(movementId);
-    const movementKeyRef = storeRef
-      .collection('inventory_idempotency')
-      .doc(movementKey);
-    if ((await transaction.get(movementRef)).exists ||
-        (await transaction.get(movementKeyRef)).exists) {
-      conflict('Sale return inventory identity already exists.');
-    }
-    movementWrites.push({
-      movementId,
-      movementKey,
-      movementRef,
-      movementKeyRef,
-      productId,
-      baseQuantity,
-      lineCost,
-      unitCost: storedSaleReturnInt(
-        line.unitCostMinorUnits,
-        'line.unitCostMinorUnits',
-      ),
-    });
-  }
-  if (verifiedSubtotal !== subtotal || verifiedCost !== cost) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Original sale lines do not reconcile to its posted totals.',
-    );
-  }
-
-  let customerRef = null;
   let customerLedgerRef = null;
   let customerBalanceRef = null;
   let customerBalanceSnapshot = null;
-  if (isCredit) {
-    customerRef = storeRef.collection('parties').doc(customerId);
+  if (isCredit && returnTotal > 0) {
+    const customerRef = storeRef.collection('parties').doc(customerId);
     assertParty(
       await transaction.get(customerRef),
       command.storeId,
@@ -5868,63 +6288,76 @@ async function postSaleReturnInTransaction(
   }
 
   const accountDeltas = new Map();
-  addDelta(
-    accountDeltas,
-    command.accounts.salesReturnsAccountId,
-    subtotal,
-    0,
-  );
-  if (tax > 0) {
-    addDelta(accountDeltas, command.accounts.taxAccountId, tax, 0);
+  if (returnSubtotal > 0) {
+    addDelta(
+      accountDeltas,
+      command.accounts.salesReturnsAccountId,
+      returnSubtotal,
+      0,
+    );
   }
-  addDelta(accountDeltas, paymentAccountId, 0, total);
-  if (cost > 0) {
+  if (returnTax > 0) {
+    addDelta(
+      accountDeltas,
+      command.accounts.taxAccountId,
+      returnTax,
+      0,
+    );
+  }
+  if (returnTotal > 0) {
+    addDelta(accountDeltas, paymentAccountId, 0, returnTotal);
+  }
+  if (returnCost > 0) {
     addDelta(
       accountDeltas,
       command.accounts.inventoryAccountId,
-      cost,
+      returnCost,
       0,
     );
     addDelta(
       accountDeltas,
       command.accounts.costOfSalesAccountId,
       0,
-      cost,
+      returnCost,
     );
   }
 
-  const journalLines = [
-    {
+  const journalLines = [];
+  if (returnSubtotal > 0) {
+    journalLines.push({
       id: command.saleReturn.id + '-sales-return',
       accountId: command.accounts.salesReturnsAccountId,
       description: 'Sales return',
-      debitMinorUnits: subtotal,
+      debitMinorUnits: returnSubtotal,
       creditMinorUnits: 0,
-    },
-  ];
-  if (tax > 0) {
+    });
+  }
+  if (returnTax > 0) {
     journalLines.push({
       id: command.saleReturn.id + '-tax',
       accountId: command.accounts.taxAccountId,
       description: 'Output tax reversal',
-      debitMinorUnits: tax,
+      debitMinorUnits: returnTax,
       creditMinorUnits: 0,
     });
   }
-  journalLines.push({
-    id: command.saleReturn.id + '-settlement',
-    accountId: paymentAccountId,
-    description: isCredit ? 'Customer receivable reversal' : 'Customer refund',
-    debitMinorUnits: 0,
-    creditMinorUnits: total,
-  });
-  if (cost > 0) {
+  if (returnTotal > 0) {
+    journalLines.push({
+      id: command.saleReturn.id + '-settlement',
+      accountId: paymentAccountId,
+      description:
+        isCredit ? 'Customer receivable reversal' : 'Customer refund',
+      debitMinorUnits: 0,
+      creditMinorUnits: returnTotal,
+    });
+  }
+  if (returnCost > 0) {
     journalLines.push(
       {
         id: command.saleReturn.id + '-inventory',
         accountId: command.accounts.inventoryAccountId,
         description: 'Inventory restored from sale return',
-        debitMinorUnits: cost,
+        debitMinorUnits: returnCost,
         creditMinorUnits: 0,
       },
       {
@@ -5932,16 +6365,19 @@ async function postSaleReturnInTransaction(
         accountId: command.accounts.costOfSalesAccountId,
         description: 'Cost of sales reversal',
         debitMinorUnits: 0,
-        creditMinorUnits: cost,
+        creditMinorUnits: returnCost,
       },
     );
+  }
+  if (journalLines.length < 2) {
+    invalid('Sale return must produce a balanced accounting effect.');
   }
   for (let i = 0; i < journalLines.length; i++) {
     journalLines[i].lineNumber = i + 1;
   }
   const journalTotal = checkedMinorAdd(
-    total,
-    cost,
+    returnTotal,
+    returnCost,
     'Sale return journal total',
   );
 
@@ -5982,7 +6418,7 @@ async function postSaleReturnInTransaction(
     idempotencyKey: journalKey,
     sourceType: 'saleReturn',
     sourceId: command.saleReturn.id,
-    description: command.saleReturn.reason || 'Full sale return',
+    description: command.saleReturn.reason || 'Sale return',
     status: 'posted',
     currency,
     totalDebitMinorUnits: journalTotal,
@@ -5999,7 +6435,7 @@ async function postSaleReturnInTransaction(
     });
   }
 
-  if (isCredit) {
+  if (isCredit && returnTotal > 0) {
     const prior = readPartyBalanceForPosting(customerBalanceSnapshot, {
       storeId: command.storeId,
       partyId: customerId,
@@ -6008,7 +6444,7 @@ async function postSaleReturnInTransaction(
     });
     const nextCredit = checkedMinorAdd(
       prior.credit,
-      total,
+      returnTotal,
       'Sale return customer credit',
     );
     const nextNet = checkedMinorAdd(
@@ -6024,7 +6460,7 @@ async function postSaleReturnInTransaction(
       sourceId: command.saleReturn.id,
       currency,
       debitMinorUnits: 0,
-      creditMinorUnits: total,
+      creditMinorUnits: returnTotal,
       description: command.saleReturn.reason || 'Sale return',
       postedAt: Timestamp.fromDate(command.saleReturn.postedAt),
     });
@@ -6041,12 +6477,18 @@ async function postSaleReturnInTransaction(
   }
 
   for (const accountId of accountIds) {
-    const prior = readBalanceForPosting(balanceSnapshots.get(accountId), {
-      storeId: command.storeId,
-      accountId,
-      currency,
-    });
-    const delta = accountDeltas.get(accountId) || {debit: 0, credit: 0};
+    const prior = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId) || {
+      debit: 0,
+      credit: 0,
+    };
     const nextDebit = checkedMinorAdd(
       prior.debit,
       delta.debit,
@@ -6073,6 +6515,13 @@ async function postSaleReturnInTransaction(
     });
   }
 
+  const returnType =
+    command.saleReturn.lines == null &&
+    priorReturnedSubtotal === 0 &&
+    allComplete
+      ? 'full'
+      : 'partial';
+
   transaction.set(returnRef, {
     storeId: command.storeId,
     idempotencyKey: command.saleReturn.idempotencyKey,
@@ -6081,24 +6530,38 @@ async function postSaleReturnInTransaction(
     postedAt: Timestamp.fromDate(command.saleReturn.postedAt),
     reason: command.saleReturn.reason,
     currency,
-    subtotalMinorUnits: subtotal,
-    taxMinorUnits: tax,
-    totalMinorUnits: total,
-    costTotalMinorUnits: cost,
+    subtotalMinorUnits: returnSubtotal,
+    taxMinorUnits: returnTax,
+    totalMinorUnits: returnTotal,
+    costTotalMinorUnits: returnCost,
     paymentMethod,
     customerId,
     journalEntryId,
     status: 'posted',
-    returnType: 'full',
+    returnType,
+    completedOriginalSale: allComplete,
     lines: returnedLines,
     createdAt: FieldValue.serverTimestamp(),
   });
-  transaction.update(originalSaleRef, {
-    returnStatus: 'full',
-    returnId: command.saleReturn.id,
+
+  const projectionRows = originalLines
+    .map((line) => nextProjection.get(line.id))
+    .filter(Boolean);
+  const originalUpdate = {
+    returnStatus: allComplete ? 'full' : 'partial',
+    returnIds: FieldValue.arrayUnion(command.saleReturn.id),
+    returnedSubtotalMinorUnits: nextReturnedSubtotal,
+    returnedTaxMinorUnits: nextReturnedTax,
+    returnedCostMinorUnits: nextReturnedCost,
+    returnedLines: projectionRows,
     returnedAt: Timestamp.fromDate(command.saleReturn.postedAt),
     updatedAt: FieldValue.serverTimestamp(),
-  });
+  };
+  if (allComplete) {
+    originalUpdate.returnId = command.saleReturn.id;
+  }
+  transaction.update(originalSaleRef, originalUpdate);
+
   transaction.set(returnKeyRef, {
     storeId: command.storeId,
     returnId: command.saleReturn.id,
@@ -6120,6 +6583,7 @@ async function postSaleReturnInTransaction(
     returnId: command.saleReturn.id,
     originalSaleId: command.saleReturn.originalSaleId,
     journalEntryId,
+    returnStatus: allComplete ? 'full' : 'partial',
   };
 }
 
