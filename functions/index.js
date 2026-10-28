@@ -5235,6 +5235,28 @@ function parsePurchaseOrderReceiveCommand(rawCommand) {
     invalid('Unsupported purchase payment method.');
   }
 
+  let lines = null;
+  if (command.lines != null) {
+    if (!Array.isArray(command.lines) ||
+        command.lines.length === 0 ||
+        command.lines.length > MAX_LINES) {
+      invalid('Receipt lines must contain between 1 and 100 items.');
+    }
+    lines = command.lines.map((rawLine, index) => {
+      const line = asObject(rawLine, 'lines[' + index + ']');
+      return {
+        lineId: safeId(line.lineId, 'receipt line id'),
+        quantityMilliUnits: positiveInt(
+          line.quantityMilliUnits,
+          'receipt quantityMilliUnits',
+        ),
+      };
+    });
+    if (new Set(lines.map((line) => line.lineId)).size !== lines.length) {
+      invalid('Receipt line ids must be unique.');
+    }
+  }
+
   const postingAccounts = asObject(
     command.postingAccounts,
     'postingAccounts',
@@ -5281,6 +5303,7 @@ function parsePurchaseOrderReceiveCommand(rawCommand) {
     paymentMethod,
     currency: stringValue(command.currency, 'currency'),
     taxMinorUnits,
+    lines,
     accounts,
   };
 }
