@@ -9,6 +9,7 @@ SalesInvoiceSummary sale({
   String id = 'sale-1',
   String customer = 'customer-1',
   String currency = 'ILS',
+  bool returned = false,
 }) {
   return SalesInvoiceSummary(
     id: id,
@@ -22,6 +23,9 @@ SalesInvoiceSummary sale({
     cost: Money(minorUnits: 6000, currency: currency),
     journalEntryId: 'journal-1',
     description: 'Read-only report',
+    returnStatus: returned ? 'full' : null,
+    returnId: returned ? 'full-return-$id' : null,
+    returnedAt: returned ? DateTime.utc(2026, 10, 28) : null,
   );
 }
 
@@ -54,6 +58,17 @@ void main() {
     expect(csv, contains("'=SUM(2,3)"));
     expect(csv, contains("'  @HYPERLINK"));
     expect(csv, contains('""unsafe""'));
+  });
+
+  test('CSV exposes immutable full-return state', () {
+    const exporter = SalesInvoiceSelectionExport();
+    final csv = exporter.csv(
+      invoices: [sale(id: 'returned-1', returned: true)],
+      customerNames: const {'customer-1': 'عميل'},
+    );
+    expect(csv, contains('return_status'));
+    expect(csv, contains('"full"'));
+    expect(csv, contains('"full-return-returned-1"'));
   });
 
   test('detailed invoice PDF is generated from verified line data', () async {
