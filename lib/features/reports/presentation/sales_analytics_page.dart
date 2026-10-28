@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 
+import '../../../core/idempotency/idempotency_key.dart';
 import '../../../core/money/money.dart';
 import '../../../core/quantity/quantity.dart';
 import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
+import '../../sales/domain/entities/sale_return.dart';
+import '../../sales/domain/repositories/sale_repository.dart';
 import '../domain/entities/sales_analytics.dart';
 import '../domain/entities/sales_invoice_report.dart';
 import '../domain/repositories/reports_repository.dart';
@@ -20,6 +24,7 @@ class SalesAnalyticsPage extends StatefulWidget {
   const SalesAnalyticsPage({
     required this.repository,
     required this.documentBuilder,
+    required this.saleRepository,
     required this.user,
     required this.membership,
     super.key,
@@ -27,6 +32,7 @@ class SalesAnalyticsPage extends StatefulWidget {
 
   final ReportsRepository? repository;
   final ReportDocumentBuilder? documentBuilder;
+  final SaleRepository? saleRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -49,6 +55,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
   int _reportEpoch = 0;
   bool _isLoading = true;
   bool _isExporting = false;
+  String? _returningInvoiceId;
   String? _errorMessage;
 
   StoreContext get _context {
@@ -681,6 +688,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                     DataColumn(label: Text('قبل الضريبة')),
                     DataColumn(label: Text('الضريبة')),
                     DataColumn(label: Text('الإجمالي')),
+                    DataColumn(label: Text('الحالة')),
                     DataColumn(label: Text('مرجع القيد')),
                     DataColumn(label: Text('إجراءات')),
                   ],
@@ -704,6 +712,21 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                             DataCell(Text(item.subtotal.formatted)),
                             DataCell(Text(item.tax.formatted)),
                             DataCell(Text(item.total.formatted)),
+                            DataCell(
+                              Chip(
+                                avatar: Icon(
+                                  item.isFullyReturned
+                                      ? Icons.undo
+                                      : Icons.check_circle_outline,
+                                  size: 16,
+                                ),
+                                label: Text(
+                                  item.isFullyReturned
+                                      ? 'مُرجعة بالكامل'
+                                      : 'مرحّلة',
+                                ),
+                              ),
+                            ),
                             DataCell(SelectableText(item.journalEntryId)),
                             DataCell(Row(
                               mainAxisSize: MainAxisSize.min,
@@ -729,6 +752,23 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                                   icon: const Icon(
                                     Icons.picture_as_pdf_outlined,
                                   ),
+                                ),
+                                IconButton(
+                                  tooltip: item.isFullyReturned
+                                      ? 'الفاتورة مُرجعة بالكامل'
+                                      : 'إرجاع الفاتورة بالكامل',
+                                  onPressed: _canReturnInvoice(item)
+                                      ? () => _returnFullInvoice(item)
+                                      : null,
+                                  icon: _returningInvoiceId == item.id
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.undo_outlined),
                                 ),
                               ],
                             )),
@@ -919,6 +959,145 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     } finally {
       if (mounted) {
         setState(() => _isExporting = false);
+      }
+    }
+  }
+
+  bool _canReturnInvoice(SalesInvoiceSummary invoice) {
+    final role = widget.membership.role;
+    final authorized = role.canManageSales || role.canPostAccounting;
+    final supportedPayment = const {'cash', 'bank', 'card', 'credit'}
+        .contains(invoice.paymentMethod);
+    return widget.saleRepository != null &&
+        authorized &&
+        supportedPayment &&
+        !invoice.isFullyReturned &&
+        _returningInvoiceId == null &&
+        !_isExporting;
+  }
+
+  SaleReturnPostingAccounts _returnAccounts(SalesInvoiceSummary invoice) {
+    String? settlementAccountId;
+    switch (invoice.paymentMethod) {
+      case 'cash':
+        settlementAccountId = '1110';
+      case 'bank':
+        settlementAccountId = '1121';
+      case 'card':
+        settlementAccountId = '1160';
+      case 'credit':
+        settlementAccountId = null;
+    }
+    return SaleReturnPostingAccounts(
+      settlementAccountId: settlementAccountId,
+      customerReceivableAccountId:
+          invoice.paymentMethod == 'credit' ? '1140' : null,
+      salesReturnsAccountId: '4200',
+      inventoryAccountId: '1150',
+      costOfSalesAccountId: '5100',
+      taxAccountId: invoice.tax.isZero ? null : '2120',
+    );
+  }
+
+  Future<void> _returnFullInvoice(SalesInvoiceSummary invoice) async {
+    final repository = widget.saleRepository;
+    if (repository == null || !_canReturnInvoice(invoice)) {
+      return;
+    }
+
+    final reasonController = TextEditingController(
+      text: 'إرجاع كامل للفاتورة ${invoice.id}',
+    );
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('تأكيد إرجاع الفاتورة بالكامل'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'سيتم عكس كامل الفاتورة ${invoice.id} محاسبياً ومخزنياً. '
+                'هذه العملية لا تحذف البيع الأصلي.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonController,
+                maxLength: 250,
+                decoration: const InputDecoration(
+                  labelText: 'سبب الإرجاع',
+                  hintText: 'اكتب سبب الإرجاع',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                reasonController.text.trim(),
+              ),
+              icon: const Icon(Icons.undo),
+              label: const Text('تأكيد الإرجاع الكامل'),
+            ),
+          ],
+        ),
+      ),
+    );
+    reasonController.dispose();
+    if (!mounted || reason == null) {
+      return;
+    }
+
+    final returnId = 'full-return-${invoice.id}';
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
+    setState(() => _returningInvoiceId = invoice.id);
+    try {
+      final result = await repository.postFullSaleReturn(
+        context: _context,
+        saleReturn: SaleReturn(
+          id: returnId,
+          storeId: requestedStore,
+          idempotencyKey: IdempotencyKey(returnId),
+          originalSaleId: invoice.id,
+          postedAt: DateTime.now().toUtc(),
+          reason: reason.isEmpty ? null : reason,
+        ),
+        accounts: _returnAccounts(invoice),
+      );
+      if (!mounted ||
+          requestedStore != widget.membership.storeId ||
+          requestedUser != widget.user.id) {
+        return;
+      }
+      if (result is FailureResult<SaleReturnPostingResult>) {
+        _showMessage('تعذر إرجاع الفاتورة: ${result.failure.message}');
+        return;
+      }
+
+      final posted = (result as Success<SaleReturnPostingResult>).value;
+      _showMessage(
+        posted.alreadyReturned
+            ? 'الفاتورة كانت مُرجعة بالفعل؛ تم تأكيد نفس عملية الإرجاع.'
+            : 'تم إرجاع الفاتورة بالكامل وعكس القيد والمخزون.',
+      );
+      await _load();
+    } catch (error) {
+      if (mounted) {
+        _showMessage(
+          'تعذر التأكد من نتيجة الإرجاع. أعد المحاولة على نفس الفاتورة؛ '
+          'النظام يستخدم نفس هوية الإرجاع لمنع التكرار.',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _returningInvoiceId = null);
       }
     }
   }
