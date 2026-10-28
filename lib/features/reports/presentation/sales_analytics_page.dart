@@ -58,8 +58,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
   bool _isExporting = false;
   String? _returningInvoiceId;
   final Map<String, SaleReturn> _pendingFullReturns = <String, SaleReturn>{};
-  final Map<String, SaleReturn> _pendingPartialReturns =
-      <String, SaleReturn>{};
+  final Map<String, SaleReturn> _pendingPartialReturns = <String, SaleReturn>{};
   String? _errorMessage;
 
   StoreContext get _context {
@@ -1116,8 +1115,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     }
 
     final controllers = <String, TextEditingController>{
-      for (final line in returnableLines)
-        line.id: TextEditingController(),
+      for (final line in returnableLines) line.id: TextEditingController(),
     };
     final reasonController = TextEditingController(
       text: 'مردود جزئي للفاتورة ${invoice.id}',
@@ -1359,6 +1357,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       }
     }
   }
+
   Future<void> _returnFullInvoice(SalesInvoiceSummary invoice) async {
     final repository = widget.saleRepository;
     if (repository == null || !_canReturnRemainingInvoice(invoice)) {
@@ -1729,6 +1728,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     }
   }
 }
+
 class _PartialReturnDraft {
   const _PartialReturnDraft({
     required this.lines,
