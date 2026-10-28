@@ -12,6 +12,7 @@ function fingerprintPurchaseOrderReceipt(command) {
     paymentMethod: command.paymentMethod,
     currency: command.currency,
     taxMinorUnits: command.taxMinorUnits,
+    lines: command.lines,
     accounts: command.accounts,
   })).digest('hex');
 }
@@ -19,6 +20,7 @@ function fingerprintPurchaseOrderReceipt(command) {
 // The original V2 receipts did not store the posting account IDs. Verify the
 // historical purchase and journal, including account identities in the lines.
 function matchesLegacyPurchaseOrderReceipt(marker, order, purchase, journal, command) {
+  if (command.lines != null) return false;
   const completed = order.completedAt?.toDate?.();
   const posted = purchase.postedAt?.toDate?.();
   const postedJournal = journal.postedAt?.toDate?.();
