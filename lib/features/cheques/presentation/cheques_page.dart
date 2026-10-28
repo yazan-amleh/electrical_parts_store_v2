@@ -104,6 +104,7 @@ class _ChequesPageState extends State<ChequesPage> {
                   width: 170,
                   child: DropdownButtonFormField<String>(
                     value: _filter,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'الحالة',
                       isDense: true,
