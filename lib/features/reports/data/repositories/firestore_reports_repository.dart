@@ -531,6 +531,13 @@ class FirestoreReportsRepository implements ReportsRepository {
         pageSize: limit,
         maxDocuments: maxDocuments,
       );
+      final returnsPageFuture = _readPeriodDocuments(
+        collection: FirebasePaths.salesReturns(_firestore, context.storeId),
+        start: start,
+        end: end,
+        pageSize: limit,
+        maxDocuments: maxDocuments,
+      );
       final lookupSnapshots =
           await Future.wait<QuerySnapshot<Map<String, dynamic>>>([
         FirebasePaths.products(_firestore, context.storeId).get(),
@@ -538,6 +545,7 @@ class FirestoreReportsRepository implements ReportsRepository {
         FirebasePaths.parties(_firestore, context.storeId).get(),
       ]);
       final salesPage = await salesPageFuture;
+      final returnsPage = await returnsPageFuture;
 
       // Historical V2 sales keep their lines only in a subcollection.
       // Read these in bounded batches. Never silently publish partial
@@ -555,9 +563,9 @@ class FirestoreReportsRepository implements ReportsRepository {
       }
       final recoveredLines = <String, List<Map<String, dynamic>>>{};
       for (var offset = 0; offset < legacySales.length; offset += 20) {
-        final end =
+        final batchEnd =
             offset + 20 < legacySales.length ? offset + 20 : legacySales.length;
-        final batch = legacySales.sublist(offset, end);
+        final batch = legacySales.sublist(offset, batchEnd);
         final lines = await Future.wait(
           batch.map((invoice) => invoice.reference.collection('lines').get()),
         );
@@ -607,23 +615,107 @@ class FirestoreReportsRepository implements ReportsRepository {
       final categoryRows = <String, _AnalyticsAccumulator>{};
       final customerRows = <String, _AnalyticsAccumulator>{};
 
+      void ensureCurrency(String transactionCurrency) {
+        if (currency == null) {
+          currency = transactionCurrency;
+          salesRevenue = Money.zero(currency: transactionCurrency);
+          salesCost = Money.zero(currency: transactionCurrency);
+          return;
+        }
+        if (transactionCurrency != currency) {
+          throw const FormatException(
+            'Sales analytics cannot combine different currencies.',
+          );
+        }
+      }
+
+      void applyLine({
+        required Map<String, dynamic> line,
+        required String rowCurrency,
+        required int sign,
+      }) {
+        final productId = _analyticsNullableString(line['productId']);
+        final product = productId == null ? null : productLookup[productId];
+        final fallbackLabel = _analyticsString(
+          line['description'],
+          productId ?? 'صنف غير معروف',
+        );
+        final productLabel = product?.name ?? fallbackLabel;
+        final categoryId = product?.categoryId ?? 'uncategorized';
+        final categoryLabel = categoryNames[categoryId] ?? 'غير مصنف';
+        final quantityMilliUnits = _analyticsInt(line['quantityMilliUnits']);
+        final factorMilliUnits = _analyticsInt(
+          line['unitFactorToBaseMilliUnits'],
+          1000,
+        );
+        final storedBaseQuantity = _analyticsInt(
+          line['baseQuantityMilliUnits'],
+          -1,
+        );
+        final baseQuantityMilliUnits = storedBaseQuantity >= 0
+            ? storedBaseQuantity
+            : _scaled(quantityMilliUnits, factorMilliUnits);
+        final lineRevenueMinorUnits = _analyticsInt(
+          line['totalMinorUnits'],
+          _nonNegative(
+            _scaled(
+                  _analyticsInt(line['unitPriceMinorUnits']),
+                  quantityMilliUnits,
+                ) -
+                _analyticsInt(line['discountMinorUnits']),
+          ),
+        );
+        final isService =
+            line['isService'] is bool && line['isService'] as bool;
+        final lineCostMinorUnits = _analyticsInt(
+          line['costTotalMinorUnits'],
+          isService
+              ? 0
+              : _scaled(
+                  _analyticsInt(line['unitCostMinorUnits']),
+                  baseQuantityMilliUnits,
+                ),
+        );
+
+        _addAnalyticsRow(
+          productRows,
+          key: productId ?? fallbackLabel,
+          label: productLabel,
+          quantityMilliUnits: sign * baseQuantityMilliUnits,
+          revenueMinorUnits: sign * lineRevenueMinorUnits,
+          costMinorUnits: sign * lineCostMinorUnits,
+          currency: rowCurrency,
+        );
+        _addAnalyticsRow(
+          categoryRows,
+          key: categoryId,
+          label: categoryLabel,
+          quantityMilliUnits: sign * baseQuantityMilliUnits,
+          revenueMinorUnits: sign * lineRevenueMinorUnits,
+          costMinorUnits: sign * lineCostMinorUnits,
+          currency: rowCurrency,
+        );
+      }
+
       for (final document in salesPage.documents) {
         final data = document.data() ?? const <String, dynamic>{};
         final postedAt = _analyticsDate(data['postedAt']);
-        if (postedAt == null) {
-          continue;
+        if (postedAt == null ||
+            data['storeId'] != context.storeId ||
+            data['status'] != 'posted') {
+          return FailureResult<SalesAnalytics>(
+            ValidationFailure(
+              'Sale ${document.id} has invalid tenant, status, or date.',
+            ),
+          );
         }
 
         final saleCurrency = _analyticsString(data['currency'], 'ILS');
-        if (currency == null) {
-          currency = saleCurrency;
-          salesRevenue = Money.zero(currency: saleCurrency);
-          salesCost = Money.zero(currency: saleCurrency);
-        } else if (saleCurrency != currency) {
-          return const FailureResult<SalesAnalytics>(
-            ValidationFailure(
-              'Sales analytics cannot combine different currencies.',
-            ),
+        try {
+          ensureCurrency(saleCurrency);
+        } on FormatException catch (error) {
+          return FailureResult<SalesAnalytics>(
+            ValidationFailure(error.message),
           );
         }
 
@@ -631,9 +723,74 @@ class FirestoreReportsRepository implements ReportsRepository {
           data['totalMinorUnits'],
           _analyticsInt(data['amountMinorUnits']),
         );
+        final taxMinorUnits = _analyticsInt(data['taxMinorUnits']);
+        final expectedSubtotal = _analyticsInt(
+          data['subtotalMinorUnits'],
+          saleTotalMinorUnits - taxMinorUnits,
+        );
         final saleCostMinorUnits = _analyticsInt(data['costTotalMinorUnits']);
+        if (saleTotalMinorUnits < 0 ||
+            taxMinorUnits < 0 ||
+            expectedSubtotal < 0 ||
+            saleCostMinorUnits < 0 ||
+            expectedSubtotal + taxMinorUnits != saleTotalMinorUnits) {
+          return FailureResult<SalesAnalytics>(
+            ValidationFailure('Sale ${document.id} has invalid totals.'),
+          );
+        }
+
+        final rawLines = data['lines'] ?? recoveredLines[document.id];
+        if (rawLines is! List || rawLines.isEmpty) {
+          return FailureResult<SalesAnalytics>(
+            ValidationFailure(
+              'Sale ${document.id} has no verifiable invoice lines.',
+            ),
+          );
+        }
+        var verifiedSubtotal = 0;
+        var verifiedCost = 0;
+        for (final rawLine in rawLines) {
+          if (rawLine is! Map) {
+            return FailureResult<SalesAnalytics>(
+              ValidationFailure(
+                'Sale ${document.id} has malformed invoice lines.',
+              ),
+            );
+          }
+          final line = Map<String, dynamic>.from(rawLine);
+          final quantityMilliUnits = _analyticsInt(line['quantityMilliUnits']);
+          final lineRevenueMinorUnits = _analyticsInt(
+            line['totalMinorUnits'],
+            -1,
+          );
+          final lineCostMinorUnits = _analyticsInt(
+            line['costTotalMinorUnits'],
+            -1,
+          );
+          if (quantityMilliUnits <= 0 ||
+              lineRevenueMinorUnits < 0 ||
+              lineCostMinorUnits < 0) {
+            return FailureResult<SalesAnalytics>(
+              ValidationFailure(
+                'Sale ${document.id} contains invalid invoice line totals.',
+              ),
+            );
+          }
+          verifiedSubtotal += lineRevenueMinorUnits;
+          verifiedCost += lineCostMinorUnits;
+          applyLine(line: line, rowCurrency: saleCurrency, sign: 1);
+        }
+        if (verifiedSubtotal != expectedSubtotal ||
+            verifiedCost != saleCostMinorUnits) {
+          return FailureResult<SalesAnalytics>(
+            ValidationFailure(
+              'Sale ${document.id} lines do not match posted totals.',
+            ),
+          );
+        }
+
         salesRevenue += Money(
-          minorUnits: saleTotalMinorUnits,
+          minorUnits: expectedSubtotal,
           currency: saleCurrency,
         );
         salesCost += Money(
@@ -656,16 +813,58 @@ class FirestoreReportsRepository implements ReportsRepository {
           key: customerKey,
           label: customerLabel,
           quantityMilliUnits: 0,
-          revenueMinorUnits: saleTotalMinorUnits,
+          revenueMinorUnits: expectedSubtotal,
           costMinorUnits: saleCostMinorUnits,
           currency: saleCurrency,
         );
+      }
 
-        final rawLines = data['lines'] ?? recoveredLines[document.id];
+      // Returns affect the period in which the return was posted. They do not
+      // rewrite the original sale period. Full-return documents carry the
+      // immutable original line snapshot so product/category analytics can be
+      // reversed using the exact posted revenue and COGS amounts.
+      for (final document in returnsPage.documents) {
+        final data = document.data() ?? const <String, dynamic>{};
+        if (data['storeId'] != context.storeId ||
+            data['status'] != 'posted' ||
+            data['returnType'] != 'full' ||
+            _analyticsDate(data['postedAt']) == null) {
+          return FailureResult<SalesAnalytics>(
+            ValidationFailure(
+              'Sale return ${document.id} has invalid tenant or status.',
+            ),
+          );
+        }
+        final returnCurrency = _analyticsString(data['currency'], 'ILS');
+        try {
+          ensureCurrency(returnCurrency);
+        } on FormatException catch (error) {
+          return FailureResult<SalesAnalytics>(
+            ValidationFailure(error.message),
+          );
+        }
+
+        final subtotal = _analyticsInt(data['subtotalMinorUnits'], -1);
+        final tax = _analyticsInt(data['taxMinorUnits'], -1);
+        final total = _analyticsInt(data['totalMinorUnits'], -1);
+        final returnedCost = _analyticsInt(data['costTotalMinorUnits'], -1);
+        if (subtotal < 0 ||
+            tax < 0 ||
+            total < 0 ||
+            returnedCost < 0 ||
+            subtotal + tax != total) {
+          return FailureResult<SalesAnalytics>(
+            ValidationFailure(
+              'Sale return ${document.id} has invalid totals.',
+            ),
+          );
+        }
+
+        final rawLines = data['lines'];
         if (rawLines is! List || rawLines.isEmpty) {
           return FailureResult<SalesAnalytics>(
             ValidationFailure(
-              'Sale ${document.id} has no verifiable invoice lines.',
+              'Sale return ${document.id} has no immutable line snapshot.',
             ),
           );
         }
@@ -675,84 +874,50 @@ class FirestoreReportsRepository implements ReportsRepository {
           if (rawLine is! Map) {
             return FailureResult<SalesAnalytics>(
               ValidationFailure(
-                'Sale ${document.id} has malformed invoice lines.',
+                'Sale return ${document.id} has malformed lines.',
               ),
             );
           }
           final line = Map<String, dynamic>.from(rawLine);
-          final productId = _analyticsNullableString(line['productId']);
-          final product = productId == null ? null : productLookup[productId];
-          final fallbackLabel = _analyticsString(
-            line['description'],
-            productId ?? 'صنف غير معروف',
-          );
-          final productLabel = product?.name ?? fallbackLabel;
-          final categoryId = product?.categoryId ?? 'uncategorized';
-          final categoryLabel = categoryNames[categoryId] ?? 'غير مصنف';
-          final quantityMilliUnits = _analyticsInt(line['quantityMilliUnits']);
-          final factorMilliUnits = _analyticsInt(
-            line['unitFactorToBaseMilliUnits'],
-            1000,
-          );
-          final baseQuantityMilliUnits = _scaled(
-            quantityMilliUnits,
-            factorMilliUnits,
-          );
-          final lineRevenueMinorUnits = _analyticsInt(
-            line['totalMinorUnits'],
-            _nonNegative(
-              _scaled(
-                    _analyticsInt(line['unitPriceMinorUnits']),
-                    quantityMilliUnits,
-                  ) -
-                  _analyticsInt(line['discountMinorUnits']),
-            ),
-          );
-          final isService =
-              line['isService'] is bool && line['isService'] as bool;
-          final lineCostMinorUnits = _analyticsInt(
-            line['costTotalMinorUnits'],
-            isService
-                ? 0
-                : _scaled(
-                    _analyticsInt(line['unitCostMinorUnits']),
-                    baseQuantityMilliUnits,
-                  ),
-          );
-          verifiedSubtotal += lineRevenueMinorUnits;
-          verifiedCost += lineCostMinorUnits;
-
-          _addAnalyticsRow(
-            productRows,
-            key: productId ?? fallbackLabel,
-            label: productLabel,
-            quantityMilliUnits: baseQuantityMilliUnits,
-            revenueMinorUnits: lineRevenueMinorUnits,
-            costMinorUnits: lineCostMinorUnits,
-            currency: saleCurrency,
-          );
-          _addAnalyticsRow(
-            categoryRows,
-            key: categoryId,
-            label: categoryLabel,
-            quantityMilliUnits: baseQuantityMilliUnits,
-            revenueMinorUnits: lineRevenueMinorUnits,
-            costMinorUnits: lineCostMinorUnits,
-            currency: saleCurrency,
-          );
+          final lineRevenue = _analyticsInt(line['totalMinorUnits'], -1);
+          final lineCost = _analyticsInt(line['costTotalMinorUnits'], -1);
+          final quantity = _analyticsInt(line['quantityMilliUnits'], -1);
+          if (lineRevenue < 0 || lineCost < 0 || quantity <= 0) {
+            return FailureResult<SalesAnalytics>(
+              ValidationFailure(
+                'Sale return ${document.id} contains invalid line totals.',
+              ),
+            );
+          }
+          verifiedSubtotal += lineRevenue;
+          verifiedCost += lineCost;
+          applyLine(line: line, rowCurrency: returnCurrency, sign: -1);
         }
-        final expectedSubtotal = _analyticsInt(
-          data['subtotalMinorUnits'],
-          saleTotalMinorUnits - _analyticsInt(data['taxMinorUnits']),
-        );
-        if (verifiedSubtotal != expectedSubtotal ||
-            verifiedCost != saleCostMinorUnits) {
+        if (verifiedSubtotal != subtotal || verifiedCost != returnedCost) {
           return FailureResult<SalesAnalytics>(
             ValidationFailure(
-              'Sale ${document.id} lines do not match posted totals.',
+              'Sale return ${document.id} lines do not match return totals.',
             ),
           );
         }
+
+        salesRevenue -= Money(minorUnits: subtotal, currency: returnCurrency);
+        salesCost -= Money(minorUnits: returnedCost, currency: returnCurrency);
+
+        final customerId = _analyticsNullableString(data['customerId']);
+        final customerKey = customerId ?? 'walk-in';
+        final customerLabel = customerId == null
+            ? 'مبيعات نقدية / بدون عميل'
+            : (partyNames[customerId] ?? customerId);
+        _addAnalyticsRow(
+          customerRows,
+          key: customerKey,
+          label: customerLabel,
+          quantityMilliUnits: 0,
+          revenueMinorUnits: -subtotal,
+          costMinorUnits: -returnedCost,
+          currency: returnCurrency,
+        );
       }
 
       final analyticsCurrency = currency ?? 'ILS';
@@ -782,12 +947,17 @@ class FirestoreReportsRepository implements ReportsRepository {
           customerRows: List.unmodifiable(
             sortedCustomers.map((row) => row.toEntity()),
           ),
-          mayBeTruncated: salesPage.mayBeTruncated,
+          mayBeTruncated:
+              salesPage.mayBeTruncated || returnsPage.mayBeTruncated,
         ),
       );
     } on FirebaseException catch (error) {
       return FailureResult<SalesAnalytics>(
         InfrastructureFailure(error.message ?? error.code),
+      );
+    } on FormatException catch (error) {
+      return FailureResult<SalesAnalytics>(
+        ValidationFailure(error.message),
       );
     } catch (error) {
       return FailureResult<SalesAnalytics>(
