@@ -181,6 +181,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                     _buildPartySelector(isCustomer),
                     const SizedBox(height: 12),
                     TextField(
+                      key: const ValueKey('party-payment-amount'),
                       controller: _amountController,
                       enabled: !_isPosting,
                       keyboardType: const TextInputType.numberWithOptions(
@@ -285,6 +286,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                       const SizedBox(height: 10),
                     ],
                     FilledButton.icon(
+                      key: const ValueKey('party-payment-submit'),
                       onPressed: _isPosting ? null : _postPayment,
                       icon: _isPosting
                           ? const SizedBox(
