@@ -479,8 +479,7 @@ class _PurchaseOrdersPageState extends State<PurchaseOrdersPage> {
       inputTaxAccountId: draft.taxMinorUnits > 0 ? '1170' : null,
     );
     final now = DateTime.now().toUtc();
-    final receiptId =
-        'po-receipt-${order.id}-${now.microsecondsSinceEpoch}';
+    final receiptId = 'po-receipt-${order.id}-${now.microsecondsSinceEpoch}';
     final receipt = PurchaseOrderReceiptRequest(
       receiptId: receiptId,
       idempotencyKey: IdempotencyKey(receiptId),
@@ -733,8 +732,7 @@ class _ReceivePurchaseOrderDialogState
       }
       if (quantity.milliUnits > line.remainingQuantity.milliUnits) {
         setState(
-          () => _error =
-              'كمية ${line.productName} تتجاوز الكمية المتبقية.',
+          () => _error = 'كمية ${line.productName} تتجاوز الكمية المتبقية.',
         );
         return;
       }
