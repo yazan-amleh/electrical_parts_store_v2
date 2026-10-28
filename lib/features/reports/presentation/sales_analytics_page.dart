@@ -56,6 +56,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
   bool _isLoading = true;
   bool _isExporting = false;
   String? _returningInvoiceId;
+  final Map<String, SaleReturn> _pendingFullReturns = <String, SaleReturn>{};
   String? _errorMessage;
 
   StoreContext get _context {
@@ -83,6 +84,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       _invoices = null;
       _searchController.clear();
       _selectedInvoiceIds.clear();
+      _pendingFullReturns.clear();
       _selectionMode = false;
       _load();
     }
@@ -1006,26 +1008,35 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       return;
     }
 
+    final pending = _pendingFullReturns[invoice.id];
     final reasonController = TextEditingController(
-      text: 'إرجاع كامل للفاتورة ${invoice.id}',
+      text: pending?.reason ?? 'إرجاع كامل للفاتورة ${invoice.id}',
     );
     final reason = await showDialog<String>(
       context: context,
       builder: (dialogContext) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          title: const Text('تأكيد إرجاع الفاتورة بالكامل'),
+          title: Text(
+            pending == null
+                ? 'تأكيد إرجاع الفاتورة بالكامل'
+                : 'إعادة محاولة الإرجاع الكامل',
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'سيتم عكس كامل الفاتورة ${invoice.id} محاسبياً ومخزنياً. '
-                'هذه العملية لا تحذف البيع الأصلي.',
+                pending == null
+                    ? 'سيتم عكس كامل الفاتورة ${invoice.id} محاسبياً '
+                        'ومخزنياً. هذه العملية لا تحذف البيع الأصلي.'
+                    : 'ستُعاد محاولة نفس عملية الإرجاع السابقة بنفس '
+                        'المعرّف والتاريخ والسبب لمنع تكرار القيد.',
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: reasonController,
+                enabled: pending == null,
                 maxLength: 250,
                 decoration: const InputDecoration(
                   labelText: 'سبب الإرجاع',
@@ -1044,7 +1055,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                 reasonController.text.trim(),
               ),
               icon: const Icon(Icons.undo),
-              label: const Text('تأكيد الإرجاع الكامل'),
+              label: Text(
+                pending == null ? 'تأكيد الإرجاع الكامل' : 'إعادة المحاولة',
+              ),
             ),
           ],
         ),
@@ -1056,20 +1069,24 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     }
 
     final returnId = 'full-return-${invoice.id}';
+    final saleReturn = pending ??
+        SaleReturn(
+          id: returnId,
+          storeId: widget.membership.storeId,
+          idempotencyKey: IdempotencyKey(returnId),
+          originalSaleId: invoice.id,
+          postedAt: DateTime.now().toUtc(),
+          reason: reason.isEmpty ? null : reason,
+        );
+    _pendingFullReturns[invoice.id] = saleReturn;
+
     final requestedStore = widget.membership.storeId;
     final requestedUser = widget.user.id;
     setState(() => _returningInvoiceId = invoice.id);
     try {
       final result = await repository.postFullSaleReturn(
         context: _context,
-        saleReturn: SaleReturn(
-          id: returnId,
-          storeId: requestedStore,
-          idempotencyKey: IdempotencyKey(returnId),
-          originalSaleId: invoice.id,
-          postedAt: DateTime.now().toUtc(),
-          reason: reason.isEmpty ? null : reason,
-        ),
+        saleReturn: saleReturn,
         accounts: _returnAccounts(invoice),
       );
       if (!mounted ||
@@ -1078,11 +1095,15 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
         return;
       }
       if (result is FailureResult<SaleReturnPostingResult>) {
+        if (result.failure is! InfrastructureFailure) {
+          _pendingFullReturns.remove(invoice.id);
+        }
         _showMessage('تعذر إرجاع الفاتورة: ${result.failure.message}');
         return;
       }
 
       final posted = (result as Success<SaleReturnPostingResult>).value;
+      _pendingFullReturns.remove(invoice.id);
       _showMessage(
         posted.alreadyReturned
             ? 'الفاتورة كانت مُرجعة بالفعل؛ تم تأكيد نفس عملية الإرجاع.'
@@ -1093,7 +1114,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       if (mounted) {
         _showMessage(
           'تعذر التأكد من نتيجة الإرجاع. أعد المحاولة على نفس الفاتورة؛ '
-          'النظام يستخدم نفس هوية الإرجاع لمنع التكرار.',
+          'سيُعاد استخدام نفس الطلب المحاسبي حرفياً.',
         );
       }
     } finally {
