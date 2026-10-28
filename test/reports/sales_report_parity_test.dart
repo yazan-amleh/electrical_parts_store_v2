@@ -1,3 +1,4 @@
+import 'package:electrical_parts_store_v2/core/errors/failure.dart';
 import 'package:electrical_parts_store_v2/core/money/money.dart';
 import 'package:electrical_parts_store_v2/core/result/result.dart';
 import 'package:electrical_parts_store_v2/core/tenancy/store_context.dart';
@@ -130,6 +131,7 @@ class _Reports implements ReportsRepository {
 
 class _Returns implements SaleRepository {
   final submissions = <SaleReturn>[];
+  bool failFirst = false;
 
   @override
   Future<Result<SaleReturnPostingResult>> postFullSaleReturn({
@@ -138,6 +140,11 @@ class _Returns implements SaleRepository {
     required SaleReturnPostingAccounts accounts,
   }) async {
     submissions.add(saleReturn);
+    if (failFirst && submissions.length == 1) {
+      return const FailureResult(
+        InfrastructureFailure('Unknown network outcome'),
+      );
+    }
     return Success(
       SaleReturnPostingResult(
         returnId: saleReturn.id,
@@ -261,4 +268,57 @@ void main() {
     );
     expect(returns.submissions.single.originalSaleId, 'sale-100');
   });
+
+  testWidgets('unknown return outcome retries the exact same command',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1300, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final returns = _Returns()..failFirst = true;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SalesAnalyticsPage(
+          repository: _Reports(),
+          documentBuilder: null,
+          saleRepository: returns,
+          user: const AuthenticatedUser(
+            id: 'user-1',
+            email: 'test@example.com',
+          ),
+          membership: const StoreMembership(
+            storeId: 'store-1',
+            userId: 'user-1',
+            role: StoreRole.owner,
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final returnButton = find.byTooltip('إرجاع الفاتورة بالكامل');
+    await tester.ensureVisible(returnButton);
+    await tester.pumpAndSettle();
+    await tester.tap(returnButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تأكيد الإرجاع الكامل'));
+    await tester.pumpAndSettle();
+
+    expect(returns.submissions, hasLength(1));
+    final first = returns.submissions.single;
+
+    await tester.ensureVisible(returnButton);
+    await tester.pumpAndSettle();
+    await tester.tap(returnButton);
+    await tester.pumpAndSettle();
+    expect(find.text('إعادة محاولة الإرجاع الكامل'), findsOneWidget);
+    await tester.tap(find.text('إعادة المحاولة'));
+    await tester.pumpAndSettle();
+
+    expect(returns.submissions, hasLength(2));
+    final second = returns.submissions.last;
+    expect(second.id, first.id);
+    expect(second.idempotencyKey.value, first.idempotencyKey.value);
+    expect(second.postedAt, first.postedAt);
+    expect(second.reason, first.reason);
+  });
+
 }
