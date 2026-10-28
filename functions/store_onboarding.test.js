@@ -38,11 +38,11 @@ describe('store onboarding emulator: server authority and atomic creation', () =
     assert.equal(store.exists, true);
     assert.equal(store.data().ownerId, uid);
     assert.equal(store.data().currency, 'ILS');
-    assert.equal(store.data().initialChartVersion, 2);
-    assert.equal(store.data().initialChartAccountCount, 27);
-    assert.equal(store.data().accountingChartVersion, 2);
+    assert.equal(store.data().initialChartVersion, 3);
+    assert.equal(store.data().initialChartAccountCount, 28);
+    assert.equal(store.data().accountingChartVersion, 3);
     const accounts = await storeRef.collection('accounts').get();
-    assert.equal(accounts.size, 27);
+    assert.equal(accounts.size, 28);
     const cash = accounts.docs.find((doc) => doc.id === '1110');
     assert.equal(cash.data().storeId, first.storeId);
     assert.equal(cash.data().currency, 'ILS');
@@ -62,7 +62,7 @@ describe('store onboarding emulator: server authority and atomic creation', () =
     const again = await functions.createStore.run(request({ name: 'Electrical Shop' }, uid));
     assert.equal(again.storeId, first.storeId);
     assert.equal(again.alreadyCreated, true);
-    assert.equal((await storeRef.collection('accounts').get()).size, 27);
+    assert.equal((await storeRef.collection('accounts').get()).size, 28);
     await db.recursiveDelete(storeRef);
     await prefRef.delete();
   });
@@ -118,12 +118,14 @@ describe('store onboarding emulator: server authority and atomic creation', () =
       data: {storeId: store.id},
     });
     assert.equal(first.status, 'upgraded');
-    assert.equal(first.version, 2);
-    assert.deepEqual(first.addedAccountIds.sort(), ['3400', '4200']);
-    assert.equal((await store.get()).data().accountingChartVersion, 2);
+    assert.equal(first.version, 3);
+    assert.deepEqual(first.addedAccountIds.sort(), ['3400', '4200', '5200']);
+    assert.equal((await store.get()).data().accountingChartVersion, 3);
     assert.equal((await store.collection('accounts').doc('3400').get())
       .data().normalSide, 'credit');
     assert.equal((await store.collection('accounts').doc('4200').get())
+      .data().normalSide, 'debit');
+    assert.equal((await store.collection('accounts').doc('5200').get())
       .data().normalSide, 'debit');
     assert.equal((await store.collection('journal_entries').get()).empty, true);
     assert.equal((await store.collection('account_balances').get()).empty, true);
