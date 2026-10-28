@@ -5541,7 +5541,7 @@ async function postSaleReturnInTransaction(
     command.accounts.salesReturnsAccountId,
     command.accounts.inventoryAccountId,
     command.accounts.costOfSalesAccountId,
-    if (tax > 0) command.accounts.taxAccountId,
+    ...(tax > 0 ? [command.accounts.taxAccountId] : []),
   ].filter(Boolean);
   if (new Set(accountIds).size !== accountIds.length) {
     invalid('Sale return posting accounts must be distinct.');
