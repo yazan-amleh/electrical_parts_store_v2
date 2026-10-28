@@ -1,7 +1,7 @@
 import '../../../../core/idempotency/idempotency_key.dart';
 
 class SaleReturnLineRequest {
-  const SaleReturnLineRequest({
+  SaleReturnLineRequest({
     required this.lineId,
     required this.quantityMilliUnits,
   }) {
