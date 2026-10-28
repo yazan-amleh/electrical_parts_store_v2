@@ -1599,7 +1599,7 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       final rows = <String>[
         'invoice_id,posted_at_utc,customer,payment,subtotal_minor_units,'
             'tax_minor_units,total_minor_units,cost_minor_units,currency,'
-            'journal_entry_id',
+            'journal_entry_id,return_status,return_id',
         for (final item in report.invoices)
           if (query.isEmpty ||
               item.id.toLowerCase().contains(query) ||
@@ -1619,6 +1619,8 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
               item.cost.minorUnits.toString(),
               _csvValue(item.total.currency),
               _csvValue(item.journalEntryId),
+              _csvValue(item.returnStatus ?? ''),
+              _csvValue(item.returnId ?? ''),
             ].join(','),
       ];
       await Clipboard.setData(ClipboardData(text: rows.join('\r\n')));
