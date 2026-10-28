@@ -324,8 +324,9 @@ class _DashboardPageState extends State<DashboardPage> {
             Text('عمليات الشهر — $_currency'),
             Text('المبيعات: ${report.salesRevenue.formatted} '
                 '(${report.salesCount} فاتورة)'),
-            Text('المشتريات: ${report.purchasesTotal.formatted} '
-                '(${report.purchasesCount} فاتورة)'),
+            Text('صافي المشتريات: ${report.purchasesTotal.formatted} '
+                '(${report.purchasesCount} شراء / '
+                '${report.purchaseReturnCount} مردود)'),
             Text('المصروفات: ${report.expensesTotal.formatted}'),
           ],
         ),
