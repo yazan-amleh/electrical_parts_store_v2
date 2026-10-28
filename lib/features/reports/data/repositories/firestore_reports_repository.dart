@@ -532,10 +532,10 @@ class FirestoreReportsRepository implements ReportsRepository {
             discount: Money(minorUnits: discount, currency: currency),
             total: Money(minorUnits: lineTotal, currency: currency),
             cost: Money(minorUnits: lineCost, currency: currency),
-            returnedQuantityMilliUnits: returnStatus == 'full' &&
-                    returnedQuantityByLine.isEmpty
-                ? quantity
-                : (returnedQuantityByLine[id] ?? 0),
+            returnedQuantityMilliUnits:
+                returnStatus == 'full' && returnedQuantityByLine.isEmpty
+                    ? quantity
+                    : (returnedQuantityByLine[id] ?? 0),
             unitName: _analyticsNullableString(line['unitName']),
             isService: line['isService'] == true,
           ));
