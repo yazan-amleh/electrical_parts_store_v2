@@ -75,6 +75,16 @@ class FirestoreReportsRepository implements ReportsRepository {
           pageSize: limit,
           maxDocuments: maxDocuments,
         ),
+        _readPeriodDocuments(
+          collection: FirebasePaths.purchaseReturns(
+            _firestore,
+            context.storeId,
+          ),
+          start: start,
+          end: end,
+          pageSize: limit,
+          maxDocuments: maxDocuments,
+        ),
       ]);
 
       final transactions = <ReportTransaction>[];
@@ -115,6 +125,16 @@ class FirestoreReportsRepository implements ReportsRepository {
           transactions.add(transaction);
         }
       }
+      for (final document in pages[4].documents) {
+        final transaction = ReportFirestoreMapper.tryTransaction(
+          document,
+          source: 'purchaseReturn',
+          sign: -1,
+        );
+        if (transaction != null) {
+          transactions.add(transaction);
+        }
+      }
 
       String? currency;
       for (final transaction in transactions) {
@@ -138,6 +158,7 @@ class FirestoreReportsRepository implements ReportsRepository {
       var salesCount = 0;
       var salesReturnCount = 0;
       var purchasesCount = 0;
+      var purchaseReturnCount = 0;
       var expensesCount = 0;
 
       for (final transaction in transactions) {
@@ -157,6 +178,9 @@ class FirestoreReportsRepository implements ReportsRepository {
           case 'purchase':
             purchasesTotal += transaction.amount;
             purchasesCount++;
+          case 'purchaseReturn':
+            purchasesTotal += transaction.amount;
+            purchaseReturnCount++;
           case 'expense':
             expensesTotal += transaction.amount;
             expensesCount++;
@@ -182,6 +206,7 @@ class FirestoreReportsRepository implements ReportsRepository {
           salesCount: salesCount,
           salesReturnCount: salesReturnCount,
           purchasesCount: purchasesCount,
+          purchaseReturnCount: purchaseReturnCount,
           expensesCount: expensesCount,
           salesByPaymentMethod: Map.unmodifiable(salesByPaymentMethod),
           expensesByPaymentMethod: Map.unmodifiable(expensesByPaymentMethod),
