@@ -235,7 +235,8 @@ class _ReportsPageState extends State<ReportsPage> {
           context,
           title: 'صافي المبيعات',
           value: report.salesRevenue,
-          subtitle: '${report.salesCount} فاتورة بيع • ${report.salesReturnCount} مردود',
+          subtitle:
+              '${report.salesCount} فاتورة بيع • ${report.salesReturnCount} مردود',
           icon: Icons.point_of_sale_outlined,
         ),
         _metricCard(
