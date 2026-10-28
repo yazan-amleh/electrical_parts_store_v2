@@ -320,5 +320,4 @@ void main() {
     expect(second.postedAt, first.postedAt);
     expect(second.reason, first.reason);
   });
-
 }
