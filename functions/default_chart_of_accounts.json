@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "baseCurrency": "ILS",
   "accounts": [
     {
@@ -322,6 +322,20 @@
       "currency": "ILS",
       "isHeader": false,
       "sortOrder": 600,
+      "isActive": true
+    },
+    {
+      "id": "5200",
+      "code": "5200",
+      "name": "فرق تقييم مردود المشتريات",
+      "type": "expense",
+      "normalSide": "debit",
+      "controlType": "none",
+      "statementSection": "costOfSales",
+      "parentId": null,
+      "currency": "ILS",
+      "isHeader": false,
+      "sortOrder": 610,
       "isActive": true
     },
     {
