@@ -1114,177 +1114,13 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       return;
     }
 
-    final controllers = <String, TextEditingController>{
-      for (final line in returnableLines) line.id: TextEditingController(),
-    };
-    final reasonController = TextEditingController(
-      text: 'مردود جزئي للفاتورة ${invoice.id}',
-    );
-    String? validationMessage;
     final draft = await showDialog<_PartialReturnDraft>(
       context: context,
-      builder: (dialogContext) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: StatefulBuilder(
-          builder: (dialogContext, setDialogState) => AlertDialog(
-            title: const Text('مردود جزئي من الفاتورة'),
-            content: SizedBox(
-              width: 620,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'اختر الكمية المراد إرجاعها فقط. السعر والخصم '
-                      'والضريبة والتكلفة تُشتق من الفاتورة الأصلية على الخادم.',
-                    ),
-                    const SizedBox(height: 12),
-                    for (final line in returnableLines)
-                      Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                line.description,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'المباع: '
-                                '${Quantity.fromMilliUnits(line.quantityMilliUnits).formatted} • '
-                                'مرتجع سابقًا: '
-                                '${Quantity.fromMilliUnits(line.returnedQuantityMilliUnits).formatted} • '
-                                'المتبقي: '
-                                '${Quantity.fromMilliUnits(line.remainingQuantityMilliUnits).formatted} '
-                                '${line.unitName ?? ''}',
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: TextField(
-                                      key: ValueKey(
-                                        'partial-return-qty-${line.id}',
-                                      ),
-                                      controller: controllers[line.id],
-                                      keyboardType:
-                                          const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                      decoration: InputDecoration(
-                                        labelText: 'كمية الإرجاع',
-                                        suffixText: line.unitName,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  TextButton(
-                                    onPressed: () {
-                                      controllers[line.id]!.text =
-                                          Quantity.fromMilliUnits(
-                                        line.remainingQuantityMilliUnits,
-                                      ).formatted;
-                                    },
-                                    child: const Text('كل المتبقي'),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    TextField(
-                      key: const ValueKey('partial-return-reason'),
-                      controller: reasonController,
-                      maxLength: 250,
-                      decoration: const InputDecoration(
-                        labelText: 'سبب المردود',
-                      ),
-                    ),
-                    if (validationMessage != null)
-                      Text(
-                        validationMessage!,
-                        style: TextStyle(
-                          color: Theme.of(dialogContext).colorScheme.error,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('إلغاء'),
-              ),
-              FilledButton.icon(
-                onPressed: () {
-                  final requestedLines = <SaleReturnLineRequest>[];
-                  for (final line in returnableLines) {
-                    final raw = controllers[line.id]!.text.trim();
-                    if (raw.isEmpty) {
-                      continue;
-                    }
-                    Quantity quantity;
-                    try {
-                      quantity = Quantity.fromString(raw);
-                    } catch (_) {
-                      setDialogState(() {
-                        validationMessage =
-                            'الكمية المدخلة للصنف ${line.description} غير صحيحة.';
-                      });
-                      return;
-                    }
-                    if (quantity.milliUnits <= 0) {
-                      continue;
-                    }
-                    if (quantity.milliUnits >
-                        line.remainingQuantityMilliUnits) {
-                      setDialogState(() {
-                        validationMessage =
-                            'كمية ${line.description} تتجاوز الكمية المتبقية.';
-                      });
-                      return;
-                    }
-                    requestedLines.add(
-                      SaleReturnLineRequest(
-                        lineId: line.id,
-                        quantityMilliUnits: quantity.milliUnits,
-                      ),
-                    );
-                  }
-                  if (requestedLines.isEmpty) {
-                    setDialogState(() {
-                      validationMessage =
-                          'أدخل كمية موجبة لصنف واحد على الأقل.';
-                    });
-                    return;
-                  }
-                  Navigator.of(dialogContext).pop(
-                    _PartialReturnDraft(
-                      lines: requestedLines,
-                      reason: reasonController.text.trim(),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.undo),
-                label: const Text('ترحيل المردود الجزئي'),
-              ),
-            ],
-          ),
-        ),
+      builder: (dialogContext) => _PartialReturnDialog(
+        invoiceId: invoice.id,
+        lines: returnableLines,
       ),
     );
-    for (final controller in controllers.values) {
-      controller.dispose();
-    }
-    reasonController.dispose();
     if (!mounted || draft == null) {
       return;
     }
@@ -1739,4 +1575,200 @@ class _PartialReturnDraft {
 
   final List<SaleReturnLineRequest> lines;
   final String reason;
+}
+
+class _PartialReturnDialog extends StatefulWidget {
+  const _PartialReturnDialog({
+    required this.invoiceId,
+    required this.lines,
+  });
+
+  final String invoiceId;
+  final List<SalesInvoiceLineSummary> lines;
+
+  @override
+  State<_PartialReturnDialog> createState() => _PartialReturnDialogState();
+}
+
+class _PartialReturnDialogState extends State<_PartialReturnDialog> {
+  late final Map<String, TextEditingController> _quantityControllers;
+  late final TextEditingController _reasonController;
+  String? _validationMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _quantityControllers = <String, TextEditingController>{
+      for (final line in widget.lines) line.id: TextEditingController(),
+    };
+    _reasonController = TextEditingController(
+      text: 'مردود جزئي للفاتورة ${widget.invoiceId}',
+    );
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _quantityControllers.values) {
+      controller.dispose();
+    }
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        title: const Text('مردود جزئي من الفاتورة'),
+        content: SizedBox(
+          width: 620,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'اختر الكمية المراد إرجاعها فقط. السعر والخصم '
+                  'والضريبة والتكلفة تُشتق من الفاتورة الأصلية على الخادم.',
+                ),
+                const SizedBox(height: 12),
+                for (final line in widget.lines) _buildLine(line),
+                TextField(
+                  key: const ValueKey('partial-return-reason'),
+                  controller: _reasonController,
+                  maxLength: 250,
+                  decoration: const InputDecoration(
+                    labelText: 'سبب المردود',
+                  ),
+                ),
+                if (_validationMessage != null)
+                  Text(
+                    _validationMessage!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton.icon(
+            onPressed: _submit,
+            icon: const Icon(Icons.undo),
+            label: const Text('ترحيل المردود الجزئي'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLine(SalesInvoiceLineSummary line) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              line.description,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'المباع: '
+              '${Quantity.fromMilliUnits(line.quantityMilliUnits).formatted} • '
+              'مرتجع سابقًا: '
+              '${Quantity.fromMilliUnits(line.returnedQuantityMilliUnits).formatted} • '
+              'المتبقي: '
+              '${Quantity.fromMilliUnits(line.remainingQuantityMilliUnits).formatted} '
+              '${line.unitName ?? ''}',
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: ValueKey('partial-return-qty-${line.id}'),
+                    controller: _quantityControllers[line.id],
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'كمية الإرجاع',
+                      suffixText: line.unitName,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () {
+                    _quantityControllers[line.id]!.text =
+                        Quantity.fromMilliUnits(
+                      line.remainingQuantityMilliUnits,
+                    ).formatted;
+                  },
+                  child: const Text('كل المتبقي'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _submit() {
+    final requestedLines = <SaleReturnLineRequest>[];
+    for (final line in widget.lines) {
+      final raw = _quantityControllers[line.id]!.text.trim();
+      if (raw.isEmpty) {
+        continue;
+      }
+      Quantity quantity;
+      try {
+        quantity = Quantity.fromString(raw);
+      } catch (_) {
+        setState(() {
+          _validationMessage =
+              'الكمية المدخلة للصنف ${line.description} غير صحيحة.';
+        });
+        return;
+      }
+      if (quantity.milliUnits <= 0) {
+        continue;
+      }
+      if (quantity.milliUnits > line.remainingQuantityMilliUnits) {
+        setState(() {
+          _validationMessage =
+              'كمية ${line.description} تتجاوز الكمية المتبقية.';
+        });
+        return;
+      }
+      requestedLines.add(
+        SaleReturnLineRequest(
+          lineId: line.id,
+          quantityMilliUnits: quantity.milliUnits,
+        ),
+      );
+    }
+    if (requestedLines.isEmpty) {
+      setState(() {
+        _validationMessage = 'أدخل كمية موجبة لصنف واحد على الأقل.';
+      });
+      return;
+    }
+    Navigator.of(context).pop(
+      _PartialReturnDraft(
+        lines: requestedLines,
+        reason: _reasonController.text.trim(),
+      ),
+    );
+  }
 }
