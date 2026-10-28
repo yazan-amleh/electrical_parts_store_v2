@@ -333,7 +333,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
         Autocomplete<Party>(
           key: ValueKey(
             'party-selector-${_partyType.name}-'
-            '${_partyLoadEpoch}-${_selectedParty?.id ?? 'none'}',
+            '$_partyLoadEpoch-${_selectedParty?.id ?? 'none'}',
           ),
           initialValue: TextEditingValue(
             text: _selectedParty?.name ?? '',
