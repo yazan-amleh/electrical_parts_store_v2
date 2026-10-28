@@ -82,6 +82,11 @@ async function seedStore() {
       storeId: STORE_ID,
       status: 'posted',
     });
+    await setDoc(storeDoc(db, 'sales_returns', 'return-1'), {
+      storeId: STORE_ID,
+      status: 'posted',
+      returnType: 'full',
+    });
     await setDoc(storeDoc(db, 'purchases', 'purchase-1'), {
       storeId: STORE_ID,
       status: 'posted',
@@ -209,6 +214,15 @@ describe('Firestore security rules', function () {
   it('keeps store data tenant-scoped', async () => {
     await assertSucceeds(getDoc(storeDoc(salesDb, 'products', 'product-1')));
     await assertSucceeds(getDoc(storeDoc(salesDb, 'sales', 'sale-1')));
+    await assertSucceeds(
+      getDoc(storeDoc(salesDb, 'sales_returns', 'return-1')),
+    );
+    await assertFails(
+      setDoc(storeDoc(salesDb, 'sales_returns', 'return-client'), {
+        storeId: STORE_ID,
+        status: 'posted',
+      }),
+    );
     await assertSucceeds(
       getDoc(storeDoc(salesDb, 'purchase_orders', 'order-1')),
     );
