@@ -139,7 +139,6 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
     required PurchasePostingAccounts accounts,
     required int taxMinorUnits,
   }) async {
-    final receiptId = receipt.receiptId;
     final payload = PurchaseOrderCommandMapper.receiveRequest(
       order: order,
       receipt: receipt,
