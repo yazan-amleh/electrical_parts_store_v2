@@ -263,6 +263,15 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
+      match /sales_returns/{returnId} {
+        allow read: if canReadStore(storeId);
+        allow create, update, delete: if false;
+      }
+
+      match /sale_return_idempotency/{key} {
+        allow read, write: if false;
+      }
+
       match /purchases/{purchaseId} {
         allow read: if canReadStore(storeId);
         allow create, update, delete: if false;
