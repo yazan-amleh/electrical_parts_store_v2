@@ -177,7 +177,6 @@ abstract final class FirebasePaths {
     return store(firestore, storeId).collection('purchase_returns');
   }
 
-
   static CollectionReference<Map<String, dynamic>> commandOutbox(
     FirebaseFirestore firestore,
     String storeId,
