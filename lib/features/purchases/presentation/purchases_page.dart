@@ -442,19 +442,32 @@ class _PurchasesPageState extends State<PurchasesPage> {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Text('الإجمالي قبل الضريبة'),
-              const Spacer(),
-              Text(_cartTotal.formatted),
+              const Expanded(
+                child: Text(
+                  'الإجمالي قبل الضريبة',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  _cartTotal.formatted,
+                  textAlign: TextAlign.end,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
           Row(
             children: [
-              const Text('الإجمالي'),
-              const Spacer(),
-              Text(
-                (_cartTotal + _taxAmount).formatted,
-                style: const TextStyle(fontWeight: FontWeight.bold),
+              const Expanded(child: Text('الإجمالي')),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  (_cartTotal + _taxAmount).formatted,
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
