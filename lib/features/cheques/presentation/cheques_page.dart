@@ -478,11 +478,8 @@ class _ChequesPageState extends State<ChequesPage> {
 }
 
 class _PendingChequeSettlement {
-  _PendingChequeSettlement({
-    required this.request,
-    this.queued = false,
-  });
+  _PendingChequeSettlement({required this.request});
 
   final ChequeSettlementRequest request;
-  bool queued;
+  bool queued = false;
 }
