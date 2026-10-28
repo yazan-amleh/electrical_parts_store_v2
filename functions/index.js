@@ -59,6 +59,10 @@ const {
 } = require('./accounting/sale_integrity');
 const { fingerprintSaleReturn } = require('./accounting/sale_return_integrity');
 const {
+  allocateCumulative,
+  allocateHeaderBySubtotal,
+} = require('./accounting/sale_return_allocation');
+const {
   fingerprintPurchaseOrderReceipt,
   matchesLegacyPurchaseOrderReceipt,
   matchesLegacyPurchaseOrderJournalLines,
