@@ -73,6 +73,7 @@ class _ChequesPageState extends State<ChequesPage> {
         oldWidget.membership.storeId != widget.membership.storeId) {
       _cheques = const <Cheque>[];
       _pendingSettlements.clear();
+      _busyChequeId = null;
       _filter = 'all';
       _load();
     }
