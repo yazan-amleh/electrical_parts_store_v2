@@ -175,7 +175,10 @@ abstract final class AppBootstrap {
       notificationRepository: FirebaseNotificationRepository(
         firestore: firestore,
       ),
-      settingsRepository: FirestoreSettingsRepository(firestore: firestore),
+      settingsRepository: FirestoreSettingsRepository(
+        firestore: firestore,
+        functions: functions,
+      ),
       noteRepository: FirestoreNoteRepository(firestore: firestore),
       activityLogRepository: FirestoreActivityLogRepository(
         firestore: firestore,
