@@ -11537,8 +11537,10 @@ async function deliverRepairInTransaction(transaction, userId, command) {
       storedInt(rawPart.unitPriceMinorUnits, 0),
       'repair part unit price',
     );
-    const unitCost = storedInt(product.purchasePriceMinorUnits, 0);
-    const cost = multiplyAndRound(unitCost, quantity);
+    const storedUnitCost = storedInt(
+      product.purchasePriceMinorUnits,
+      0,
+    );
     const revenue = multiplyAndRound(unitPrice, quantity);
     const currentQuantity = storedInt(product.quantityOnHandMilliUnits, 0);
     const nextQuantity = currentQuantity - quantity;
@@ -11553,14 +11555,32 @@ async function deliverRepairInTransaction(transaction, userId, command) {
     )
       ? product.inventoryValueMinorUnits
       : multiplyAndRound(
-        unitCost,
+        storedUnitCost,
         currentQuantity,
       );
-    const nextValue = currentValue - cost;
-    if (nextValue < 0) {
+    let cost;
+    try {
+      cost = allocateCumulative({
+        sourceTotal: currentValue,
+        sourceQuantity: currentQuantity,
+        alreadyReturnedQuantity: 0,
+        alreadyAllocated: 0,
+        returnQuantity: quantity,
+        label: 'repair inventory carrying value',
+      }).allocated;
+    } catch (error) {
       throw new HttpsError(
         'failed-precondition',
-        'Repair would create negative inventory value.',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    const unitCost = cost === 0 ? 0 : divideAndRound(cost, quantity);
+    const nextValue = currentValue - cost;
+    if (nextValue < 0 ||
+        (nextQuantity === 0 && nextValue !== 0)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Repair inventory carrying value does not reconcile.',
       );
     }
     partsRevenue += revenue;
@@ -11847,9 +11867,7 @@ async function deliverRepairInTransaction(transaction, userId, command) {
       type: 'saleIssue',
       quantityDeltaMilliUnits: -part.quantityMilliUnits,
       unitCostMinorUnits: part.unitCostMinorUnits,
-      totalCostMinorUnits: part.unitCostMinorUnits == 0
-          ? 0
-          : change.cost,
+      totalCostMinorUnits: change.cost,
       currency: repair.currency,
       idempotencyKey: command.idempotencyKey +
           ':inventory:' + change.productId,
