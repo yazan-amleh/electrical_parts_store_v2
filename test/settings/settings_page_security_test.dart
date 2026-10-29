@@ -122,7 +122,7 @@ void main() {
     await tester.pump();
 
     repository.profileCompleters['store-b']!.complete(
-      const Success(
+      Success(
         StoreProfile(
           id: 'store-b',
           name: 'Store B',
