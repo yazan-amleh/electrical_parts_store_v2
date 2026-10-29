@@ -3,6 +3,7 @@ import '../../../sales/domain/enums/sale_payment_method.dart';
 import '../../domain/entities/offer.dart';
 import '../../domain/entities/offer_line.dart';
 import '../../domain/entities/offer_order.dart';
+import '../../domain/entities/offer_order_confirmation.dart';
 
 abstract final class OfferCommandMapper {
   static Map<String, dynamic> createOfferRequest(Offer offer) {
@@ -56,22 +57,22 @@ abstract final class OfferCommandMapper {
 
   static Map<String, dynamic> confirmOrderRequest({
     required OfferOrder order,
-    required SalePaymentMethod paymentMethod,
-    required SalePostingAccounts accounts,
+    required OfferOrderConfirmationRequest confirmation,
   }) {
     return <String, dynamic>{
       'storeId': order.storeId,
       'orderId': order.id,
-      'idempotencyKey': 'confirm-${order.id}',
-      'postedAt': DateTime.now().toUtc().toIso8601String(),
-      'paymentMethod': paymentMethod.name,
+      'idempotencyKey': confirmation.idempotencyKey.value,
+      'postedAt': confirmation.postedAt.toIso8601String(),
+      'paymentMethod': confirmation.paymentMethod.name,
       'postingAccounts': <String, dynamic>{
-        'settlementAccountId': accounts.settlementAccountId,
-        'customerReceivableAccountId': accounts.customerReceivableAccountId,
-        'salesAccountId': accounts.salesAccountId,
-        'inventoryAccountId': accounts.inventoryAccountId,
-        'costOfSalesAccountId': accounts.costOfSalesAccountId,
-        'taxAccountId': accounts.taxAccountId,
+        'settlementAccountId': confirmation.accounts.settlementAccountId,
+        'customerReceivableAccountId':
+            confirmation.accounts.customerReceivableAccountId,
+        'salesAccountId': confirmation.accounts.salesAccountId,
+        'inventoryAccountId': confirmation.accounts.inventoryAccountId,
+        'costOfSalesAccountId': confirmation.accounts.costOfSalesAccountId,
+        'taxAccountId': confirmation.accounts.taxAccountId,
       },
     };
   }
