@@ -76,6 +76,36 @@ class _Payments implements PartyPaymentRepository {
   }
 }
 
+
+class _UncertainPayments implements PartyPaymentRepository {
+  _UncertainPayments({this.queueFirst = false});
+
+  final bool queueFirst;
+  final posted = <PartyPayment>[];
+
+  @override
+  Future<Result<PartyPaymentPostingPlan>> postPartyPayment({
+    required StoreContext context,
+    required PartyPayment payment,
+    required PartyPaymentPostingAccounts accounts,
+  }) async {
+    posted.add(payment);
+    if (posted.length == 1) {
+      if (queueFirst) {
+        return const FailureResult<PartyPaymentPostingPlan>(
+          QueuedFailure(commandId: 'queued-payment'),
+        );
+      }
+      return const FailureResult<PartyPaymentPostingPlan>(
+        InfrastructureFailure('Unknown network outcome'),
+      );
+    }
+    return const FailureResult<PartyPaymentPostingPlan>(
+      ValidationFailure('Captured retry'),
+    );
+  }
+}
+
 const _user = AuthenticatedUser(
   id: 'user-1',
   email: 'test@example.com',
@@ -96,6 +126,25 @@ Widget _page(_Payments payments, _Parties parties, {String? initialPartyId}) {
         user: _user,
         membership: _membership,
         initialPartyId: initialPartyId,
+      ),
+    ),
+  );
+}
+
+
+Widget _pageWithContext(
+  PartyPaymentRepository payments,
+  _Parties parties, {
+  required AuthenticatedUser user,
+  required StoreMembership membership,
+}) {
+  return MaterialApp(
+    home: Scaffold(
+      body: PartyPaymentsPage(
+        repository: payments,
+        partyRepository: parties,
+        user: user,
+        membership: membership,
       ),
     ),
   );
@@ -180,4 +229,149 @@ void main() {
     );
     expect(field.controller!.text, 'Alice Customer');
   });
+
+  testWidgets('unknown payment result retries the exact same payment object',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final payments = _UncertainPayments();
+    final parties = _Parties();
+
+    await tester.pumpWidget(
+      _pageWithContext(
+        payments,
+        parties,
+        user: _user,
+        membership: _membership,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final search = find.byKey(
+      const ValueKey('party-payment-party-search'),
+    );
+    await tester.enterText(search, 'Alice');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Alice Customer'));
+    await tester.enterText(
+      find.byKey(const ValueKey('party-payment-amount')),
+      '25.00',
+    );
+    await tester.tap(find.byKey(const ValueKey('party-payment-submit')));
+    await tester.pumpAndSettle();
+
+    expect(payments.posted, hasLength(1));
+    final first = payments.posted.single;
+
+    await tester.tap(find.byKey(const ValueKey('party-payment-submit')));
+    await tester.pumpAndSettle();
+
+    expect(payments.posted, hasLength(2));
+    final second = payments.posted.last;
+    expect(identical(first, second), isTrue);
+    expect(second.id, first.id);
+    expect(second.idempotencyKey.value, first.idempotencyKey.value);
+    expect(second.postedAt, first.postedAt);
+  });
+
+  testWidgets('unknown payment result blocks changed financial request',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final payments = _UncertainPayments();
+    final parties = _Parties();
+
+    await tester.pumpWidget(
+      _pageWithContext(
+        payments,
+        parties,
+        user: _user,
+        membership: _membership,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final search = find.byKey(
+      const ValueKey('party-payment-party-search'),
+    );
+    await tester.enterText(search, 'Alice');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Alice Customer'));
+    final amount = find.byKey(const ValueKey('party-payment-amount'));
+    await tester.enterText(amount, '25.00');
+    await tester.tap(find.byKey(const ValueKey('party-payment-submit')));
+    await tester.pumpAndSettle();
+
+    expect(payments.posted, hasLength(1));
+    await tester.enterText(amount, '30.00');
+    await tester.tap(find.byKey(const ValueKey('party-payment-submit')));
+    await tester.pumpAndSettle();
+
+    expect(payments.posted, hasLength(1));
+    expect(
+      find.textContaining('نتيجة الحركة السابقة غير محسومة'),
+      findsWidgets,
+    );
+  });
+
+  testWidgets('tenant change clears queued payment fence', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1000, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final payments = _UncertainPayments(queueFirst: true);
+    final parties = _Parties();
+
+    await tester.pumpWidget(
+      _pageWithContext(
+        payments,
+        parties,
+        user: _user,
+        membership: _membership,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    var search = find.byKey(
+      const ValueKey('party-payment-party-search'),
+    );
+    await tester.enterText(search, 'Alice');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Alice Customer'));
+    await tester.enterText(
+      find.byKey(const ValueKey('party-payment-amount')),
+      '10.00',
+    );
+    await tester.tap(find.byKey(const ValueKey('party-payment-submit')));
+    await tester.pumpAndSettle();
+    expect(payments.posted, hasLength(1));
+
+    const nextMembership = StoreMembership(
+      storeId: 'store-2',
+      userId: 'user-1',
+      role: StoreRole.owner,
+    );
+    await tester.pumpWidget(
+      _pageWithContext(
+        payments,
+        parties,
+        user: _user,
+        membership: nextMembership,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    search = find.byKey(const ValueKey('party-payment-party-search'));
+    await tester.enterText(search, 'Alice');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Alice Customer'));
+    await tester.enterText(
+      find.byKey(const ValueKey('party-payment-amount')),
+      '11.00',
+    );
+    await tester.tap(find.byKey(const ValueKey('party-payment-submit')));
+    await tester.pumpAndSettle();
+
+    expect(payments.posted, hasLength(2));
+    expect(payments.posted.last.storeId, 'store-2');
+  });
+
 }
