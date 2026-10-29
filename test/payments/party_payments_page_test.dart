@@ -76,7 +76,6 @@ class _Payments implements PartyPaymentRepository {
   }
 }
 
-
 class _UncertainPayments implements PartyPaymentRepository {
   _UncertainPayments({this.queueFirst = false});
 
@@ -130,7 +129,6 @@ Widget _page(_Payments payments, _Parties parties, {String? initialPartyId}) {
     ),
   );
 }
-
 
 Widget _pageWithContext(
   PartyPaymentRepository payments,
@@ -373,5 +371,4 @@ void main() {
     expect(payments.posted, hasLength(2));
     expect(payments.posted.last.storeId, 'store-2');
   });
-
 }
