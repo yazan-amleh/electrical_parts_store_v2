@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/errors/failure.dart';
@@ -6,6 +8,7 @@ import '../../../core/money/money.dart';
 import '../../../core/result/result.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
 import '../domain/entities/expense.dart';
 import '../domain/entities/expense_posting_plan.dart';
 import '../domain/enums/expense_payment_method.dart';
@@ -49,6 +52,10 @@ class _ExpensesPageState extends State<ExpensesPage> {
   ExpensePaymentMethod _paymentMethod = ExpensePaymentMethod.cash;
   String _expenseAccountId = '6130';
   bool _isPosting = false;
+  Expense? _pendingExpense;
+  String? _pendingSignature;
+  bool _pendingQueued = false;
+  bool _pendingUncertain = false;
 
   Money get _amount =>
       _parseMoney(_amountController.text) ?? Money.zero(currency: _currency);
@@ -59,7 +66,25 @@ class _ExpensesPageState extends State<ExpensesPage> {
   Money get _total => _amount + _tax;
 
   @override
+  void didUpdateWidget(covariant ExpensesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId) {
+      _pendingExpense = null;
+      _pendingSignature = null;
+      _pendingQueued = false;
+      _pendingUncertain = false;
+      _clearForm();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (!widget.membership.role.canPostAccounting) {
+      return const Center(
+        child: Text('ليس لديك صلاحية لترحيل المصروفات.'),
+      );
+    }
     return Directionality(
       textDirection: TextDirection.rtl,
       child: SingleChildScrollView(
@@ -212,6 +237,19 @@ class _ExpensesPageState extends State<ExpensesPage> {
                           ],
                         ),
                       ),
+                      if (_pendingQueued || _pendingUncertain) ...[
+                        const SizedBox(height: 12),
+                        MaterialBanner(
+                          content: Text(
+                            _pendingQueued
+                                ? 'هذا المصروف محفوظ في طابور التنفيذ. '
+                                    'لا تنشئ مصروفًا آخر حتى تُحسم النتيجة.'
+                                : 'تعذر التأكد من نتيجة الترحيل السابقة. '
+                                    'أعد نفس المصروف بنفس البيانات فقط.',
+                          ),
+                          actions: const <Widget>[],
+                        ),
+                      ],
                       const SizedBox(height: 16),
                       FilledButton.icon(
                         onPressed: _isPosting ? null : _postExpense,
@@ -263,6 +301,17 @@ class _ExpensesPageState extends State<ExpensesPage> {
   }
 
   Future<void> _postExpense() async {
+    if (_isPosting) {
+      return;
+    }
+    if (_pendingQueued) {
+      _showMessage(
+        'هذا المصروف محفوظ في طابور التنفيذ. لا تُرسله مرة أخرى '
+        'حتى يتم التحقق من نتيجته.',
+      );
+      return;
+    }
+
     final repository = widget.repository;
     if (repository == null) {
       _showMessage('مستودع المصروفات غير موصول بهذه البيئة.');
@@ -286,22 +335,47 @@ class _ExpensesPageState extends State<ExpensesPage> {
       return;
     }
 
-    final expenseId = 'expense-${DateTime.now().microsecondsSinceEpoch}';
-    final expense = Expense(
-      id: expenseId,
-      storeId: widget.membership.storeId,
-      idempotencyKey: IdempotencyKey(expenseId),
-      postedAt: DateTime.now().toUtc(),
-      paymentMethod: _paymentMethod,
-      expenseAccountId: _expenseAccountId,
-      amount: amount,
-      tax: tax,
-      supplierId:
-          _paymentMethod == ExpensePaymentMethod.credit ? supplierId : null,
-      description: _descriptionController.text.trim().isEmpty
-          ? null
-          : _descriptionController.text.trim(),
-    );
+    final description = _descriptionController.text.trim();
+    final signature = jsonEncode([
+      widget.membership.storeId,
+      widget.user.id,
+      _paymentMethod.name,
+      _expenseAccountId,
+      amount.minorUnits,
+      amount.currency,
+      tax.minorUnits,
+      tax.currency,
+      _paymentMethod == ExpensePaymentMethod.credit ? supplierId : null,
+      description,
+    ]);
+    if (_pendingUncertain && _pendingSignature != signature) {
+      _showMessage(
+        'نتيجة المصروف السابق غير محسومة. أعد نفس المصروف بنفس البيانات '
+        'ولا تنشئ مصروفًا جديدًا حتى يتم تأكيد النتيجة.',
+      );
+      return;
+    }
+
+    final previous = _pendingSignature == signature ? _pendingExpense : null;
+    final expenseId =
+        previous?.id ?? 'expense-${DateTime.now().microsecondsSinceEpoch}';
+    final expense = previous ??
+        Expense(
+          id: expenseId,
+          storeId: widget.membership.storeId,
+          idempotencyKey: IdempotencyKey(expenseId),
+          postedAt: DateTime.now().toUtc(),
+          paymentMethod: _paymentMethod,
+          expenseAccountId: _expenseAccountId,
+          amount: amount,
+          tax: tax,
+          supplierId:
+              _paymentMethod == ExpensePaymentMethod.credit ? supplierId : null,
+          description: description.isEmpty ? null : description,
+        );
+
+    _pendingSignature = signature;
+    _pendingExpense = expense;
 
     setState(() => _isPosting = true);
     final result = await repository.postExpense(
@@ -317,14 +391,31 @@ class _ExpensesPageState extends State<ExpensesPage> {
     if (result is FailureResult<ExpensePostingPlan>) {
       final failure = result.failure;
       if (failure is QueuedFailure) {
-        _showMessage('تم حفظ المصروف للطابور وسيُرحّل عند عودة الاتصال.');
+        _pendingQueued = true;
+        _pendingUncertain = false;
+        _showMessage(
+          'تم حفظ المصروف للطابور. لا تُنشئ مصروفًا آخر حتى تُحسم النتيجة.',
+        );
+      } else if (failure is InfrastructureFailure) {
+        _pendingUncertain = true;
+        _showMessage(
+          'تعذر التأكد من نتيجة الترحيل. أعد نفس المصروف بنفس البيانات فقط.',
+        );
       } else {
+        _pendingExpense = null;
+        _pendingSignature = null;
+        _pendingQueued = false;
+        _pendingUncertain = false;
         _showMessage(failure.message);
       }
       return;
     }
 
     if (result is Success<ExpensePostingPlan>) {
+      _pendingExpense = null;
+      _pendingSignature = null;
+      _pendingQueued = false;
+      _pendingUncertain = false;
       _clearForm();
       _showMessage('تم ترحيل المصروف والقيد بنجاح.');
     }
