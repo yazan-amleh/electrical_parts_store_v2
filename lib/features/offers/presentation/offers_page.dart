@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/errors/failure.dart';
+import '../../../core/idempotency/idempotency_key.dart';
 import '../../../core/money/money.dart';
 import '../../../core/quantity/quantity.dart';
 import '../../../core/result/result.dart';
@@ -56,6 +58,9 @@ class _OffersPageState extends State<OffersPage> {
   bool _showOrders = false;
   bool _isLoading = true;
   String? _errorMessage;
+  int _loadEpoch = 0;
+  final Map<String, OfferOrderConfirmationRequest> _pendingConfirmations =
+      <String, OfferOrderConfirmationRequest>{};
 
   StoreContext get _context =>
       StoreContext(storeId: widget.membership.storeId, userId: widget.user.id);
@@ -66,13 +71,32 @@ class _OffersPageState extends State<OffersPage> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(covariant OffersPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId) {
+      _offers = const <Offer>[];
+      _orders = const <OfferOrder>[];
+      _pendingConfirmations.clear();
+      _searchController.clear();
+      _showOrders = false;
+      _load();
+    }
+  }
+
   Future<void> _load() async {
     final repository = widget.repository;
+    final epoch = ++_loadEpoch;
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
     if (repository == null) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'مستودع العروض غير موصول بهذه البيئة.';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'مستودع العروض غير موصول بهذه البيئة.';
+        });
+      }
       return;
     }
 
@@ -82,22 +106,36 @@ class _OffersPageState extends State<OffersPage> {
     });
     final offersResult = await repository.getOffers(context: _context);
     final ordersResult = await repository.getOfferOrders(context: _context);
-    if (!mounted) {
+    if (!mounted ||
+        epoch != _loadEpoch ||
+        requestedStore != widget.membership.storeId ||
+        requestedUser != widget.user.id) {
       return;
     }
 
     String? error;
+    var nextOffers = _offers;
+    var nextOrders = _orders;
     if (offersResult is Success<List<Offer>>) {
-      _offers = offersResult.value;
+      nextOffers = offersResult.value;
     } else if (offersResult is FailureResult<List<Offer>>) {
       error = offersResult.failure.message;
     }
     if (ordersResult is Success<List<OfferOrder>>) {
-      _orders = ordersResult.value;
+      nextOrders = ordersResult.value;
     } else if (ordersResult is FailureResult<List<OfferOrder>>) {
       error ??= ordersResult.failure.message;
     }
+    final pendingOrderIds = nextOrders
+        .where((order) => order.status == OfferOrderStatus.pending)
+        .map((order) => order.id)
+        .toSet();
+    _pendingConfirmations.removeWhere(
+      (orderId, _) => !pendingOrderIds.contains(orderId),
+    );
     setState(() {
+      _offers = nextOffers;
+      _orders = nextOrders;
       _isLoading = false;
       _errorMessage = error;
     });
