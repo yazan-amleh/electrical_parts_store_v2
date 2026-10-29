@@ -66,6 +66,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
   PartyPayment? _pendingPayment;
   String? _pendingSignature;
   bool _pendingQueued = false;
+  bool _pendingUncertain = false;
   List<Party> _parties = const <Party>[];
   Party? _selectedParty;
   bool _isLoadingParties = false;
@@ -98,6 +99,16 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       _partyController.text = widget.initialPartyId ?? '';
       _selectedParty = null;
       _parties = const <Party>[];
+      _pendingPayment = null;
+      _pendingSignature = null;
+      _pendingQueued = false;
+      _pendingUncertain = false;
+      _amountController.clear();
+      _descriptionController.clear();
+      _chequeNumberController.clear();
+      _bankNameController.clear();
+      _dueDate = null;
+      _paymentMethod = PartyPaymentMethod.cash;
       _loadParties();
     }
   }
@@ -274,6 +285,19 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                         prefixIcon: Icon(Icons.notes_outlined),
                       ),
                     ),
+                    if (_pendingQueued || _pendingUncertain) ...[
+                      MaterialBanner(
+                        content: Text(
+                          _pendingQueued
+                              ? 'هذه الحركة محفوظة في طابور التنفيذ. '
+                                  'لا تنشئ حركة أخرى حتى يتم التحقق من نتيجتها.'
+                              : 'تعذر التأكد من نتيجة الترحيل السابقة. '
+                                  'أعد نفس الحركة بنفس البيانات فقط.',
+                        ),
+                        actions: const <Widget>[],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     const SizedBox(height: 20),
                     if (widget.draftRepository != null) ...[
                       OutlinedButton.icon(
@@ -594,6 +618,14 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       bankName,
       _dueDate?.toUtc().toIso8601String(),
     ]);
+    if (_pendingUncertain && _pendingSignature != signature) {
+      _showMessage(
+        'نتيجة الحركة السابقة غير محسومة. أعد نفس الحركة بنفس البيانات '
+        'ولا تنشئ حركة جديدة حتى يتم تأكيد النتيجة.',
+      );
+      return;
+    }
+
     final previous = _pendingSignature == signature ? _pendingPayment : null;
     final paymentId = previous?.id ??
         'party-payment-${DateTime.now().microsecondsSinceEpoch}';
@@ -665,9 +697,20 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       final failure = result.failure;
       if (failure is QueuedFailure) {
         _pendingQueued = true;
+        _pendingUncertain = false;
         _showMessage(
-            'تم حفظ الحركة للطابور. لا تعِد إرسالها قبل التحقق من حالتها.');
+          'تم حفظ الحركة للطابور. لا تعِد إرسالها قبل التحقق من حالتها.',
+        );
+      } else if (failure is InfrastructureFailure) {
+        _pendingUncertain = true;
+        _showMessage(
+          'تعذر التأكد من نتيجة الترحيل. أعد نفس الحركة بنفس البيانات فقط.',
+        );
       } else {
+        _pendingPayment = null;
+        _pendingSignature = null;
+        _pendingQueued = false;
+        _pendingUncertain = false;
         _showMessage(failure.message);
       }
       return;
@@ -677,6 +720,7 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       _pendingPayment = null;
       _pendingSignature = null;
       _pendingQueued = false;
+      _pendingUncertain = false;
       _amountController.clear();
       _descriptionController.clear();
       _chequeNumberController.clear();
