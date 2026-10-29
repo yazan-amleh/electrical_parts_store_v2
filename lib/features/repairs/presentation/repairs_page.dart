@@ -708,6 +708,7 @@ class _RepairDialogState extends State<_RepairDialog> {
   @override
   Widget build(BuildContext context) {
     final canEdit = !_busy &&
+        !_financialUnresolved &&
         !_repair.isInvoiced &&
         _repair.status != RepairStatus.cancelled;
     return Directionality(
@@ -749,6 +750,33 @@ class _RepairDialogState extends State<_RepairDialog> {
               children: [
                 if (_error != null) ...[
                   _Banner(text: _error!),
+                  const SizedBox(height: 8),
+                ],
+                if (_financialUnresolved) ...[
+                  _Banner(
+                    text: _pendingPayment != null
+                        ? 'هناك دفعة صيانة غير محسومة. '
+                            'أعد نفس الدفعة أو استخدم التحديث للتحقق.'
+                        : 'هناك فاتورة وتسليم غير محسومة. '
+                            'أعد نفس العملية أو استخدم التحديث للتحقق.',
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: OutlinedButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : _pendingPayment != null
+                              ? () => _submitPayment(_pendingPayment!)
+                              : () => _submitDelivery(_pendingDelivery!),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(
+                        _pendingPayment != null
+                            ? 'إعادة نفس الدفعة'
+                            : 'إعادة نفس الفاتورة والتسليم',
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 8),
                 ],
                 Card(
@@ -864,7 +892,9 @@ class _RepairDialogState extends State<_RepairDialog> {
                       child: const Text('دفعة مقدمة'),
                     ),
                     OutlinedButton(
-                      onPressed: !_busy && _repair.isInvoiced
+                      onPressed: !_busy &&
+                              !_financialUnresolved &&
+                              _repair.isInvoiced
                           ? () => _payment(RepairPaymentKind.settlement)
                           : null,
                       child: const Text('دفعة على الفاتورة'),
@@ -877,16 +907,24 @@ class _RepairDialogState extends State<_RepairDialog> {
         ),
         actions: [
           TextButton(
-            onPressed: _busy || _isExporting
+            onPressed: _busy || _isExporting || _financialUnresolved
                 ? null
                 : () => Navigator.of(context).pop(),
             child: const Text('إغلاق'),
           ),
           if (!_repair.isInvoiced && _repair.status != RepairStatus.cancelled)
             FilledButton.icon(
-              onPressed: _busy ? null : _deliver,
-              icon: const Icon(Icons.receipt_long_outlined),
-              label: const Text('فاتورة وتسليم'),
+              onPressed: _busy || _pendingPayment != null ? null : _deliver,
+              icon: Icon(
+                _pendingDelivery == null
+                    ? Icons.receipt_long_outlined
+                    : Icons.refresh,
+              ),
+              label: Text(
+                _pendingDelivery == null
+                    ? 'فاتورة وتسليم'
+                    : 'إعادة نفس الفاتورة والتسليم',
+              ),
             ),
           if (_busy)
             const SizedBox(
@@ -898,6 +936,18 @@ class _RepairDialogState extends State<_RepairDialog> {
       ),
     );
   }
+}
+
+class _PendingRepairDelivery {
+  const _PendingRepairDelivery({
+    required this.idempotencyKey,
+    required this.postedAt,
+    required this.accounts,
+  });
+
+  final String idempotencyKey;
+  final DateTime postedAt;
+  final RepairPostingAccounts accounts;
 }
 
 class _CreateRepairDialog extends StatefulWidget {
