@@ -33,6 +33,7 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
   Money _balance = const Money.zero();
   bool _isLoading = true;
   String? _errorMessage;
+  int _loadEpoch = 0;
 
   StoreContext get _storeContext {
     return StoreContext(
@@ -45,6 +46,19 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant PartyLedgerPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId ||
+        oldWidget.party.id != widget.party.id ||
+        oldWidget.party.type != widget.party.type) {
+      _entries = const <PartyLedgerEntry>[];
+      _balance = const Money.zero();
+      _load();
+    }
   }
 
   @override
@@ -61,7 +75,12 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
       return SizedBox(width: 760, height: 560, child: _buildErrorState());
     }
 
-    var running = Money.zero(currency: _balance.currency);
+    final loadedDelta = _entries.fold(
+      Money.zero(currency: _balance.currency),
+      (sum, entry) => sum + entry.balanceDelta,
+    );
+    final openingBalance = _balance - loadedDelta;
+    var running = openingBalance;
     final rows = <_PartyLedgerRow>[];
     for (final entry in _entries) {
       running = running + entry.balanceDelta;
@@ -119,6 +138,14 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
                 ),
               ),
             ),
+            if (_entries.length == 500)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: Text(
+                  'يعرض الكشف آخر 500 حركة فقط. تم احتساب الرصيد الافتتاحي '
+                  'من الرصيد الحالي حتى تبقى الأرصدة الجارية متطابقة.',
+                ),
+              ),
             Expanded(
               child: _entries.isEmpty
                   ? const Center(child: Text('لا توجد حركات لهذا الطرف.'))
@@ -204,17 +231,36 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
   }
 
   Future<void> _load() async {
+    final epoch = ++_loadEpoch;
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
+    final requestedPartyId = widget.party.id;
+    final requestedPartyType = widget.party.type;
+
+    if (widget.party.storeId != requestedStore) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'الطرف لا ينتمي إلى المتجر الحالي.';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
     final entriesResult = await widget.repository.getEntries(
       context: _storeContext,
-      partyType: widget.party.type,
-      partyId: widget.party.id,
+      partyType: requestedPartyType,
+      partyId: requestedPartyId,
       limit: 500,
     );
-    if (!mounted) {
+    if (!mounted ||
+        epoch != _loadEpoch ||
+        requestedStore != widget.membership.storeId ||
+        requestedUser != widget.user.id ||
+        requestedPartyId != widget.party.id ||
+        requestedPartyType != widget.party.type) {
       return;
     }
     if (entriesResult is FailureResult<List<PartyLedgerEntry>>) {
@@ -226,10 +272,15 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
     }
     final balanceResult = await widget.repository.getBalance(
       context: _storeContext,
-      partyType: widget.party.type,
-      partyId: widget.party.id,
+      partyType: requestedPartyType,
+      partyId: requestedPartyId,
     );
-    if (!mounted) {
+    if (!mounted ||
+        epoch != _loadEpoch ||
+        requestedStore != widget.membership.storeId ||
+        requestedUser != widget.user.id ||
+        requestedPartyId != widget.party.id ||
+        requestedPartyType != widget.party.type) {
       return;
     }
     if (balanceResult is FailureResult<Money>) {
@@ -239,9 +290,22 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
       });
       return;
     }
+    final entries = (entriesResult as Success<List<PartyLedgerEntry>>).value;
+    final balance = (balanceResult as Success<Money>).value;
+    if (entries.any(
+      (entry) =>
+          entry.debit.currency != balance.currency ||
+          entry.credit.currency != balance.currency,
+    )) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'عملة كشف الحساب لا تطابق رصيد الطرف.';
+      });
+      return;
+    }
     setState(() {
-      _entries = (entriesResult as Success<List<PartyLedgerEntry>>).value;
-      _balance = (balanceResult as Success<Money>).value;
+      _entries = entries;
+      _balance = balance;
       _isLoading = false;
     });
   }
