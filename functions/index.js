@@ -73,6 +73,7 @@ const {
   fingerprintInventoryMovement,
   matchesLegacyInventoryMovement,
 } = require('./accounting/inventory_movement_integrity');
+const {fingerprintOfferOrderConfirmation} = require('./accounting/offer_order_integrity');
 const {
   MAX_AUDIT_DOCS_PER_COLLECTION,
   MAX_AUDIT_TOTAL_DOCS,
