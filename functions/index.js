@@ -75,6 +75,11 @@ const {
 } = require('./accounting/inventory_movement_integrity');
 const {fingerprintOfferOrderConfirmation} = require('./accounting/offer_order_integrity');
 const {
+  fingerprintRepairDelivery,
+  fingerprintRepairPayment,
+  sameLegacyRepairAdvance,
+} = require('./accounting/repair_integrity');
+const {
   MAX_AUDIT_DOCS_PER_COLLECTION,
   MAX_AUDIT_TOTAL_DOCS,
   readAuditPages,
@@ -11364,8 +11369,58 @@ async function deliverRepairInTransaction(transaction, userId, command) {
     transaction.get(journalRef),
     transaction.get(journalIdempotencyRef),
   ]);
+  const deliveryFingerprint = fingerprintRepairDelivery(command);
   if (deliveryIdempotencySnapshot.exists) {
     const data = deliveryIdempotencySnapshot.data();
+    if (data.storeId !== command.storeId ||
+        data.repairId !== command.repairId ||
+        data.journalEntryId !== journalEntryId) {
+      conflict('Repair delivery idempotency marker is inconsistent.');
+    }
+    if (data.requestFingerprint != null) {
+      if (data.requestFingerprint !== deliveryFingerprint) {
+        conflict('Repair delivery retry changed its financial details.');
+      }
+    } else {
+      const historicalRepair = repairSnapshot.exists
+        ? repairSnapshot.data()
+        : null;
+      const historicalJournal = journalSnapshot.exists
+        ? journalSnapshot.data()
+        : null;
+      if (!historicalRepair ||
+          historicalRepair.storeId !== command.storeId ||
+          historicalRepair.status !== 'delivered' ||
+          historicalRepair.invoiceJournalEntryId !== journalEntryId ||
+          !historicalJournal ||
+          historicalJournal.storeId !== command.storeId ||
+          historicalJournal.sourceType !== 'repair' ||
+          historicalJournal.status !== 'posted') {
+        conflict('Historical repair delivery cannot be verified.');
+      }
+      const historicalLines = await transaction.get(
+        journalRef.collection('lines'),
+      );
+      const accountIds = new Set(
+        historicalLines.docs.map((doc) => doc.data().accountId),
+      );
+      const requiredAccounts = [
+        command.accounts.customerReceivableAccountId,
+        command.accounts.repairRevenueAccountId,
+      ];
+      if (storedInt(historicalRepair.costOfPartsMinorUnits, 0) > 0) {
+        requiredAccounts.push(
+          command.accounts.inventoryAccountId,
+          command.accounts.costOfSalesAccountId,
+        );
+      }
+      if (storedInt(historicalRepair.advancePaidMinorUnits, 0) > 0) {
+        requiredAccounts.push(command.accounts.customerAdvancesAccountId);
+      }
+      if (requiredAccounts.some((accountId) => !accountIds.has(accountId))) {
+        conflict('Historical repair delivery accounts differ from retry.');
+      }
+    }
     return {
       status: 'already_delivered',
       repairId: command.repairId,
@@ -11859,6 +11914,7 @@ async function deliverRepairInTransaction(transaction, userId, command) {
     repairId: command.repairId,
     idempotencyKey: command.idempotencyKey,
     journalEntryId,
+    requestFingerprint: deliveryFingerprint,
     createdAt: FieldValue.serverTimestamp(),
   });
   transaction.set(journalIdempotencyRef, {
@@ -11926,16 +11982,52 @@ async function postRepairAdvanceInTransaction(
     transaction.get(journalRef),
     transaction.get(journalIdempotencyRef),
   ]);
+  const advanceFingerprint = fingerprintRepairPayment(
+    command,
+    'advance',
+  );
   if (paymentIdempotencySnapshot.exists) {
     const data = paymentIdempotencySnapshot.data();
-    if (data.paymentId === command.payment.id) {
-      return {
-        status: 'already_posted',
-        paymentId: command.payment.id,
-        journalEntryId,
-      };
+    if (data.storeId !== command.storeId ||
+        data.repairId !== command.repairId ||
+        data.paymentId !== command.payment.id ||
+        data.journalEntryId !== journalEntryId) {
+      conflict('The repair payment idempotency key is already assigned.');
     }
-    conflict('The repair payment idempotency key is already assigned.');
+    if (data.requestFingerprint != null) {
+      if (data.requestFingerprint !== advanceFingerprint) {
+        conflict('Repair advance retry changed its financial details.');
+      }
+    } else {
+      if (!paymentSnapshot.exists ||
+          !journalSnapshot.exists ||
+          !journalIdempotencySnapshot.exists ||
+          !sameLegacyRepairAdvance(
+            paymentSnapshot.data(),
+            data,
+            command,
+          )) {
+        conflict('Historical repair advance cannot be verified.');
+      }
+      const historicalJournal = journalSnapshot.data();
+      const historicalLines = await transaction.get(
+        journalRef.collection('lines'),
+      );
+      const accounts = new Set(
+        historicalLines.docs.map((doc) => doc.data().accountId),
+      );
+      if (historicalJournal.sourceType !== 'repairAdvance' ||
+          historicalJournal.status !== 'posted' ||
+          !accounts.has(command.accounts.settlementAccountId) ||
+          !accounts.has(command.accounts.customerAdvancesAccountId)) {
+        conflict('Historical repair advance accounts differ from retry.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      paymentId: command.payment.id,
+      journalEntryId,
+    };
   }
   if (paymentSnapshot.exists ||
       journalSnapshot.exists ||
@@ -12108,6 +12200,7 @@ async function postRepairAdvanceInTransaction(
     repairId: command.repairId,
     idempotencyKey: command.payment.idempotencyKey,
     journalEntryId,
+    requestFingerprint: advanceFingerprint,
     createdAt: FieldValue.serverTimestamp(),
   });
   transaction.set(journalIdempotencyRef, {
