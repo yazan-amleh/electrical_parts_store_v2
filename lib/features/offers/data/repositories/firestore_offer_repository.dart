@@ -7,8 +7,6 @@ import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
 import '../../../../infrastructure/firebase/firebase_paths.dart';
 import '../../../../infrastructure/queue/cloud_function_queue_fallback.dart';
-import '../../../sales/domain/entities/sale_posting_plan.dart';
-import '../../../sales/domain/enums/sale_payment_method.dart';
 import '../../domain/entities/offer.dart';
 import '../../domain/entities/offer_order.dart';
 import '../../domain/entities/offer_order_confirmation.dart';
