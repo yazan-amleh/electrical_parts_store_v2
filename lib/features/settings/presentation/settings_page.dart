@@ -561,8 +561,6 @@ class _SettingsPageState extends State<SettingsPage> {
           userId: draft.userId,
           role: draft.role,
           isActive: true,
-          displayName: draft.displayName,
-          email: draft.email,
         ),
       );
       if (!mounted) return;
@@ -663,14 +661,10 @@ class _NewMemberDraft {
   const _NewMemberDraft({
     required this.userId,
     required this.role,
-    this.displayName,
-    this.email,
   });
 
   final String userId;
   final StoreRole role;
-  final String? displayName;
-  final String? email;
 }
 
 class _AddMemberDialog extends StatefulWidget {
@@ -682,15 +676,11 @@ class _AddMemberDialog extends StatefulWidget {
 
 class _AddMemberDialogState extends State<_AddMemberDialog> {
   final _userIdController = TextEditingController();
-  final _displayNameController = TextEditingController();
-  final _emailController = TextEditingController();
   StoreRole _role = StoreRole.viewer;
 
   @override
   void dispose() {
     _userIdController.dispose();
-    _displayNameController.dispose();
-    _emailController.dispose();
     super.dispose();
   }
 
@@ -703,12 +693,6 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
       _NewMemberDraft(
         userId: userId,
         role: _role,
-        displayName: _displayNameController.text.trim().isEmpty
-            ? null
-            : _displayNameController.text.trim(),
-        email: _emailController.text.trim().isEmpty
-            ? null
-            : _emailController.text.trim(),
       ),
     );
   }
@@ -734,23 +718,7 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                     prefixIcon: Icon(Icons.fingerprint_outlined),
                   ),
                 ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'البريد الإلكتروني (اختياري)',
-                    prefixIcon: Icon(Icons.email_outlined),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _displayNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'اسم العرض (اختياري)',
-                    prefixIcon: Icon(Icons.badge_outlined),
-                  ),
-                ),
+
                 const SizedBox(height: 10),
                 DropdownButtonFormField<StoreRole>(
                   value: _role,
@@ -776,7 +744,8 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                 const SizedBox(height: 8),
                 const Text(
                   'يجب أن يكون المستخدم موجوداً مسبقاً في Firebase Authentication. '
-                  'هذه الشاشة تربطه بالمتجر ولا تنشئ حساب تسجيل دخول جديداً.',
+                  'الاسم والبريد يُقرآن من حساب Authentication الموثوق، '
+                  'وهذه الشاشة تربطه بالمتجر فقط.',
                 ),
               ],
             ),
