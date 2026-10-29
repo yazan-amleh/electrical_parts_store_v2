@@ -1008,6 +1008,33 @@ describe('Firestore security rules', function () {
     );
   });
 
+  it('keeps membership mutations server-only even for the owner', async () => {
+    await assertSucceeds(
+      getDocs(collection(ownerDb, 'stores', STORE_ID, 'members')),
+    );
+    await assertFails(
+      setDoc(storeDoc(ownerDb, 'members', 'new-user'), {
+        storeId: STORE_ID,
+        userId: 'new-user',
+        role: 'owner',
+        isActive: true,
+      }),
+    );
+    await assertFails(
+      updateDoc(storeDoc(ownerDb, 'members', 'sales-1'), {
+        role: 'owner',
+      }),
+    );
+    await assertFails(
+      updateDoc(storeDoc(ownerDb, 'members', 'owner-1'), {
+        isActive: false,
+      }),
+    );
+    await assertFails(
+      deleteDoc(storeDoc(ownerDb, 'members', 'sales-1')),
+    );
+  });
+
   it('restricts the selected-store preference to the user and server writes', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), 'user_store_preferences', 'owner-1'), {
@@ -1032,7 +1059,7 @@ describe('Firestore security rules', function () {
     );
   });
 
-  it('does not allow owners to forge or remove seeded chart metadata', async () => {
+  it('keeps store profile and seeded metadata mutations server-only', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await updateDoc(doc(context.firestore(), 'stores', STORE_ID), {
         initialChartVersion: 1,
@@ -1049,7 +1076,7 @@ describe('Firestore security rules', function () {
         initialChartAccountCount: 0,
       }),
     );
-    await assertSucceeds(
+    await assertFails(
       updateDoc(doc(ownerDb, 'stores', STORE_ID), {
         name: 'New Store Name',
       }),
