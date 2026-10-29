@@ -8886,8 +8886,27 @@ async function confirmOfferOrderInTransaction(transaction, userId, command) {
     invalid('Offer order was not found.');
   }
   const order = orderSnapshot.data();
+  const fingerprint = fingerprintOfferOrderConfirmation(command);
   if (confirmationSnapshot.exists) {
     const data = confirmationSnapshot.data();
+    if (data.storeId !== command.storeId ||
+        data.orderId !== command.orderId ||
+        data.saleId == null ||
+        data.journalEntryId == null) {
+      conflict('Offer confirmation marker is inconsistent.');
+    }
+    if (data.requestFingerprint != null) {
+      if (data.requestFingerprint !== fingerprint) {
+        conflict(
+          'Offer confirmation retry differs from the original request.',
+        );
+      }
+    } else if (order.status !== 'confirmed' ||
+        order.saleId !== data.saleId ||
+        order.journalEntryId !== data.journalEntryId ||
+        order.paymentMethod !== command.paymentMethod) {
+      conflict('Historical offer confirmation cannot be verified.');
+    }
     return {
       status: 'already_confirmed',
       orderId: command.orderId,
@@ -8896,6 +8915,11 @@ async function confirmOfferOrderInTransaction(transaction, userId, command) {
     };
   }
   if (order.status === 'confirmed') {
+    if (order.paymentMethod !== command.paymentMethod) {
+      conflict(
+        'Confirmed offer order payment method differs from the retry.',
+      );
+    }
     return {
       status: 'already_confirmed',
       orderId: command.orderId,
@@ -9003,6 +9027,7 @@ async function confirmOfferOrderInTransaction(transaction, userId, command) {
     saleId: result.saleId,
     journalEntryId: result.journalEntryId,
     idempotencyKey: command.idempotencyKey,
+    requestFingerprint: fingerprint,
     createdAt: FieldValue.serverTimestamp(),
   });
   return {
