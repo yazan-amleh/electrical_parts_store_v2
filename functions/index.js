@@ -16,6 +16,11 @@ const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
 const { createStoreHandler, selectStoreHandler } = require('./store_onboarding');
+const {
+  updateStoreProfileHandler,
+  addStoreMemberHandler,
+  updateStoreMemberHandler,
+} = require('./settings_management');
 const {createVoucherDraftHandlers} = require('./voucher_drafts');
 const {nextVoucherNumber} = require('./accounting/voucher_numbering');
 const {
@@ -140,6 +145,34 @@ exports.mutateChartAccount = onCall(async (request) => {
     assertAccess: (member, storeId) => assertMembership(
       member, storeId, 'modify chart of accounts', new Set(['owner', 'admin']),
     ),
+  });
+});
+
+exports.updateStoreProfile = onCall(async (request) => {
+  return updateStoreProfileHandler({
+    db,
+    FieldValue,
+    HttpsError,
+    request,
+  });
+});
+
+exports.addStoreMember = onCall(async (request) => {
+  return addStoreMemberHandler({
+    db,
+    auth: admin.auth(),
+    FieldValue,
+    HttpsError,
+    request,
+  });
+});
+
+exports.updateStoreMember = onCall(async (request) => {
+  return updateStoreMemberHandler({
+    db,
+    FieldValue,
+    HttpsError,
+    request,
   });
 });
 
