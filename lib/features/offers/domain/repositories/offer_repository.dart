@@ -46,8 +46,7 @@ abstract interface class OfferRepository {
   Future<Result<OfferOrderConfirmation>> confirmOfferOrder({
     required StoreContext context,
     required OfferOrder order,
-    required SalePaymentMethod paymentMethod,
-    required SalePostingAccounts accounts,
+    required OfferOrderConfirmationRequest confirmation,
   });
 
   Future<Result<void>> cancelOfferOrder({
