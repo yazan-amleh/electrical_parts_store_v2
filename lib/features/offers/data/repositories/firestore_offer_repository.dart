@@ -224,13 +224,11 @@ class FirestoreOfferRepository implements OfferRepository {
   Future<Result<OfferOrderConfirmation>> confirmOfferOrder({
     required StoreContext context,
     required OfferOrder order,
-    required SalePaymentMethod paymentMethod,
-    required SalePostingAccounts accounts,
+    required OfferOrderConfirmationRequest confirmation,
   }) async {
     final payload = OfferCommandMapper.confirmOrderRequest(
       order: order,
-      paymentMethod: paymentMethod,
-      accounts: accounts,
+      confirmation: confirmation,
     );
     try {
       final response = await _functions
@@ -242,15 +240,17 @@ class FirestoreOfferRepository implements OfferRepository {
           orderId: order.id,
           saleId: data['saleId'] as String? ?? '',
           journalEntryId: data['journalEntryId'] as String? ?? '',
+          alreadyConfirmed: data['status'] == 'already_confirmed',
         ),
       );
     } on firebase_functions.FirebaseFunctionsException catch (error) {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'confirm-offer-order-${order.id}',
+        commandId:
+            'confirm-offer-order-${confirmation.idempotencyKey.value}',
         operation: 'confirmOfferOrder',
-        idempotencyKey: 'confirm-${order.id}',
+        idempotencyKey: confirmation.idempotencyKey.value,
         payload: payload,
       );
       if (queued != null) {
