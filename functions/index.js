@@ -9304,6 +9304,43 @@ async function settleChequeInTransaction(transaction, userId, command) {
   let bouncedPartyLedgerRef;
   let bouncedPartyBalanceRef;
   let bouncedPartyBalance = {};
+  let repairRef = null;
+  let repairPaidAfterBounce = null;
+  if (command.action === 'bounce' && cheque.repairId != null) {
+    if (!isCustomerCheque || cheque.paymentKind !== 'settlement') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Only customer repair settlement cheques may link to a repair.',
+      );
+    }
+    const repairId = safeId(cheque.repairId, 'repairId');
+    repairRef = storeRef.collection('repairs').doc(repairId);
+    const repairSnapshot = await transaction.get(repairRef);
+    if (!repairSnapshot.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Repair linked to the cheque was not found.',
+      );
+    }
+    const repair = repairSnapshot.data();
+    if (repair.storeId !== command.storeId ||
+        repair.customerId !== cheque.partyId ||
+        repair.invoiceJournalEntryId == null) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Repair cheque linkage is inconsistent.',
+      );
+    }
+    const repairPaid = storedInt(repair.paidMinorUnits, 0);
+    if (repairPaid < amount) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Repair paid projection is lower than the bounced cheque.',
+      );
+    }
+    repairPaidAfterBounce = repairPaid - amount;
+  }
+
   if (command.action === 'bounce') {
     const partyLedgerId = command.chequeId + '-bounce';
     bouncedPartyLedgerRef = storeRef
@@ -9381,6 +9418,12 @@ async function settleChequeInTransaction(transaction, userId, command) {
     settledAt: Timestamp.fromDate(command.postedAt),
     updatedAt: FieldValue.serverTimestamp(),
   });
+  if (repairRef != null) {
+    transaction.update(repairRef, {
+      paidMinorUnits: repairPaidAfterBounce,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
   markJournalPosting(
     transaction, storeRef, journalRef.id, FieldValue,
   );
