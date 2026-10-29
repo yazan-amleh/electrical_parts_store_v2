@@ -39,6 +39,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String _memberSearch = '';
   bool _showInactiveMembers = true;
   String? _errorMessage;
+  int _loadEpoch = 0;
 
   bool get _canManage => widget.membership.role.canManageStore;
 
@@ -57,6 +58,20 @@ class _SettingsPageState extends State<SettingsPage> {
     _phoneController = TextEditingController();
     _addressController = TextEditingController();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant SettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId) {
+      _profile = null;
+      _members = const <StoreMember>[];
+      _savingMemberIds.clear();
+      _memberSearch = '';
+      _errorMessage = null;
+      _load();
+    }
   }
 
   @override
@@ -214,11 +229,15 @@ class _SettingsPageState extends State<SettingsPage> {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 6),
-            const Text(
-              'يمكن للمالك أو المدير تعديل دور العضو وتفعيله. لا يمكن نقل '
-              'ملكية المتجر من هذه الشاشة.',
-            ),
-            if (_canManage) ...[
+            if (!_canManage)
+              const Text(
+                'قائمة الأعضاء والصلاحيات متاحة للمالك والمدير فقط.',
+              )
+            else ...[
+              const Text(
+                'يمكن للمالك أو المدير تعديل دور العضو وتفعيله. لا يمكن نقل '
+                'ملكية المتجر من هذه الشاشة.',
+              ),
               const SizedBox(height: 10),
               Align(
                 alignment: AlignmentDirectional.centerStart,
@@ -236,44 +255,50 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
               ),
-            ],
-            const SizedBox(height: 12),
-            TextField(
-              decoration: const InputDecoration(
-                labelText: 'البحث عن مستخدم',
-                hintText: 'الاسم أو البريد الإلكتروني أو UID',
-                prefixIcon: Icon(Icons.search),
+              const SizedBox(height: 12),
+              TextField(
+                decoration: const InputDecoration(
+                  labelText: 'البحث عن مستخدم',
+                  hintText: 'الاسم أو البريد الإلكتروني أو UID',
+                  prefixIcon: Icon(Icons.search),
+                ),
+                onChanged: (value) {
+                  setState(() => _memberSearch = value.trim().toLowerCase());
+                },
               ),
-              onChanged: (value) {
-                setState(() => _memberSearch = value.trim().toLowerCase());
-              },
-            ),
-            const SizedBox(height: 8),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('إظهار المستخدمين غير النشطين'),
-              value: _showInactiveMembers,
-              onChanged: (value) {
-                setState(() => _showInactiveMembers = value);
-              },
-            ),
-            Text(
-              'إجمالي الأعضاء: ${_members.length} • '
-              'النشطون: ${_members.where((member) => member.isActive).length}',
-            ),
-            const SizedBox(height: 8),
-            if (_members.isEmpty)
-              const Text('لا يوجد أعضاء مسجلون.')
-            else if (_visibleMembers.isEmpty)
-              const Text('لا يوجد أعضاء مطابقون للبحث أو الفلتر.')
-            else
-              for (final member in _visibleMembers)
-                _memberTile(context, member),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('إظهار المستخدمين غير النشطين'),
+                value: _showInactiveMembers,
+                onChanged: (value) {
+                  setState(() => _showInactiveMembers = value);
+                },
+              ),
+              Text(
+                'إجمالي الأعضاء: ${_members.length} • '
+                'النشطون: ${_members.where((member) => member.isActive).length}',
+              ),
+              const SizedBox(height: 8),
+              if (_members.isEmpty)
+                const Text('لا يوجد أعضاء مسجلون.')
+              else if (_visibleMembers.isEmpty)
+                const Text('لا يوجد أعضاء مطابقون للبحث أو الفلتر.')
+              else
+                for (final member in _visibleMembers)
+                  _memberTile(context, member),
+            ],
           ],
         ),
       ),
     );
   }
+
+  /*
+   * Member controls are intentionally omitted for non-managers. Membership
+   * list rules are manager-only, so read-only users still get the store
+   * profile without triggering a forbidden member enumeration.
+   */
 
   List<StoreMember> get _visibleMembers {
     return _members.where((member) {
@@ -419,12 +444,19 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
+    final epoch = ++_loadEpoch;
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
+
     final profileResult = await repository.getStoreProfile(context: _context);
-    if (!mounted) {
+    if (!mounted ||
+        epoch != _loadEpoch ||
+        requestedStore != widget.membership.storeId ||
+        requestedUser != widget.user.id) {
       return;
     }
     if (profileResult is FailureResult<StoreProfile>) {
@@ -435,16 +467,23 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
-    final membersResult = await repository.getMembers(context: _context);
-    if (!mounted) {
-      return;
-    }
-    if (membersResult is FailureResult<List<StoreMember>>) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = membersResult.failure.message;
-      });
-      return;
+    List<StoreMember> members = const <StoreMember>[];
+    if (_canManage) {
+      final membersResult = await repository.getMembers(context: _context);
+      if (!mounted ||
+          epoch != _loadEpoch ||
+          requestedStore != widget.membership.storeId ||
+          requestedUser != widget.user.id) {
+        return;
+      }
+      if (membersResult is FailureResult<List<StoreMember>>) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = membersResult.failure.message;
+        });
+        return;
+      }
+      members = (membersResult as Success<List<StoreMember>>).value;
     }
 
     final profile = (profileResult as Success<StoreProfile>).value;
@@ -454,7 +493,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _addressController.text = profile.address;
     setState(() {
       _profile = profile;
-      _members = (membersResult as Success<List<StoreMember>>).value;
+      _members = members;
       _isLoading = false;
     });
   }
