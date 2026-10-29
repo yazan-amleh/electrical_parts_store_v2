@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
+import '../../../../core/errors/failure.dart';
 import '../../../../core/idempotency/idempotency_key.dart';
 import '../../../../core/money/money.dart';
 import '../../../../core/quantity/quantity.dart';
@@ -323,6 +324,11 @@ class _RepairDialogState extends State<_RepairDialog> {
   bool _busy = false;
   bool _isExporting = false;
   String? _error;
+  _PendingRepairDelivery? _pendingDelivery;
+  RepairPayment? _pendingPayment;
+
+  bool get _financialUnresolved =>
+      _pendingDelivery != null || _pendingPayment != null;
 
   @override
   void initState() {
