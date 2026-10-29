@@ -141,6 +141,57 @@ describe('repair financial retry integrity', () => {
     await db.recursiveDelete(store);
   });
 
+  it('depletes repair parts using exact inventory carrying value', async () => {
+    const store = await seed('repair-exact-carrying-value');
+    await store.collection('products').doc('product-a').set({
+      storeId: store.id,
+      currency: 'ILS',
+      isService: false,
+      isActive: true,
+      quantityOnHandMilliUnits: 3000,
+      purchasePriceMinorUnits: 333,
+      inventoryValueMinorUnits: 1000,
+    });
+    await store.collection('repairs').doc('repair-1').update({
+      laborCostMinorUnits: 0,
+      parts: [{
+        id: 'part-a',
+        productId: 'product-a',
+        productName: 'Electrical component',
+        quantityMilliUnits: 3000,
+        unitPriceMinorUnits: 500,
+        unitCostMinorUnits: 333,
+        currency: 'ILS',
+        source: 'products',
+      }],
+    });
+
+    const result = await functions.deliverRepair.run(
+      deliveryRequest(store.id),
+    );
+    assert.equal(result.status, 'posted');
+
+    const product = (await store.collection('products')
+      .doc('product-a').get()).data();
+    assert.equal(product.quantityOnHandMilliUnits, 0);
+    assert.equal(product.inventoryValueMinorUnits, 0);
+
+    const repair = (await store.collection('repairs')
+      .doc('repair-1').get()).data();
+    assert.equal(repair.costOfPartsMinorUnits, 1000);
+    assert.equal(repair.invoicedTotalMinorUnits, 1500);
+
+    const movement = (await store.collection('inventory_movements')
+      .doc('repair-1-part-product-a').get()).data();
+    assert.equal(movement.totalCostMinorUnits, 1000);
+
+    const costLine = (await store.collection('journal_entries')
+      .doc('repair-1-invoice')
+      .collection('lines').doc('repair-1-cost').get()).data();
+    assert.equal(costLine.debitMinorUnits, 1000);
+    await db.recursiveDelete(store);
+  });
+
   it('replays exact advance and rejects a changed amount', async () => {
     const store = await seed('repair-advance-fingerprint');
     const request = advanceRequest(store.id, 100);
