@@ -110,6 +110,30 @@ This closes the automated Purchase Return / partial Purchase Order receipt
 workstream only. Real isolated Firebase E2E, visual comparison and release
 approval remain open and are not implied by green CI.
 
+
+## Purchase-order partial receipt closure (2026-10-28)
+
+- Purchase orders now support **true cumulative partial receipts** instead of
+  rejecting any order with a prior received quantity.
+- Each receipt is its own immutable Purchase + journal posting with a unique
+  receipt id and idempotency key. An unresolved network/queued outcome keeps
+  the exact same receipt request for retry; the UI blocks creating another
+  receipt until that request is resolved.
+- Receipt quantities are validated against each order line's remaining
+  quantity inside the Firestore transaction. Competing receipts serialize;
+  an over-receipt loses closed without extra purchase, stock or journal writes.
+- The order remains `pending` while any quantity is outstanding and becomes
+  `completed` only after every line is fully received. Cancelling a
+  partially received order cancels only the remaining quantity; posted
+  receipts are not reversed silently.
+- The purchase-order screen now loads automatically on entry, resets data on
+  tenant/user change, displays ordered/received/remaining quantities, and
+  supports partial-quantity entry with exact retry.
+- Backward compatibility is retained for pre-partial-receipt full receipts,
+  including their historical request fingerprint.
+- Verification: GitHub Actions run `40740486252` — **SUCCESS** (syntax,
+  format, analyze, Flutter tests, web build and configured CI gates).
+
 ## Mandatory rollout gate
 
 Do not deploy or merge merely because CI succeeds. Verify roles, privileged service accounts, close-period writer boundaries and real backup/restore recovery in an **isolated V2** environment. Obtain an explicit deployment decision from the owner. The existing manual deploy workflow checks out `v2/port-v1-complete`, not this audit branch; approving a separate deployment action requires a deliberate branch/release review.
