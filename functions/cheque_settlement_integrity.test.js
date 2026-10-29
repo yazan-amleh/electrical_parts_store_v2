@@ -117,6 +117,37 @@ describe('cheque settlement guarded transaction', () => {
     await db.recursiveDelete(store);
   });
 
+  it('bounced repair settlement cheque reopens the repair outstanding balance', async () => {
+    const store = await seed('cheque-guard-repair-bounce');
+    await store.collection('party_payments').doc('cheque-1').update({
+      repairId: 'repair-1',
+      paymentKind: 'settlement',
+    });
+    await store.collection('repairs').doc('repair-1').set({
+      storeId: store.id,
+      customerId: 'customer-1',
+      status: 'delivered',
+      invoiceJournalEntryId: 'repair-1-invoice',
+      invoicedTotalMinorUnits: AMOUNT,
+      paidMinorUnits: AMOUNT,
+      currency: 'ILS',
+    });
+
+    const first = await settle(command(store.id, 'bounce'));
+    assert.equal(first.status, 'bounced');
+
+    let repair = (await store.collection('repairs')
+      .doc('repair-1').get()).data();
+    assert.equal(repair.paidMinorUnits, 0);
+
+    const retry = await settle(command(store.id, 'bounce'));
+    assert.equal(retry.status, 'bounced');
+    repair = (await store.collection('repairs')
+      .doc('repair-1').get()).data();
+    assert.equal(repair.paidMinorUnits, 0);
+    await db.recursiveDelete(store);
+  });
+
   it('refuses corrupt bounced customer party balance before any settlement', async () => {
     const store = await seed('cheque-guard-corrupt-party');
     await store.collection('party_balances').doc('customer-customer-1').update({
