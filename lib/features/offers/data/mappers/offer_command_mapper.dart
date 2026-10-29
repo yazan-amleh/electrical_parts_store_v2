@@ -1,5 +1,3 @@
-import '../../../sales/domain/entities/sale_posting_plan.dart';
-import '../../../sales/domain/enums/sale_payment_method.dart';
 import '../../domain/entities/offer.dart';
 import '../../domain/entities/offer_line.dart';
 import '../../domain/entities/offer_order.dart';
