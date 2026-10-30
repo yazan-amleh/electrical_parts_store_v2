@@ -34,8 +34,7 @@ class _ActivityRepository implements ActivityLogRepository {
               (log) =>
                   (fromInclusive == null ||
                       !log.occurredAt.isBefore(fromInclusive)) &&
-                  (toExclusive == null ||
-                      log.occurredAt.isBefore(toExclusive)),
+                  (toExclusive == null || log.occurredAt.isBefore(toExclusive)),
             )
             .take(limit)
             .toList(growable: false),
