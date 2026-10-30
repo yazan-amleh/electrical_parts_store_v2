@@ -718,7 +718,6 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                     prefixIcon: Icon(Icons.fingerprint_outlined),
                   ),
                 ),
-
                 const SizedBox(height: 10),
                 DropdownButtonFormField<StoreRole>(
                   value: _role,
