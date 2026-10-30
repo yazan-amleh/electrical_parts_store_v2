@@ -12,11 +12,36 @@ function eventDocumentId(event) {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
-function currentSnapshot(event) {
-  if (event?.data?.after) {
-    return event.data.after.exists ? event.data.after : null;
+function activitySnapshot(event) {
+  const after = event?.data?.after;
+  if (after) {
+    if (after.exists) {
+      return after;
+    }
+    const before = event?.data?.before;
+    return before?.exists ? before : null;
   }
-  return event?.data?.exists ? event.data : null;
+
+  const snapshot = event?.data;
+  return snapshot?.exists ? snapshot : null;
+}
+
+function changeKind(event) {
+  const before = event?.data?.before;
+  const after = event?.data?.after;
+  if (!before && !after) {
+    return 'created';
+  }
+
+  const beforeExists = before?.exists === true;
+  const afterExists = after?.exists === true;
+  if (!beforeExists && afterExists) {
+    return 'created';
+  }
+  if (beforeExists && !afterExists) {
+    return 'deleted';
+  }
+  return 'updated';
 }
 
 function trustedTimestamp(data, event, Timestamp) {
@@ -55,13 +80,33 @@ async function writeActivity({
   if (typeof storeId !== 'string' || storeId.length === 0) {
     throw new Error('Activity event has no storeId.');
   }
-  const snapshot = currentSnapshot(event);
+
+  const snapshot = activitySnapshot(event);
   if (!snapshot) {
     return {skipped: true};
   }
+
   const data = snapshot.data() || {};
   if (data.storeId != null && data.storeId !== storeId) {
     throw new Error('Activity source belongs to another store.');
+  }
+
+  const operation = changeKind(event);
+  const resolvedType = typeof type === 'function'
+    ? type(data, event.params || {}, operation)
+    : type;
+  const resolvedDescription = typeof description === 'function'
+    ? description(data, event.params || {}, operation)
+    : description;
+
+  if (typeof resolvedType !== 'string' || resolvedType.length === 0) {
+    throw new Error('Activity event has no valid type.');
+  }
+  if (
+    typeof resolvedDescription !== 'string' ||
+    resolvedDescription.trim().length === 0
+  ) {
+    throw new Error('Activity event has no valid description.');
   }
 
   const activityId = eventDocumentId(event);
@@ -75,17 +120,15 @@ async function writeActivity({
 
   await activityRef.set({
     storeId,
-    type,
-    description:
-      typeof description === 'function'
-        ? description(data, event.params || {})
-        : description,
+    type: resolvedType,
+    description: resolvedDescription.trim(),
     timestamp,
     userId,
     userName: null,
     metadata: {
       ...metadata,
       sourceId: snapshot.id,
+      operation,
     },
     eventId: event?.id ?? null,
     createdAt: timestamp,
@@ -98,6 +141,8 @@ async function writeActivity({
 }
 
 module.exports = {
+  activitySnapshot,
+  changeKind,
   eventDocumentId,
   writeActivity,
 };
