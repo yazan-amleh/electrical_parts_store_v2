@@ -136,7 +136,7 @@ void main() {
     expect(find.text('Store B'), findsOneWidget);
 
     repository.profileCompleters['store-a']!.complete(
-      const Success(
+      Success(
         StoreProfile(
           id: 'store-a',
           name: 'STALE STORE A',
