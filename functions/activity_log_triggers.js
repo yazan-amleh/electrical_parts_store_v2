@@ -45,15 +45,20 @@ function changeKind(event) {
 }
 
 function trustedTimestamp(data, event, Timestamp) {
-  for (const key of ['postedAt', 'occurredAt', 'updatedAt', 'createdAt']) {
+  // The activity feed records when the source changed, not the possibly
+  // backdated transaction date or the prior update time on a deleted record.
+  // CloudEvent time is stable across retries, unlike server wall-clock time.
+  if (typeof event?.time === 'string' && event.time.trim()) {
+    const parsed = new Date(event.time);
+    if (!Number.isNaN(parsed.getTime())) {
+      return Timestamp.fromDate(parsed);
+    }
+  }
+  for (const key of ['updatedAt', 'createdAt', 'postedAt', 'occurredAt']) {
     const value = data?.[key];
     if (value && typeof value.toDate === 'function') {
       return value;
     }
-  }
-  const parsed = new Date(event?.time ?? '');
-  if (!Number.isNaN(parsed.getTime())) {
-    return Timestamp.fromDate(parsed);
   }
   return Timestamp.now();
 }
