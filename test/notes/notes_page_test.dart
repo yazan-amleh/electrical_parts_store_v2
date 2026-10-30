@@ -45,7 +45,12 @@ class _NotesRepository implements NoteRepository {
 
 const _user = AuthenticatedUser(id: 'user-1', email: 'owner@example.com');
 
-Note _note(String storeId, String name) {
+Note _note(
+  String storeId,
+  String name, {
+  bool starred = false,
+  bool archived = false,
+}) {
   return Note(
     id: name,
     storeId: storeId,
@@ -55,6 +60,8 @@ Note _note(String storeId, String name) {
     type: NoteType.general,
     priority: NotePriority.medium,
     createdAt: DateTime.utc(2026, 10, 30),
+    isStarred: starred,
+    isArchived: archived,
   );
 }
 
@@ -114,5 +121,31 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('بيانات المتجر ب'), findsOneWidget);
     expect(find.text('بيانات خاصة بالمتجر أ'), findsNothing);
+  });
+
+  testWidgets('restores V1 active, starred and archived note views', (
+    tester,
+  ) async {
+    final repository = _NotesRepository({
+      'store-a': [
+        _note('store-a', 'ملاحظة نشطة', starred: true),
+        _note('store-a', 'ملاحظة مؤرشفة', archived: true),
+      ],
+    });
+
+    await tester.pumpWidget(_page(repository, 'store-a'));
+    await tester.pumpAndSettle();
+    expect(find.text('ملاحظة نشطة'), findsOneWidget);
+    expect(find.text('ملاحظة مؤرشفة'), findsNothing);
+
+    await tester.tap(find.text('المميزة بنجمة'));
+    await tester.pumpAndSettle();
+    expect(find.text('ملاحظة نشطة'), findsOneWidget);
+    expect(find.text('ملاحظة مؤرشفة'), findsNothing);
+
+    await tester.tap(find.text('المؤرشفة'));
+    await tester.pumpAndSettle();
+    expect(find.text('ملاحظة مؤرشفة'), findsOneWidget);
+    expect(find.text('ملاحظة نشطة'), findsNothing);
   });
 }
