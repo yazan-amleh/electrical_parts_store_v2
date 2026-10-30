@@ -245,8 +245,7 @@ class FirestoreOfferRepository implements OfferRepository {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId:
-            'confirm-offer-order-${confirmation.idempotencyKey.value}',
+        commandId: 'confirm-offer-order-${confirmation.idempotencyKey.value}',
         operation: 'confirmOfferOrder',
         idempotencyKey: confirmation.idempotencyKey.value,
         payload: payload,
