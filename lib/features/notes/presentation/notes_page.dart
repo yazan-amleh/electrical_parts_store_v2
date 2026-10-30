@@ -25,7 +25,7 @@ class NotesPage extends StatefulWidget {
 }
 
 class _NotesPageState extends State<NotesPage> {
-  late final StoreContext _context;
+  late StoreContext _context;
   late Future<Result<List<Note>>> _notesFuture;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -39,13 +39,39 @@ class _NotesPageState extends State<NotesPage> {
       userId: widget.user.id,
     );
     _notesFuture = _loadNotes();
-    _searchController.addListener(() {
-      if (mounted) {
-        setState(() {
-          _searchQuery = _searchController.text.trim().toLowerCase();
-        });
-      }
-    });
+    _searchController.addListener(_handleSearchChanged);
+  }
+
+  void _handleSearchChanged() {
+    if (mounted) {
+      setState(() {
+        _searchQuery = _searchController.text.trim().toLowerCase();
+      });
+    }
+  }
+
+  bool _isCurrentContext(StoreContext actionContext) {
+    return actionContext.storeId == _context.storeId &&
+        actionContext.userId == _context.userId;
+  }
+
+  @override
+  void didUpdateWidget(covariant NotesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId ||
+        oldWidget.repository != widget.repository) {
+      _searchController.removeListener(_handleSearchChanged);
+      _searchController.clear();
+      _searchController.addListener(_handleSearchChanged);
+      _searchQuery = '';
+      _includeArchived = false;
+      _context = StoreContext(
+        storeId: widget.membership.storeId,
+        userId: widget.user.id,
+      );
+      _notesFuture = _loadNotes();
+    }
   }
 
   Future<Result<List<Note>>> _loadNotes() {
@@ -62,11 +88,12 @@ class _NotesPageState extends State<NotesPage> {
   }
 
   Future<void> _editNote([Note? note]) async {
+    final actionContext = _context;
     final draft = await showDialog<_NoteDraft>(
       context: context,
       builder: (context) => _NoteDialog(note: note),
     );
-    if (draft == null || !mounted) {
+    if (draft == null || !mounted || !_isCurrentContext(actionContext)) {
       return;
     }
 
@@ -74,8 +101,8 @@ class _NotesPageState extends State<NotesPage> {
     final candidate = note == null
         ? Note(
             id: DateTime.now().microsecondsSinceEpoch.toString(),
-            storeId: _context.storeId,
-            userId: _context.userId,
+            storeId: actionContext.storeId,
+            userId: actionContext.userId,
             title: draft.title,
             content: draft.content,
             type: draft.type,
@@ -93,10 +120,10 @@ class _NotesPageState extends State<NotesPage> {
           );
 
     final result = await widget.repository.saveNote(
-      context: _context,
+      context: actionContext,
       note: candidate,
     );
-    if (!mounted) {
+    if (!mounted || !_isCurrentContext(actionContext)) {
       return;
     }
     if (result is FailureResult<void>) {
@@ -108,11 +135,16 @@ class _NotesPageState extends State<NotesPage> {
   }
 
   Future<void> _updateNote(Note updated) async {
+    final actionContext = _context;
+    if (updated.storeId != actionContext.storeId ||
+        updated.userId != actionContext.userId) {
+      return;
+    }
     final result = await widget.repository.saveNote(
-      context: _context,
+      context: actionContext,
       note: updated,
     );
-    if (!mounted) {
+    if (!mounted || !_isCurrentContext(actionContext)) {
       return;
     }
     if (result is FailureResult<void>) {
@@ -144,6 +176,7 @@ class _NotesPageState extends State<NotesPage> {
 
   @override
   void dispose() {
+    _searchController.removeListener(_handleSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -211,6 +244,7 @@ class _NotesPageState extends State<NotesPage> {
             ),
             Expanded(
               child: FutureBuilder<Result<List<Note>>>(
+                key: ValueKey('${_context.storeId}/${_context.userId}'),
                 future: _notesFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting &&
