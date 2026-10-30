@@ -24,12 +24,17 @@ class NotesPage extends StatefulWidget {
   State<NotesPage> createState() => _NotesPageState();
 }
 
+enum _NotesView { active, starred, archived }
+
 class _NotesPageState extends State<NotesPage> {
   late StoreContext _context;
   late Future<Result<List<Note>>> _notesFuture;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  bool _includeArchived = false;
+  _NotesView _view = _NotesView.active;
+  NoteType? _selectedType;
+  NotePriority? _selectedPriority;
+  bool _showCompletedTasks = true;
 
   @override
   void initState() {
@@ -65,7 +70,10 @@ class _NotesPageState extends State<NotesPage> {
       _searchController.clear();
       _searchController.addListener(_handleSearchChanged);
       _searchQuery = '';
-      _includeArchived = false;
+      _view = _NotesView.active;
+      _selectedType = null;
+      _selectedPriority = null;
+      _showCompletedTasks = true;
       _context = StoreContext(
         storeId: widget.membership.storeId,
         userId: widget.user.id,
@@ -77,7 +85,8 @@ class _NotesPageState extends State<NotesPage> {
   Future<Result<List<Note>>> _loadNotes() {
     return widget.repository.getNotes(
       context: _context,
-      includeArchived: _includeArchived,
+      includeArchived: _view != _NotesView.active,
+      starredOnly: _view == _NotesView.starred,
     );
   }
 
@@ -161,17 +170,50 @@ class _NotesPageState extends State<NotesPage> {
   }
 
   List<Note> _visibleNotes(List<Note> notes) {
-    if (_searchQuery.isEmpty) {
-      return notes;
-    }
-    return notes
-        .where(
-          (note) =>
-              note.title.toLowerCase().contains(_searchQuery) ||
-              note.content.toLowerCase().contains(_searchQuery) ||
-              note.tags.any((tag) => tag.toLowerCase().contains(_searchQuery)),
-        )
-        .toList();
+    return notes.where((note) {
+      if (_view == _NotesView.active && note.isArchived) {
+        return false;
+      }
+      if (_view == _NotesView.starred && !note.isStarred) {
+        return false;
+      }
+      if (_view == _NotesView.archived && !note.isArchived) {
+        return false;
+      }
+      if (_selectedType != null && note.type != _selectedType) {
+        return false;
+      }
+      if (_selectedPriority != null && note.priority != _selectedPriority) {
+        return false;
+      }
+      if (!_showCompletedTasks &&
+          _selectedType == NoteType.task &&
+          note.isCompleted) {
+        return false;
+      }
+      if (_searchQuery.isEmpty) {
+        return true;
+      }
+      return note.title.toLowerCase().contains(_searchQuery) ||
+          note.content.toLowerCase().contains(_searchQuery) ||
+          note.tags.any((tag) => tag.toLowerCase().contains(_searchQuery));
+    }).toList();
+  }
+
+  Widget _viewChip(_NotesView view, String label) {
+    return ChoiceChip(
+      selected: _view == view,
+      label: Text(label),
+      onSelected: (_) {
+        if (_view == view) {
+          return;
+        }
+        setState(() {
+          _view = view;
+          _notesFuture = _loadNotes();
+        });
+      },
+    );
   }
 
   @override
@@ -189,6 +231,11 @@ class _NotesPageState extends State<NotesPage> {
         appBar: AppBar(
           title: const Text('ملاحظاتي'),
           actions: [
+            IconButton(
+              onPressed: _reload,
+              icon: const Icon(Icons.refresh),
+              tooltip: 'تحديث الملاحظات',
+            ),
             IconButton(
               onPressed: () => _editNote(),
               icon: const Icon(Icons.add),
@@ -208,37 +255,73 @@ class _NotesPageState extends State<NotesPage> {
                 ),
               ),
             ),
-            Padding(
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  FilterChip(
-                    selected: !_includeArchived,
-                    label: const Text('الحالية'),
-                    onSelected: (selected) {
-                      if (!selected) {
-                        return;
-                      }
-                      setState(() {
-                        _includeArchived = false;
-                        _notesFuture = _loadNotes();
-                      });
-                    },
-                  ),
+                  _viewChip(_NotesView.active, 'النشطة'),
                   const SizedBox(width: 8),
-                  FilterChip(
-                    selected: _includeArchived,
-                    label: const Text('مع المؤرشفة'),
-                    onSelected: (selected) {
-                      if (!selected) {
-                        return;
-                      }
-                      setState(() {
-                        _includeArchived = true;
-                        _notesFuture = _loadNotes();
-                      });
+                  _viewChip(_NotesView.starred, 'المميزة بنجمة'),
+                  const SizedBox(width: 8),
+                  _viewChip(_NotesView.archived, 'المؤرشفة'),
+                ],
+              ),
+            ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  DropdownButton<NoteType?>(
+                    value: _selectedType,
+                    hint: const Text('النوع'),
+                    items: [
+                      const DropdownMenuItem<NoteType?>(
+                        value: null,
+                        child: Text('كل الأنواع'),
+                      ),
+                      ...NoteType.values.map(
+                        (type) => DropdownMenuItem<NoteType?>(
+                          value: type,
+                          child: Text(type.arabicLabel),
+                        ),
+                      ),
+                    ],
+                    onChanged: (type) {
+                      setState(() => _selectedType = type);
                     },
                   ),
+                  const SizedBox(width: 16),
+                  DropdownButton<NotePriority?>(
+                    value: _selectedPriority,
+                    hint: const Text('الأولوية'),
+                    items: [
+                      const DropdownMenuItem<NotePriority?>(
+                        value: null,
+                        child: Text('كل الأولويات'),
+                      ),
+                      ...NotePriority.values.map(
+                        (priority) => DropdownMenuItem<NotePriority?>(
+                          value: priority,
+                          child: Text(priority.arabicLabel),
+                        ),
+                      ),
+                    ],
+                    onChanged: (priority) {
+                      setState(() => _selectedPriority = priority);
+                    },
+                  ),
+                  if (_selectedType == NoteType.task) ...[
+                    const SizedBox(width: 16),
+                    FilterChip(
+                      label: const Text('عرض المكتملة'),
+                      selected: _showCompletedTasks,
+                      onSelected: (value) {
+                        setState(() => _showCompletedTasks = value);
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
