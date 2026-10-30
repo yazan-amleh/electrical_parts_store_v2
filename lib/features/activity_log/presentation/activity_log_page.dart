@@ -68,9 +68,44 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
   }
 
   void _bindStream() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    DateTime? fromInclusive;
+    DateTime? toExclusive;
+
+    switch (_period) {
+      case _ActivityPeriod.today:
+        fromInclusive = today;
+        toExclusive = today.add(const Duration(days: 1));
+        break;
+      case _ActivityPeriod.week:
+        fromInclusive = today.subtract(Duration(days: today.weekday - 1));
+        toExclusive = fromInclusive.add(const Duration(days: 7));
+        break;
+      case _ActivityPeriod.custom:
+        final range = _customRange;
+        if (range != null) {
+          fromInclusive = DateTime(
+            range.start.year,
+            range.start.month,
+            range.start.day,
+          );
+          toExclusive = DateTime(
+            range.end.year,
+            range.end.month,
+            range.end.day + 1,
+          );
+        }
+        break;
+      case _ActivityPeriod.all:
+        break;
+    }
+
     _logs = widget.repository.watchLogs(
       context: _context,
       limit: _loadLimit,
+      fromInclusive: fromInclusive?.toUtc(),
+      toExclusive: toExclusive?.toUtc(),
     );
   }
 
@@ -135,8 +170,8 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                           padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
                           child: MaterialBanner(
                             content: Text(
-                              'يتم عرض آخر 500 حدث فقط. استخدم البحث والفلاتر '
-                              'لتضييق النتائج.',
+                              'يتم عرض أحدث 500 حدث ضمن الفترة المحددة فقط. '
+                              'البحث وتصفية النوع يعملان على الأحداث المحمّلة.',
                             ),
                             actions: [SizedBox.shrink()],
                           ),
@@ -273,10 +308,14 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
       selected: _period == period,
       label: Text(label),
       onSelected: (_) async {
-        setState(() => _period = period);
         if (period == _ActivityPeriod.custom && _customRange == null) {
           await _pickCustomRange();
+          return;
         }
+        setState(() {
+          _period = period;
+          _bindStream();
+        });
       },
     );
   }
@@ -430,6 +469,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
     setState(() {
       _period = _ActivityPeriod.custom;
       _customRange = selected;
+      _bindStream();
     });
   }
 
@@ -510,6 +550,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
       _selectedType = null;
       _period = _ActivityPeriod.all;
       _customRange = null;
+      _bindStream();
     });
   }
 
