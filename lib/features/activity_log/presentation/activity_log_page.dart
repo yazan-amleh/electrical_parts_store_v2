@@ -324,8 +324,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
           }
           break;
         case _ActivityPeriod.week:
-          if (local.isBefore(startOfWeek) ||
-              !local.isBefore(startOfNextWeek)) {
+          if (local.isBefore(startOfWeek) || !local.isBefore(startOfNextWeek)) {
             return false;
           }
           break;
