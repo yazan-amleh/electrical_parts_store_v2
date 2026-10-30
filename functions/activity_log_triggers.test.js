@@ -151,3 +151,33 @@ test('delete events record the deleted document and operation', async () => {
   assert.equal(stored.metadata.operation, 'deleted');
   assert.equal(stored.userId, 'user-2');
 });
+
+test('activity timestamp is mutation time even for a backdated source', async () => {
+  const {db, writes} = fakeDatabase();
+  const event = {
+    id: 'source-updated-event',
+    params: {storeId: 'store-a'},
+    data: {
+      before: snapshot('product-1', {
+        storeId: 'store-a',
+        updatedAt: {toDate: () => new Date('2021-01-01T00:00:00.000Z')},
+      }),
+      after: snapshot('product-1', {
+        storeId: 'store-a',
+        updatedAt: {toDate: () => new Date('2021-01-01T00:00:00.000Z')},
+      }),
+    },
+    time: '2026-10-30T11:45:00.000Z',
+  };
+  await writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'productChanged',
+    description: 'تحديث بيانات الصنف',
+  });
+
+  const stored = [...writes.values()][0];
+  assert.equal(stored.timestamp.toISOString(), event.time);
+  assert.equal(stored.metadata.operation, 'updated');
+});
