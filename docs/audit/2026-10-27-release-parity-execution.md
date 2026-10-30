@@ -159,3 +159,29 @@ adds `3400` and debit-normal contra-revenue `4200` for **new stores only**.
 No existing store is backfilled or rebalanced automatically. The next return
 implementation must be a single atomic, idempotent server posting contract;
 the non-atomic V1 sequence is a behavioral reference, not architecture to copy.
+
+
+## Activity log parity and server ownership — 2026-10-30
+
+- The activity feed is now server-owned. Firestore rules continue to deny direct
+  client writes to `activity_logs`; Cloud Functions create deterministic log
+  documents from source events instead.
+- Activity event IDs are derived from the CloudEvent ID, so trigger retries
+  overwrite the same log document instead of duplicating the visible feed.
+- Source tenant identity is verified before a log is written. Create, update and
+  delete events retain the source document ID and mutation kind in metadata.
+- Server triggers now cover sales, purchases, party payments, expenses,
+  products, categories, customer/supplier records, offers and repairs.
+- The V2 activity screen now restores the principal V1 workflows: free-text
+  search, event-type filtering, today/week/all/custom-period views, refresh,
+  event details and metadata display.
+- The screen rebinds its stream and clears local filters when the active
+  store/user changes, preventing stale activity from a previous tenant.
+- Reads remain bounded to the latest 500 events and the UI discloses that bound
+  rather than implying complete history.
+- Added regression coverage for activity writer idempotency, tenant rejection,
+  delete-event preservation, tenant stream rebinding and search filtering.
+
+This closes the source-code and automated-safety portion of the activity-log
+workstream only. Deployed isolated Firebase trigger execution, visual comparison
+against V1 and release approval remain open.
