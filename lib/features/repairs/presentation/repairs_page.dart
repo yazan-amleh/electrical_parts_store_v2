@@ -892,11 +892,10 @@ class _RepairDialogState extends State<_RepairDialog> {
                       child: const Text('دفعة مقدمة'),
                     ),
                     OutlinedButton(
-                      onPressed: !_busy &&
-                              !_financialUnresolved &&
-                              _repair.isInvoiced
-                          ? () => _payment(RepairPaymentKind.settlement)
-                          : null,
+                      onPressed:
+                          !_busy && !_financialUnresolved && _repair.isInvoiced
+                              ? () => _payment(RepairPaymentKind.settlement)
+                              : null,
                       child: const Text('دفعة على الفاتورة'),
                     ),
                   ],
