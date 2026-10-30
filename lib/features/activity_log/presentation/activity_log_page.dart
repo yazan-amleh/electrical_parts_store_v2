@@ -316,11 +316,13 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
               local.day != today.day) {
             return false;
           }
+          break;
         case _ActivityPeriod.week:
           if (local.isBefore(startOfWeek) ||
               !local.isBefore(startOfNextWeek)) {
             return false;
           }
+          break;
         case _ActivityPeriod.custom:
           final range = _customRange;
           if (range == null) {
@@ -339,6 +341,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
           if (local.isBefore(start) || !local.isBefore(endExclusive)) {
             return false;
           }
+          break;
         case _ActivityPeriod.all:
           break;
       }
