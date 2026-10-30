@@ -572,6 +572,60 @@ exports.logRepairActivity = onDocumentWritten(
 );
 
 
+
+exports.logJournalActivity = onDocumentCreated(
+  'stores/{storeId}/journal_entries/{journalId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'accountingPosted',
+    description: (data, params) =>
+      `تم ترحيل القيد المحاسبي ${activityName(data, params.journalId)}`,
+    metadata: {source: 'journal_entries'},
+  }),
+);
+
+exports.logAccountTransferActivity = onDocumentCreated(
+  'stores/{storeId}/account_transfers/{transferId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'accountingPosted',
+    description: (data, params) =>
+      `تم تسجيل تحويل بين الحسابات ${activityName(data, params.transferId)}`,
+    metadata: {source: 'account_transfers'},
+  }),
+);
+
+exports.logSaleReturnActivity = onDocumentCreated(
+  'stores/{storeId}/sales_returns/{returnId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'saleCreated',
+    description: (data, params) =>
+      `تم تسجيل مرتجع بيع ${activityName(data, params.returnId)}`,
+    metadata: {source: 'sales_returns'},
+  }),
+);
+
+exports.logPurchaseReturnActivity = onDocumentCreated(
+  'stores/{storeId}/purchase_returns/{returnId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'purchasePosted',
+    description: (data, params) =>
+      `تم تسجيل مرتجع شراء ${activityName(data, params.returnId)}`,
+    metadata: {source: 'purchase_returns'},
+  }),
+);
+
+
 exports.postInventoryMovement = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
