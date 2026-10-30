@@ -205,7 +205,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                   },
                   icon: const Icon(Icons.clear),
                 ),
-              PopupMenuButton<ActivityType?>(
+              PopupMenuButton<String>(
                 tooltip: 'تصفية حسب النوع',
                 icon: Icon(
                   Icons.filter_list,
@@ -214,16 +214,22 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
                       : Theme.of(context).colorScheme.primary,
                 ),
                 onSelected: (value) {
-                  setState(() => _selectedType = value);
+                  setState(() {
+                    _selectedType = value == '__all__'
+                        ? null
+                        : ActivityType.values.firstWhere(
+                            (type) => type.name == value,
+                          );
+                  });
                 },
                 itemBuilder: (context) => [
-                  const PopupMenuItem<ActivityType?>(
-                    value: null,
+                  const PopupMenuItem<String>(
+                    value: '__all__',
                     child: Text('كل الأنواع'),
                   ),
                   ...ActivityType.values.map(
-                    (type) => PopupMenuItem<ActivityType?>(
-                      value: type,
+                    (type) => PopupMenuItem<String>(
+                      value: type.name,
                       child: Row(
                         children: [
                           Icon(_iconFor(type), size: 20),
@@ -326,7 +332,7 @@ class _ActivityLogPageState extends State<ActivityLogPage> {
         case _ActivityPeriod.custom:
           final range = _customRange;
           if (range == null) {
-            return false;
+            break;
           }
           final start = DateTime(
             range.start.year,
