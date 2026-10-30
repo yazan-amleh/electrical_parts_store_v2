@@ -375,12 +375,9 @@ class _OffersPageState extends State<OffersPage> {
                 spacing: 4,
                 children: [
                   IconButton(
-                    tooltip: pending == null
-                        ? 'تأكيد وترحيل'
-                        : 'إعادة نفس التأكيد',
-                    onPressed: confirming
-                        ? null
-                        : () => _confirmOrder(order),
+                    tooltip:
+                        pending == null ? 'تأكيد وترحيل' : 'إعادة نفس التأكيد',
+                    onPressed: confirming ? null : () => _confirmOrder(order),
                     icon: confirming
                         ? const SizedBox(
                             width: 18,
@@ -650,8 +647,7 @@ class _OffersPageState extends State<OffersPage> {
         return;
       }
 
-      final confirmed =
-          (result as Success<OfferOrderConfirmation>).value;
+      final confirmed = (result as Success<OfferOrderConfirmation>).value;
       _pendingConfirmations.remove(order.id);
       _showMessage(
         confirmed.alreadyConfirmed
