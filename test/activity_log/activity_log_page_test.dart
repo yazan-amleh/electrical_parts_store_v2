@@ -134,10 +134,7 @@ void main() {
     expect(find.text('تم بيع قاطع كهربائي'), findsOneWidget);
     expect(find.text('تم تسجيل مصروف نقل'), findsOneWidget);
 
-    await tester.enterText(
-      find.widgetWithText(TextField, 'بحث في سجل النشاطات...'),
-      'قاطع',
-    );
+    await tester.enterText(find.byType(TextField).first, 'قاطع');
     await tester.pump();
 
     expect(find.text('تم بيع قاطع كهربائي'), findsOneWidget);
