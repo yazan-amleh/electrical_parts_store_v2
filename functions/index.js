@@ -1,5 +1,8 @@
 const { setGlobalOptions } = require('firebase-functions/v2');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const {
+  onDocumentCreated,
+  onDocumentWritten,
+} = require('firebase-functions/v2/firestore');
 const {
   HttpsError,
   onCall,
@@ -15,6 +18,7 @@ setGlobalOptions({
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
+const {writeActivity} = require('./activity_log_triggers');
 const { createStoreHandler, selectStoreHandler } = require('./store_onboarding');
 const {
   updateStoreProfileHandler,
@@ -416,6 +420,155 @@ exports.sendChatMessageNotification = onDocumentCreated(
       removedInvalidTokens: invalidTokenRefs.length,
     };
   },
+);
+
+
+function activityName(data, fallback) {
+  const candidates = [
+    data?.name,
+    data?.invoiceNumber,
+    data?.purchaseNumber,
+    data?.paymentNumber,
+    data?.repairNumber,
+    data?.offerNumber,
+  ];
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return fallback;
+}
+
+function activityMutationVerb(operation) {
+  switch (operation) {
+    case 'created':
+      return 'تمت إضافة';
+    case 'deleted':
+      return 'تم حذف';
+    default:
+      return 'تم تعديل';
+  }
+}
+
+exports.logSaleActivity = onDocumentCreated(
+  'stores/{storeId}/sales/{saleId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'saleCreated',
+    description: (data, params) =>
+      `تم تسجيل فاتورة بيع ${activityName(data, params.saleId)}`,
+    metadata: {source: 'sales'},
+  }),
+);
+
+exports.logPurchaseActivity = onDocumentCreated(
+  'stores/{storeId}/purchases/{purchaseId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'purchasePosted',
+    description: (data, params) =>
+      `تم تسجيل فاتورة شراء ${activityName(data, params.purchaseId)}`,
+    metadata: {source: 'purchases'},
+  }),
+);
+
+exports.logPartyPaymentActivity = onDocumentCreated(
+  'stores/{storeId}/party_payments/{paymentId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'paymentPosted',
+    description: (data, params) =>
+      `تم تسجيل دفعة ${activityName(data, params.paymentId)}`,
+    metadata: {source: 'party_payments'},
+  }),
+);
+
+exports.logExpenseActivity = onDocumentCreated(
+  'stores/{storeId}/expenses/{expenseId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'expensePosted',
+    description: (data, params) =>
+      `تم تسجيل مصروف ${activityName(data, params.expenseId)}`,
+    metadata: {source: 'expenses'},
+  }),
+);
+
+exports.logProductActivity = onDocumentWritten(
+  'stores/{storeId}/products/{productId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'productChanged',
+    description: (data, params, operation) =>
+      `${activityMutationVerb(operation)} الصنف ${activityName(data, params.productId)}`,
+    metadata: {source: 'products'},
+  }),
+);
+
+exports.logCategoryActivity = onDocumentWritten(
+  'stores/{storeId}/categories/{categoryId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'categoryChanged',
+    description: (data, params, operation) =>
+      `${activityMutationVerb(operation)} التصنيف ${activityName(data, params.categoryId)}`,
+    metadata: {source: 'categories'},
+  }),
+);
+
+exports.logPartyActivity = onDocumentWritten(
+  'stores/{storeId}/parties/{partyId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: (data) =>
+      data?.partyType === 'supplier' ? 'supplierChanged' : 'customerChanged',
+    description: (data, params, operation) => {
+      const label = data?.partyType === 'supplier' ? 'المورد' : 'العميل';
+      return `${activityMutationVerb(operation)} ${label} ${activityName(data, params.partyId)}`;
+    },
+    metadata: {source: 'parties'},
+  }),
+);
+
+exports.logOfferActivity = onDocumentWritten(
+  'stores/{storeId}/offers/{offerId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'offerChanged',
+    description: (data, params, operation) =>
+      `${activityMutationVerb(operation)} العرض ${activityName(data, params.offerId)}`,
+    metadata: {source: 'offers'},
+  }),
+);
+
+exports.logRepairActivity = onDocumentWritten(
+  'stores/{storeId}/repairs/{repairId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'repairChanged',
+    description: (data, params, operation) =>
+      `${activityMutationVerb(operation)} طلب الصيانة ${activityName(data, params.repairId)}`,
+    metadata: {source: 'repairs'},
+  }),
 );
 
 
