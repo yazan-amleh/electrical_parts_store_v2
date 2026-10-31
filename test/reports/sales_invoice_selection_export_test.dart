@@ -110,7 +110,9 @@ void main() {
     expect(bytes.length, greaterThan(700));
     expect(latin1.decode(bytes.take(4).toList()), '%PDF');
   });
-  test('V1 print parity: discounted and partially returned invoice with store profile', () async {
+  test(
+      'V1 print parity: discounted and partially returned invoice with store profile',
+      () async {
     const exporter = SalesInvoiceSelectionExport();
     final invoice = sale();
     final bytes = await exporter.invoicePdf(
@@ -143,7 +145,8 @@ void main() {
     expect(latin1.decode(bytes.take(4).toList()), '%PDF');
   });
 
-  test('print rejects a different tenant instead of showing private invoice', () async {
+  test('print rejects a different tenant instead of showing private invoice',
+      () async {
     const exporter = SalesInvoiceSelectionExport();
     await expectLater(
       exporter.invoicePdf(
@@ -172,7 +175,8 @@ void main() {
     );
   });
 
-  test('print rejects mismatched line sums, costs and invalid returns', () async {
+  test('print rejects mismatched line sums, costs and invalid returns',
+      () async {
     const exporter = SalesInvoiceSelectionExport();
     Future<void> shouldReject(SalesInvoiceLineSummary line) async {
       await expectLater(
@@ -220,5 +224,4 @@ void main() {
       cost: Money(minorUnits: 6000),
     ));
   });
-
 }
