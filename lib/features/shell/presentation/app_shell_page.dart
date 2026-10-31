@@ -1263,6 +1263,7 @@ class _ModuleLandingPage extends StatelessWidget {
         repository: reportsRepository,
         documentBuilder: reportDocumentBuilder,
         saleRepository: saleRepository,
+        settingsRepository: settingsRepository,
         user: user,
         membership: membership,
       );
