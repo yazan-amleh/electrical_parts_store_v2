@@ -210,7 +210,7 @@ void main() {
     final callCount = repository.calls.length;
     await tester.tap(find.text('مدة مخصصة'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('إلغاء'));
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 
     expect(repository.calls.length, callCount);
