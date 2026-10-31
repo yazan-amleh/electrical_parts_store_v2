@@ -271,56 +271,58 @@ class _ChatPageState extends State<ChatPage> {
               child: StreamBuilder<Result<List<ChatRoom>>>(
                 key: ValueKey('${_context.storeId}/${_context.userId}'),
                 stream: _rooms,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting &&
-                !snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return _ChatErrorState(message: snapshot.error.toString());
-            }
-            final result = snapshot.data;
-            if (result is FailureResult<List<ChatRoom>>) {
-              return _ChatErrorState(message: result.failure.message);
-            }
-            final rooms = result is Success<List<ChatRoom>>
-                ? result.value
-                : const <ChatRoom>[];
-            if (rooms.isEmpty) {
-              return _EmptyChatState(onCreate: _createRoom);
-            }
-            final visible = _filteredRooms(rooms);
-            if (visible.isEmpty) {
-              return const Center(
-                child: Text('لا توجد محادثات مطابقة للبحث أو الفلتر.'),
-              );
-            }
-            return ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: visible.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                final room = visible[index];
-                return _ChatRoomTile(
-                  room: room,
-                  userId: widget.user.id,
-                  onTap: () async {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (context) => ChatRoomPage(
-                          repository: widget.repository,
-                          attachmentRepository: widget.attachmentRepository,
-                          room: room,
-                          user: widget.user,
-                          membership: widget.membership,
-                        ),
-                      ),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting &&
+                      !snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return _ChatErrorState(message: snapshot.error.toString());
+                  }
+                  final result = snapshot.data;
+                  if (result is FailureResult<List<ChatRoom>>) {
+                    return _ChatErrorState(message: result.failure.message);
+                  }
+                  final rooms = result is Success<List<ChatRoom>>
+                      ? result.value
+                      : const <ChatRoom>[];
+                  if (rooms.isEmpty) {
+                    return _EmptyChatState(onCreate: _createRoom);
+                  }
+                  final visible = _filteredRooms(rooms);
+                  if (visible.isEmpty) {
+                    return const Center(
+                      child: Text('لا توجد محادثات مطابقة للبحث أو الفلتر.'),
                     );
-                  },
-                );
-              },
-            );
-          },
+                  }
+                  return ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: visible.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final room = visible[index];
+                      return _ChatRoomTile(
+                        room: room,
+                        userId: widget.user.id,
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (context) => ChatRoomPage(
+                                repository: widget.repository,
+                                attachmentRepository:
+                                    widget.attachmentRepository,
+                                room: room,
+                                user: widget.user,
+                                membership: widget.membership,
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
               ),
             ),
           ],
