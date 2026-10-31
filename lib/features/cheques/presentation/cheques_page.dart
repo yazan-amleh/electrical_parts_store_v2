@@ -222,24 +222,30 @@ class _ChequesPageState extends State<ChequesPage> {
             ],
             if (pending != null) ...[
               const SizedBox(height: 12),
-              MaterialBanner(
-                content: Text(
-                  pending.queued
-                      ? 'تسوية هذا الشيك محفوظة في طابور التنفيذ. '
-                          'لا تنشئ تسوية أخرى حتى تتغير حالة الشيك.'
-                      : 'تعذر التأكد من نتيجة التسوية السابقة. '
-                          'أعد نفس الطلب حرفيًا لتأكيد النتيجة.',
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        pending.queued
+                            ? 'تسوية هذا الشيك محفوظة في طابور التنفيذ. '
+                                'لا تنشئ تسوية أخرى حتى تتغير حالة الشيك.'
+                            : 'تعذر التأكد من نتيجة التسوية السابقة. '
+                                'أعد نفس الطلب حرفيًا لتأكيد النتيجة.',
+                      ),
+                      if (!pending.queued)
+                        TextButton.icon(
+                          onPressed: isBusy
+                              ? null
+                              : () => _submitSettlement(cheque, pending),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('إعادة نفس التسوية'),
+                        ),
+                    ],
+                  ),
                 ),
-                actions: [
-                  if (!pending.queued)
-                    TextButton.icon(
-                      onPressed: isBusy
-                          ? null
-                          : () => _submitSettlement(cheque, pending),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('إعادة نفس التسوية'),
-                    ),
-                ],
               ),
             ],
             if (cheque.status == ChequeStatus.pending && pending == null) ...[
