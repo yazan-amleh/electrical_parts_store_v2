@@ -803,7 +803,9 @@ class _ReportsPageState extends State<ReportsPage> {
       );
       if (!mounted ||
           exportContext.storeId != _context.storeId ||
-          exportContext.userId != _context.userId) return;
+          exportContext.userId != _context.userId) {
+        return;
+      }
       await FileSaver.instance.saveFile(
         name: 'operational_${_formatDate(_from)}_${_formatDate(_to)}',
         bytes: bytes,
