@@ -481,7 +481,9 @@ service cloud.firestore {
           request.resource.data.content is string &&
           request.resource.data.type is string &&
           request.resource.data.priority is string;
-        allow delete: if false;
+        allow delete: if isMember(storeId) &&
+          resource.data.storeId == storeId &&
+          resource.data.userId == request.auth.uid;
       }
 
       match /activity_logs/{activityId} {
