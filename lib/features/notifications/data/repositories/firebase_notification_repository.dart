@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../../../../core/errors/failure.dart';
 import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
+import '../../domain/entities/note_reminder_notification.dart';
 import '../../domain/repositories/notification_repository.dart';
 
 class FirebaseNotificationRepository implements NotificationRepository {
@@ -18,6 +19,62 @@ class FirebaseNotificationRepository implements NotificationRepository {
 
   final FirebaseFirestore _firestore;
   final FirebaseMessaging _messaging;
+
+  @override
+  Stream<Result<List<NoteReminderNotification>>> watchReminders({
+    required StoreContext context,
+  }) async* {
+    if (context.storeId.trim().isEmpty || context.userId.trim().isEmpty) {
+      yield const FailureResult<List<NoteReminderNotification>>(
+        ValidationFailure('Store and user are required for the reminder inbox.'),
+      );
+      return;
+    }
+    try {
+      final query = _firestore
+          .collection('stores')
+          .doc(context.storeId)
+          .collection('reminderNotifications')
+          .where('userId', isEqualTo: context.userId)
+          .limit(100);
+      await for (final snapshot in query.snapshots()) {
+        final reminders = <NoteReminderNotification>[];
+        for (final doc in snapshot.docs) {
+          final data = doc.data();
+          final scheduled = data['scheduledFor'];
+          if (data['storeId'] != context.storeId ||
+              data['userId'] != context.userId ||
+              scheduled is! Timestamp) {
+            continue;
+          }
+          reminders.add(
+            NoteReminderNotification(
+              id: doc.id,
+              storeId: context.storeId,
+              userId: context.userId,
+              noteId: data['noteId'] as String? ?? '',
+              title: data['title'] as String? ?? 'تذكير',
+              body: data['body'] as String? ?? '',
+              scheduledFor: scheduled.toDate().toLocal(),
+              status: data['status'] as String? ?? 'queued',
+            ),
+          );
+        }
+        reminders.sort(
+          (a, b) => b.scheduledFor.compareTo(a.scheduledFor),
+        );
+        yield Success<List<NoteReminderNotification>>(reminders);
+      }
+    } on FirebaseException catch (error) {
+      yield FailureResult<List<NoteReminderNotification>>(
+        _mapFailure(error, 'The reminder inbox could not be loaded.'),
+      );
+    } catch (error) {
+      yield FailureResult<List<NoteReminderNotification>>(
+        InfrastructureFailure(error.toString()),
+      );
+    }
+  }
 
   @override
   Future<Result<void>> registerCurrentDevice({
