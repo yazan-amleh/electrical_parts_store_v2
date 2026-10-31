@@ -66,6 +66,7 @@ import '../../chatbot/presentation/chatbot_page.dart';
 import '../../settings/domain/repositories/settings_repository.dart';
 import '../../settings/domain/entities/store_profile.dart';
 import '../../notes/domain/repositories/note_repository.dart';
+import '../../notifications/domain/repositories/notification_repository.dart';
 import '../../notes/presentation/notes_page.dart';
 import '../../settings/presentation/settings_page.dart';
 
@@ -816,6 +817,7 @@ class _AppShellPageState extends State<AppShellPage> {
               widget.dependencies.chatAttachmentRepository,
           settingsRepository: widget.dependencies.settingsRepository,
           noteRepository: widget.dependencies.noteRepository,
+          notificationRepository: widget.dependencies.notificationRepository,
           activityLogRepository: widget.dependencies.activityLogRepository,
           membership: widget.membership,
         ),
@@ -1037,6 +1039,7 @@ class _ModuleLandingPage extends StatelessWidget {
     this.chatAttachmentRepository,
     required this.settingsRepository,
     this.noteRepository,
+    this.notificationRepository,
     this.activityLogRepository,
     required this.membership,
   });
@@ -1073,6 +1076,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final ChatAttachmentRepository? chatAttachmentRepository;
   final SettingsRepository? settingsRepository;
   final NoteRepository? noteRepository;
+  final NotificationRepository? notificationRepository;
   final ActivityLogRepository? activityLogRepository;
   final StoreMembership membership;
 
@@ -1290,6 +1294,7 @@ class _ModuleLandingPage extends StatelessWidget {
       if (noteRepository != null) {
         return NotesPage(
           repository: noteRepository,
+          notificationRepository: notificationRepository,
           user: user,
           membership: membership,
         );
