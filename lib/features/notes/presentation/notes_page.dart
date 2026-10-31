@@ -166,6 +166,85 @@ class _NotesPageState extends State<NotesPage> {
     }
   }
 
+  Future<void> _showNoteDetails(Note note) async {
+    final actionContext = _context;
+    final action = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final localized = MaterialLocalizations.of(dialogContext);
+        String formatDate(DateTime date) {
+          final local = date.toLocal();
+          return '${localized.formatMediumDate(local)} '
+              '${localized.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
+        }
+
+        return AlertDialog(
+          title: Text(note.title),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: 480,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SelectableText(note.content.isEmpty ? 'بدون محتوى' : note.content),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      Chip(label: Text(note.type.arabicLabel)),
+                      Chip(label: Text(note.priority.arabicLabel)),
+                      if (note.isStarred) const Chip(label: Text('مميزة')),
+                      if (note.isArchived) const Chip(label: Text('مؤرشفة')),
+                      if (note.isCompleted) const Chip(label: Text('مكتملة')),
+                    ],
+                  ),
+                  if (note.tags.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('الوسوم: ${note.tags.join(', ')}'),
+                  ],
+                  const SizedBox(height: 8),
+                  Text('تاريخ الإنشاء: ${formatDate(note.createdAt)}'),
+                  if (note.updatedAt != null)
+                    Text('آخر تعديل: ${formatDate(note.updatedAt!)}'),
+                  if (note.reminderAt != null) ...[
+                    const SizedBox(height: 8),
+                    Text('موعد المتابعة: ${formatDate(note.reminderAt!)}'),
+                    const Text(
+                      'الموعد محفوظ، ولا يُرسل إشعار تلقائي من هذه الشاشة.',
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop('delete'),
+              child: const Text('حذف'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop('edit'),
+              child: const Text('تعديل'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('إغلاق'),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted || !_isCurrentContext(actionContext)) {
+      return;
+    }
+    if (action == 'edit') {
+      await _editNote(note);
+    } else if (action == 'delete') {
+      await _deleteNote(note);
+    }
+  }
+
   Future<void> _deleteNote(Note note) async {
     final actionContext = _context;
     if (note.storeId != actionContext.storeId ||
@@ -400,7 +479,7 @@ class _NotesPageState extends State<NotesPage> {
                       final note = notes[index];
                       return Card(
                         child: ListTile(
-                          onTap: () => _editNote(note),
+                          onTap: () => _showNoteDetails(note),
                           leading: CircleAvatar(
                             child: Icon(note.isCompleted
                                 ? Icons.check
