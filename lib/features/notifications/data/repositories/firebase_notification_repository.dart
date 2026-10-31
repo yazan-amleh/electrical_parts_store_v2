@@ -26,7 +26,8 @@ class FirebaseNotificationRepository implements NotificationRepository {
   }) async* {
     if (context.storeId.trim().isEmpty || context.userId.trim().isEmpty) {
       yield const FailureResult<List<NoteReminderNotification>>(
-        ValidationFailure('Store and user are required for the reminder inbox.'),
+        ValidationFailure(
+            'Store and user are required for the reminder inbox.'),
       );
       return;
     }
