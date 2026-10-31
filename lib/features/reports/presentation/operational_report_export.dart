@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:excel/excel.dart';
 
+import '../../../core/money/money.dart';
 import '../domain/entities/operational_report.dart';
 
 /// Filters the loaded transaction details only. The report's accounting totals
@@ -200,7 +201,7 @@ class OperationalReportExport {
     ]);
   }
 
-  void _moneyRow(Sheet sheet, String title, dynamic money) {
+  void _moneyRow(Sheet sheet, String title, Money money) {
     _row(sheet, [title, money.minorUnits / 100, money.currency]);
   }
 
