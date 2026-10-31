@@ -239,15 +239,17 @@ class _ExpensesPageState extends State<ExpensesPage> {
                       ),
                       if (_pendingQueued || _pendingUncertain) ...[
                         const SizedBox(height: 12),
-                        MaterialBanner(
-                          content: Text(
-                            _pendingQueued
-                                ? 'هذا المصروف محفوظ في طابور التنفيذ. '
-                                    'لا تنشئ مصروفًا آخر حتى تُحسم النتيجة.'
-                                : 'تعذر التأكد من نتيجة الترحيل السابقة. '
-                                    'أعد نفس المصروف بنفس البيانات فقط.',
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Text(
+                              _pendingQueued
+                                  ? 'هذا المصروف محفوظ في طابور التنفيذ. '
+                                      'لا تنشئ مصروفًا آخر حتى تُحسم النتيجة.'
+                                  : 'تعذر التأكد من نتيجة الترحيل السابقة. '
+                                      'أعد نفس المصروف بنفس البيانات فقط.',
+                            ),
                           ),
-                          actions: const <Widget>[],
                         ),
                       ],
                       const SizedBox(height: 16),
