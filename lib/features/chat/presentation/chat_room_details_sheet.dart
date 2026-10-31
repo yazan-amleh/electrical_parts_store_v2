@@ -65,45 +65,13 @@ class _ChatRoomDetailsSheetState extends State<ChatRoomDetailsSheet> {
   }
 
   Future<void> _updateGroup() async {
-    final nameController = TextEditingController(text: _room.name);
-    final descriptionController = TextEditingController(
-      text: _room.groupDescription ?? '',
-    );
     final details = await showDialog<List<String>>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('تعديل معلومات المجموعة'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'اسم المجموعة'),
-            ),
-            TextField(
-              controller: descriptionController,
-              decoration: const InputDecoration(labelText: 'الوصف'),
-              maxLines: 3,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('إلغاء'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, [
-              nameController.text.trim(),
-              descriptionController.text.trim(),
-            ]),
-            child: const Text('حفظ'),
-          ),
-        ],
+      builder: (context) => _EditGroupDialog(
+        name: _room.name,
+        description: _room.groupDescription ?? '',
       ),
     );
-    nameController.dispose();
-    descriptionController.dispose();
     if (!mounted || details == null || details.first.isEmpty) {
       return;
     }
@@ -322,6 +290,72 @@ class _ChatRoomDetailsSheetState extends State<ChatRoomDetailsSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _EditGroupDialog extends StatefulWidget {
+  const _EditGroupDialog({
+    required this.name,
+    required this.description,
+  });
+
+  final String name;
+  final String description;
+
+  @override
+  State<_EditGroupDialog> createState() => _EditGroupDialogState();
+}
+
+class _EditGroupDialogState extends State<_EditGroupDialog> {
+  late final TextEditingController _name;
+  late final TextEditingController _description;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.name);
+    _description = TextEditingController(text: widget.description);
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _description.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('تعديل معلومات المجموعة'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _name,
+            decoration: const InputDecoration(labelText: 'اسم المجموعة'),
+          ),
+          TextField(
+            controller: _description,
+            decoration: const InputDecoration(labelText: 'الوصف'),
+            maxLines: 3,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('إلغاء'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, [
+            _name.text.trim(),
+            _description.text.trim(),
+          ]),
+          child: const Text('حفظ'),
+        ),
+      ],
     );
   }
 }
