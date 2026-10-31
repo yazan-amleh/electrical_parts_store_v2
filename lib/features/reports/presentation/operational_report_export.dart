@@ -164,9 +164,7 @@ class OperationalReportExport {
           item.amount.currency,
         ],
     ];
-    return lines
-        .map((line) => line.map(_csvValue).join(','))
-        .join('\r\n');
+    return lines.map((line) => line.map(_csvValue).join(',')).join('\r\n');
   }
 
   Sheet _sheet(Excel workbook, String name) {
@@ -181,7 +179,8 @@ class OperationalReportExport {
   void _headers(Sheet sheet, List<String> headers) {
     _row(sheet, headers);
     for (var i = 0; i < headers.length; i++) {
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0))
+      sheet
+          .cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0))
           .cellStyle = CellStyle(
         bold: true,
         horizontalAlign: HorizontalAlign.Center,
