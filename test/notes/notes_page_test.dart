@@ -191,4 +191,20 @@ void main() {
     expect(repository.deletes.single.storeId, 'store-a');
     expect(find.text('ملاحظة قابلة للحذف'), findsNothing);
   });
+
+  testWidgets('V1 note details open before editing', (tester) async {
+    final repository = _NotesRepository({
+      'store-a': [_note('store-a', 'تفاصيل المهمة')],
+    });
+    await tester.pumpWidget(_page(repository, 'store-a'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('تفاصيل المهمة'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('تاريخ الإنشاء'), findsOneWidget);
+    expect(find.text('نص الملاحظة'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'تعديل'));
+    await tester.pumpAndSettle();
+    expect(find.text('تعديل الملاحظة'), findsOneWidget);
+  });
 }
