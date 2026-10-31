@@ -29,6 +29,11 @@ class NoteFirestoreMapper {
   }
 
   static Map<String, dynamic> toMap(Note note) {
+    final nextReminder = note.isArchived || note.isCompleted
+        ? null
+        : note.reminderRepeat == ReminderRepeatType.none
+            ? note.reminderAt
+            : note.nextReminderAfter(DateTime.now().toUtc());
     return <String, dynamic>{
       'storeId': note.storeId,
       'userId': note.userId,
@@ -42,6 +47,9 @@ class NoteFirestoreMapper {
       'reminderAt':
           note.reminderAt == null ? null : Timestamp.fromDate(note.reminderAt!),
       'reminderRepeat': note.reminderRepeat.name,
+      'reminderNextAt': nextReminder == null
+          ? null
+          : Timestamp.fromDate(nextReminder.toUtc()),
       'tags': note.tags,
       'isCompleted': note.isCompleted,
       'isArchived': note.isArchived,
