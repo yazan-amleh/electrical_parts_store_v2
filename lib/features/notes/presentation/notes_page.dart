@@ -163,6 +163,49 @@ class _NotesPageState extends State<NotesPage> {
     }
   }
 
+  Future<void> _deleteNote(Note note) async {
+    final actionContext = _context;
+    if (note.storeId != actionContext.storeId ||
+        note.userId != actionContext.userId) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تأكيد الحذف'),
+        content: Text('هل تريد حذف الملاحظة "${note.title}" نهائيًا؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted ||
+        confirmed != true ||
+        !_isCurrentContext(actionContext)) {
+      return;
+    }
+    final result = await widget.repository.deleteNote(
+      context: actionContext,
+      note: note,
+    );
+    if (!mounted || !_isCurrentContext(actionContext)) {
+      return;
+    }
+    if (result is FailureResult<void>) {
+      _showMessage(result.failure.message);
+    } else {
+      _showMessage('تم حذف الملاحظة');
+      _reload();
+    }
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -399,6 +442,8 @@ class _NotesPageState extends State<NotesPage> {
                                         );
                               if (value == 'edit') {
                                 _editNote(note);
+                              } else if (value == 'delete') {
+                                _deleteNote(note);
                               } else {
                                 _updateNote(updated);
                               }
@@ -427,6 +472,10 @@ class _NotesPageState extends State<NotesPage> {
                                 child: Text(
                                   note.isArchived ? 'إلغاء الأرشفة' : 'أرشفة',
                                 ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Text('حذف الملاحظة'),
                               ),
                             ],
                           ),
