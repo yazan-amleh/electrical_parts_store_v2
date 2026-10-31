@@ -354,8 +354,8 @@ describe('Firestore security rules', function () {
     );
   });
 
-  it('restricts store settings and member management', async () => {
-    await assertSucceeds(
+  it('enforces server-only store settings and member management', async () => {
+    await assertFails(
       updateDoc(storeDoc(ownerDb), {
         name: 'Renamed Store',
         currency: 'ILS',
@@ -377,7 +377,7 @@ describe('Firestore security rules', function () {
       }),
     );
 
-    await assertSucceeds(
+    await assertFails(
       updateDoc(storeDoc(ownerDb, 'members', 'sales-1'), {
         role: 'accountant',
         isActive: true,
