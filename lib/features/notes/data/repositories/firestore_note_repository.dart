@@ -94,4 +94,39 @@ class FirestoreNoteRepository implements NoteRepository {
       return FailureResult<void>(InfrastructureFailure(error.toString()));
     }
   }
+
+  @override
+  Future<Result<void>> deleteNote({
+    required StoreContext context,
+    required Note note,
+  }) async {
+    if (context.storeId.trim().isEmpty ||
+        context.userId.trim().isEmpty ||
+        note.storeId != context.storeId ||
+        note.userId != context.userId) {
+      return const FailureResult<void>(
+        AuthorizationFailure('Note does not belong to the active user/store.'),
+      );
+    }
+    if (note.id.trim().isEmpty || note.id.contains('/')) {
+      return const FailureResult<void>(
+        ValidationFailure('Note id is invalid.'),
+      );
+    }
+    try {
+      await FirebasePaths.notes(
+        _firestore,
+        context.storeId,
+      ).doc(note.id).delete();
+      return const Success<void>(null);
+    } on FirebaseException catch (error) {
+      return FailureResult<void>(
+        InfrastructureFailure(error.message ?? error.code),
+      );
+    } catch (error) {
+      return FailureResult<void>(
+        InfrastructureFailure(error.toString()),
+      );
+    }
+  }
 }
