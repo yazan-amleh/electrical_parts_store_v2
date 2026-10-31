@@ -20,6 +20,7 @@ class NoteFirestoreMapper {
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       updatedAt: _date(data['updatedAt']),
       reminderAt: _date(data['reminderAt']),
+      reminderRepeat: _reminderRepeat(data['reminderRepeat'] as String?),
       tags: _strings(data['tags']),
       isCompleted: data['isCompleted'] as bool? ?? false,
       isArchived: data['isArchived'] as bool? ?? false,
@@ -40,6 +41,7 @@ class NoteFirestoreMapper {
           note.updatedAt == null ? null : Timestamp.fromDate(note.updatedAt!),
       'reminderAt':
           note.reminderAt == null ? null : Timestamp.fromDate(note.reminderAt!),
+      'reminderRepeat': note.reminderRepeat.name,
       'tags': note.tags,
       'isCompleted': note.isCompleted,
       'isArchived': note.isArchived,
@@ -58,6 +60,13 @@ class NoteFirestoreMapper {
     return NotePriority.values.firstWhere(
       (priority) => priority.name == value,
       orElse: () => NotePriority.medium,
+    );
+  }
+
+  static ReminderRepeatType _reminderRepeat(String? value) {
+    return ReminderRepeatType.values.firstWhere(
+      (repeat) => repeat.name == value,
+      orElse: () => ReminderRepeatType.none,
     );
   }
 
