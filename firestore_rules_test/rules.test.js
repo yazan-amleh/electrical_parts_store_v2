@@ -945,6 +945,40 @@ describe('Firestore security rules', function () {
     );
   });
 
+  it('keeps scheduled reminder records server-owned and user-private', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        storeDoc(context.firestore(), 'reminderNotifications', 'event-1'),
+        {
+          storeId: STORE_ID,
+          userId: 'sales-1',
+          noteId: 'note-1',
+          title: 'Private follow-up',
+          body: 'Reminder content',
+          status: 'queued',
+          scheduledFor: Timestamp.now(),
+        },
+      );
+    });
+    const ref = storeDoc(salesDb, 'reminderNotifications', 'event-1');
+    await assertSucceeds(getDoc(ref));
+    await assertFails(
+      getDoc(storeDoc(ownerDb, 'reminderNotifications', 'event-1')),
+    );
+    await assertFails(
+      getDoc(storeDoc(outsiderDb, 'reminderNotifications', 'event-1')),
+    );
+    await assertFails(
+      setDoc(storeDoc(salesDb, 'reminderNotifications', 'fake'), {
+        storeId: STORE_ID,
+        userId: 'sales-1',
+        status: 'sent',
+      }),
+    );
+    await assertFails(updateDoc(ref, {status: 'sent'}));
+    await assertFails(deleteDoc(ref));
+  });
+
   it('keeps notification tokens private and user-owned', async () => {
     const tokenRef = storeDoc(
       salesDb,
