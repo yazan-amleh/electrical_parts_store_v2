@@ -65,9 +65,8 @@ class _ChatMessageSearchPageState extends State<ChatMessageSearchPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(message.senderName),
-        content: SelectableText(message.content.isEmpty
-            ? 'رسالة تحتوي على مرفق'
-            : message.content),
+        content: SelectableText(
+            message.content.isEmpty ? 'رسالة تحتوي على مرفق' : message.content),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -170,9 +169,7 @@ class _ChatMessageSearchPageState extends State<ChatMessageSearchPage> {
                         leading: const Icon(Icons.chat_bubble_outline),
                         title: Text(message.senderName),
                         subtitle: Text(
-                          message.content.isEmpty
-                              ? 'مرفق'
-                              : message.content,
+                          message.content.isEmpty ? 'مرفق' : message.content,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
