@@ -462,6 +462,12 @@ describe('Firestore security rules', function () {
       }),
     );
     await assertFails(
+      deleteDoc(storeDoc(ownerDb, 'notes', 'note-1')),
+    );
+    await assertFails(
+      deleteDoc(storeDoc(outsiderDb, 'notes', 'note-1')),
+    );
+    await assertSucceeds(
       deleteDoc(storeDoc(salesDb, 'notes', 'note-1')),
     );
 
