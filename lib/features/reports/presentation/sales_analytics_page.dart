@@ -14,6 +14,8 @@ import '../../auth/domain/entities/store_membership.dart';
 import '../../auth/domain/enums/store_role.dart';
 import '../../sales/domain/entities/sale_return.dart';
 import '../../sales/domain/repositories/sale_repository.dart';
+import '../../settings/domain/repositories/settings_repository.dart';
+import '../../settings/domain/entities/store_profile.dart';
 import '../domain/entities/sales_analytics.dart';
 import '../domain/entities/sales_invoice_report.dart';
 import '../domain/repositories/reports_repository.dart';
@@ -28,10 +30,12 @@ class SalesAnalyticsPage extends StatefulWidget {
     required this.saleRepository,
     required this.user,
     required this.membership,
+    this.settingsRepository,
     super.key,
   });
 
   final ReportsRepository? repository;
+  final SettingsRepository? settingsRepository;
   final ReportDocumentBuilder? documentBuilder;
   final SaleRepository? saleRepository;
   final AuthenticatedUser user;
@@ -585,10 +589,29 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       }
 
       final documents = (result as Success<List<SalesInvoiceDocument>>).value;
+      // Profile data comes from the active V2 store, not a guessed logo,
+      // phone number or another tenant's cached settings.
+      StoreProfile? profile;
+      final settings = widget.settingsRepository;
+      if (settings != null) {
+        final stored = await settings.getStoreProfile(context: _context);
+        if (!mounted ||
+            requestedStore != widget.membership.storeId ||
+            requestedUser != widget.user.id) {
+          return;
+        }
+        if (stored is Success<StoreProfile> &&
+            stored.value.id == requestedStore) {
+          profile = stored.value;
+        }
+      }
       final bytes = await _invoiceSelectionExport.invoicePdf(
         documents: documents,
         customerNames: _customerNames(),
-        storeLabel: requestedStore,
+        storeLabel: profile?.name ?? requestedStore,
+        storePhone: profile?.phone ?? '',
+        storeAddress: profile?.address ?? '',
+        expectedStoreId: requestedStore,
       );
       if (!mounted ||
           requestedStore != widget.membership.storeId ||
