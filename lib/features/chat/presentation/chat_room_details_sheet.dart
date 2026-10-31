@@ -135,8 +135,7 @@ class _ChatRoomDetailsSheetState extends State<ChatRoomDetailsSheet> {
     final choices = widget.availableMembers
         .where(
           (member) =>
-              member.isActive &&
-              !_room.participantIds.contains(member.userId),
+              member.isActive && !_room.participantIds.contains(member.userId),
         )
         .toList();
     if (choices.isEmpty) {
@@ -198,7 +197,8 @@ class _ChatRoomDetailsSheetState extends State<ChatRoomDetailsSheet> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('إزالة مشارك'),
-        content: Text('إزالة ${participant.displayName ?? participant.userId}؟'),
+        content:
+            Text('إزالة ${participant.displayName ?? participant.userId}؟'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
