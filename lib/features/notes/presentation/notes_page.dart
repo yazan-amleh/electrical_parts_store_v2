@@ -119,6 +119,7 @@ class _NotesPageState extends State<NotesPage> {
             createdAt: now,
             tags: draft.tags,
             reminderAt: draft.reminderAt,
+            reminderRepeat: draft.reminderRepeat,
           )
         : note.copyWith(
             title: draft.title,
@@ -128,6 +129,7 @@ class _NotesPageState extends State<NotesPage> {
             tags: draft.tags,
             updatedAt: now,
             reminderAt: draft.reminderAt,
+            reminderRepeat: draft.reminderRepeat,
             clearReminder: draft.clearReminder,
           );
 
@@ -211,6 +213,13 @@ class _NotesPageState extends State<NotesPage> {
                   if (note.reminderAt != null) ...[
                     const SizedBox(height: 8),
                     Text('موعد المتابعة: ${formatDate(note.reminderAt!)}'),
+                    if (note.reminderRepeat != ReminderRepeatType.none)
+                      Text('التكرار: ${note.reminderRepeat.arabicLabel}'),
+                    if (note.reminderRepeat != ReminderRepeatType.none &&
+                        note.nextReminderAfter(DateTime.now()) != null)
+                      Text(
+                        'الموعد القادم: ${formatDate(note.nextReminderAfter(DateTime.now())!)}',
+                      ),
                     const Text(
                       'الموعد محفوظ، ولا يُرسل إشعار تلقائي من هذه الشاشة.',
                     ),
@@ -582,6 +591,7 @@ class _NoteDraft {
     required this.priority,
     required this.tags,
     required this.reminderAt,
+    required this.reminderRepeat,
     required this.clearReminder,
   });
 
@@ -591,6 +601,7 @@ class _NoteDraft {
   final NotePriority priority;
   final List<String> tags;
   final DateTime? reminderAt;
+  final ReminderRepeatType reminderRepeat;
   final bool clearReminder;
 }
 
@@ -610,6 +621,7 @@ class _NoteDialogState extends State<_NoteDialog> {
   late NoteType _type;
   late NotePriority _priority;
   DateTime? _reminderAt;
+  ReminderRepeatType _repeat = ReminderRepeatType.none;
 
   @override
   void initState() {
@@ -621,6 +633,7 @@ class _NoteDialogState extends State<_NoteDialog> {
     _type = note?.type ?? NoteType.general;
     _priority = note?.priority ?? NotePriority.medium;
     _reminderAt = note?.reminderAt?.toLocal();
+    _repeat = note?.reminderRepeat ?? ReminderRepeatType.none;
   }
 
   Future<void> _pickReminder() async {
@@ -679,6 +692,8 @@ class _NoteDialogState extends State<_NoteDialog> {
         priority: _priority,
         tags: tags,
         reminderAt: _reminderAt?.toUtc(),
+        reminderRepeat:
+            _reminderAt == null ? ReminderRepeatType.none : _repeat,
         clearReminder: _reminderAt == null,
       ),
     );
@@ -758,10 +773,31 @@ class _NoteDialogState extends State<_NoteDialog> {
                   ? const Icon(Icons.edit_calendar_outlined)
                   : IconButton(
                       tooltip: 'إزالة الموعد',
-                      onPressed: () => setState(() => _reminderAt = null),
+                      onPressed: () => setState(() {
+                        _reminderAt = null;
+                        _repeat = ReminderRepeatType.none;
+                      }),
                       icon: const Icon(Icons.clear),
                     ),
             ),
+            if (_reminderAt != null)
+              DropdownButtonFormField<ReminderRepeatType>(
+                value: _repeat,
+                decoration: const InputDecoration(labelText: 'تكرار التذكير'),
+                items: ReminderRepeatType.values
+                    .map(
+                      (repeat) => DropdownMenuItem(
+                        value: repeat,
+                        child: Text(repeat.arabicLabel),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _repeat = value);
+                  }
+                },
+              ),
           ],
         ),
       ),
