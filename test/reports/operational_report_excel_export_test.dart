@@ -106,19 +106,19 @@ void main() {
         .toList();
     expect(
       summaryValues.any(
-        (row) => row.first.contains('صافي المبيعات') &&
-            row[1].contains('100'),
+        (row) => row.first.contains('صافي المبيعات') && row[1].contains('100'),
       ),
       isTrue,
     );
     expect(
-      summaryValues.any((row) => row.first.contains('الحركات المصدّرة') &&
-          row[1].contains('1')),
+      summaryValues.any((row) =>
+          row.first.contains('الحركات المصدّرة') && row[1].contains('1')),
       isTrue,
     );
   });
 
-  test('truncated exports are marked explicitly; CSV blocks formula payload', () {
+  test('truncated exports are marked explicitly; CSV blocks formula payload',
+      () {
     final report = _report(truncated: true);
     final bytes = exporter.xlsx(
       report: report,
