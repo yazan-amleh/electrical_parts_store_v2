@@ -150,6 +150,14 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
+      // Server-created reminders are a private, read-only in-app inbox.
+      match /reminderNotifications/{reminderId} {
+        allow get, list: if isMember(storeId) &&
+          resource.data.storeId == storeId &&
+          resource.data.userId == request.auth.uid;
+        allow create, update, delete: if false;
+      }
+
       match /notificationTokens/{tokenId} {
         allow read: if false;
         allow create, update: if isMember(storeId) &&
@@ -461,6 +469,19 @@ service cloud.firestore {
       }
 
 
+      function validReminderNoteFields() {
+        return (!('reminderRepeat' in request.resource.data) ||
+            request.resource.data.reminderRepeat in [
+              'none', 'daily', 'weekly', 'monthly'
+            ]) &&
+          (!('reminderNextAt' in request.resource.data) ||
+            request.resource.data.reminderNextAt == null ||
+            request.resource.data.reminderNextAt is timestamp) &&
+          (!('reminderAt' in request.resource.data) ||
+            request.resource.data.reminderAt == null ||
+            request.resource.data.reminderAt is timestamp);
+      }
+
       match /notes/{noteId} {
         allow read: if isMember(storeId) &&
           resource.data.storeId == storeId &&
@@ -471,7 +492,8 @@ service cloud.firestore {
           request.resource.data.title is string &&
           request.resource.data.content is string &&
           request.resource.data.type is string &&
-          request.resource.data.priority is string;
+          request.resource.data.priority is string &&
+          validReminderNoteFields();
         allow update: if isMember(storeId) &&
           resource.data.storeId == storeId &&
           resource.data.userId == request.auth.uid &&
@@ -480,7 +502,8 @@ service cloud.firestore {
           request.resource.data.title is string &&
           request.resource.data.content is string &&
           request.resource.data.type is string &&
-          request.resource.data.priority is string;
+          request.resource.data.priority is string &&
+          validReminderNoteFields();
         allow delete: if isMember(storeId) &&
           resource.data.storeId == storeId &&
           resource.data.userId == request.auth.uid;
