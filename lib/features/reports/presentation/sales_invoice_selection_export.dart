@@ -119,9 +119,9 @@ class SalesInvoiceSelectionExport {
     final bold = pw.Font.ttf(
       await rootBundle.load('assets/fonts/Rubik-Bold.ttf'),
     );
-    const navy = PdfColor.fromInt(0xFF1E3A6E);
-    const pale = PdfColor.fromInt(0xFFEAEDF6);
-    const border = PdfColor.fromInt(0xFFCDD3E8);
+    final navy = PdfColor.fromInt(0xFF1E3A6E);
+    final pale = PdfColor.fromInt(0xFFEAEDF6);
+    final border = PdfColor.fromInt(0xFFCDD3E8);
     final pdf = pw.Document();
 
     for (final document in documents) {
@@ -323,8 +323,8 @@ class SalesInvoiceSelectionExport {
               headerStyle: pw.TextStyle(font: bold, fontSize: 9,
                   color: PdfColors.white),
               cellStyle: pw.TextStyle(font: font, fontSize: 8),
-              headerDecoration: const pw.BoxDecoration(color: navy),
-              oddRowDecoration: const pw.BoxDecoration(color: pale),
+              headerDecoration: pw.BoxDecoration(color: navy),
+              oddRowDecoration: pw.BoxDecoration(color: pale),
               cellAlignment: pw.Alignment.centerRight,
               border: pw.TableBorder.all(color: border, width: 0.4),
             ),
