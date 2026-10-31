@@ -187,7 +187,8 @@ class _NotesPageState extends State<NotesPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SelectableText(note.content.isEmpty ? 'بدون محتوى' : note.content),
+                  SelectableText(
+                      note.content.isEmpty ? 'بدون محتوى' : note.content),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
@@ -268,9 +269,7 @@ class _NotesPageState extends State<NotesPage> {
         ],
       ),
     );
-    if (!mounted ||
-        confirmed != true ||
-        !_isCurrentContext(actionContext)) {
+    if (!mounted || confirmed != true || !_isCurrentContext(actionContext)) {
       return;
     }
     final result = await widget.repository.deleteNote(
@@ -752,7 +751,7 @@ class _NoteDialogState extends State<_NoteDialog> {
                 _reminderAt == null
                     ? 'لا يوجد موعد. لا يتم إرسال إشعار تلقائي.'
                     : '${MaterialLocalizations.of(context).formatMediumDate(_reminderAt!)} '
-                      '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(_reminderAt!))}',
+                        '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(_reminderAt!))}',
               ),
               onTap: _pickReminder,
               trailing: _reminderAt == null
