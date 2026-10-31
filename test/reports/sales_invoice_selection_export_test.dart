@@ -110,4 +110,115 @@ void main() {
     expect(bytes.length, greaterThan(700));
     expect(latin1.decode(bytes.take(4).toList()), '%PDF');
   });
+  test('V1 print parity: discounted and partially returned invoice with store profile', () async {
+    const exporter = SalesInvoiceSelectionExport();
+    final invoice = sale();
+    final bytes = await exporter.invoicePdf(
+      documents: [
+        SalesInvoiceDocument(
+          invoice: invoice,
+          lines: const [
+            SalesInvoiceLineSummary(
+              id: 'line-1',
+              productId: 'product-1',
+              description: 'مفتاح كهربائي',
+              quantityMilliUnits: 2000,
+              returnedQuantityMilliUnits: 1000,
+              unitPrice: Money(minorUnits: 6000),
+              discount: Money(minorUnits: 2000),
+              total: Money(minorUnits: 10000),
+              cost: Money(minorUnits: 6000),
+              unitName: 'قطعة',
+            ),
+          ],
+        ),
+      ],
+      customerNames: const {'customer-1': 'عميل تجريبي'},
+      storeLabel: 'المتجر التجريبي',
+      storePhone: '0599000000',
+      storeAddress: 'نابلس',
+      expectedStoreId: 'store-a',
+    );
+    expect(bytes.length, greaterThan(1000));
+    expect(latin1.decode(bytes.take(4).toList()), '%PDF');
+  });
+
+  test('print rejects a different tenant instead of showing private invoice', () async {
+    const exporter = SalesInvoiceSelectionExport();
+    await expectLater(
+      exporter.invoicePdf(
+        documents: [
+          SalesInvoiceDocument(
+            invoice: sale(),
+            lines: const [
+              SalesInvoiceLineSummary(
+                id: 'line-1',
+                productId: 'product-1',
+                description: 'كابل',
+                quantityMilliUnits: 1000,
+                unitPrice: Money(minorUnits: 10000),
+                discount: Money(minorUnits: 0),
+                total: Money(minorUnits: 10000),
+                cost: Money(minorUnits: 6000),
+              ),
+            ],
+          ),
+        ],
+        customerNames: const {},
+        storeLabel: 'اسم متجر آخر',
+        expectedStoreId: 'store-b',
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('print rejects mismatched line sums, costs and invalid returns', () async {
+    const exporter = SalesInvoiceSelectionExport();
+    Future<void> shouldReject(SalesInvoiceLineSummary line) async {
+      await expectLater(
+        exporter.invoicePdf(
+          documents: [
+            SalesInvoiceDocument(invoice: sale(), lines: [line]),
+          ],
+          customerNames: const {},
+          storeLabel: 'المتجر',
+          expectedStoreId: 'store-a',
+        ),
+        throwsStateError,
+      );
+    }
+
+    await shouldReject(const SalesInvoiceLineSummary(
+      id: 'bad-total',
+      productId: 'product-1',
+      description: 'كابل',
+      quantityMilliUnits: 1000,
+      unitPrice: Money(minorUnits: 5000),
+      discount: Money(minorUnits: 0),
+      total: Money(minorUnits: 5000),
+      cost: Money(minorUnits: 6000),
+    ));
+    await shouldReject(const SalesInvoiceLineSummary(
+      id: 'bad-cost',
+      productId: 'product-1',
+      description: 'كابل',
+      quantityMilliUnits: 1000,
+      unitPrice: Money(minorUnits: 10000),
+      discount: Money(minorUnits: 0),
+      total: Money(minorUnits: 10000),
+      cost: Money(minorUnits: 5000),
+    ));
+    await shouldReject(const SalesInvoiceLineSummary(
+      id: 'bad-return',
+      productId: 'product-1',
+      description: 'كابل',
+      quantityMilliUnits: 1000,
+      returnedQuantityMilliUnits: 2000,
+      unitPrice: Money(minorUnits: 10000),
+      discount: Money(minorUnits: 0),
+      total: Money(minorUnits: 10000),
+      cost: Money(minorUnits: 6000),
+    ));
+  });
+
 }
