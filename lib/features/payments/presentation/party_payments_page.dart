@@ -286,15 +286,17 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                       ),
                     ),
                     if (_pendingQueued || _pendingUncertain) ...[
-                      MaterialBanner(
-                        content: Text(
-                          _pendingQueued
-                              ? 'هذه الحركة محفوظة في طابور التنفيذ. '
-                                  'لا تنشئ حركة أخرى حتى يتم التحقق من نتيجتها.'
-                              : 'تعذر التأكد من نتيجة الترحيل السابقة. '
-                                  'أعد نفس الحركة بنفس البيانات فقط.',
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            _pendingQueued
+                                ? 'هذه الحركة محفوظة في طابور التنفيذ. '
+                                    'لا تنشئ حركة أخرى حتى يتم التحقق من نتيجتها.'
+                                : 'تعذر التأكد من نتيجة الترحيل السابقة. '
+                                    'أعد نفس الحركة بنفس البيانات فقط.',
+                          ),
                         ),
-                        actions: const <Widget>[],
                       ),
                       const SizedBox(height: 12),
                     ],
