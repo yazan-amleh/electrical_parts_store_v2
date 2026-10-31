@@ -28,7 +28,7 @@ For a repair with invoice total T, parts cost C, and customer advance A:
 - The account balance projections are updated in the same transaction.
 - Each stock product, movement, and idempotency record is updated in the same transaction.
 
-The invoice is rejected if the product is inactive, a service, in another store, has insufficient quantity, or would create a negative inventory value.
+The invoice is rejected if the product is inactive, a service, in another store, has insufficient quantity, or would create a negative inventory value. Repair parts are issued at their exact share of the current inventory carrying value; a full depletion removes the remaining inventory value exactly rather than relying on a rounded displayed unit cost.
 
 ## Payments
 
@@ -42,8 +42,8 @@ A post-invoice settlement uses the existing party-payment engine so the customer
 
 ## Idempotency and authorization
 
-All repair writes are callable functions. They validate store membership and use command/idempotency records. Firestore client rules allow reads for store members but deny direct repair writes; the command outbox only accepts the named repair operations.
+All repair writes are callable functions. They validate store membership and use command/idempotency records. Repair delivery and advance markers persist immutable request fingerprints, so retries cannot change dates, amounts, or posting accounts under the same key. Firestore client rules allow reads for store members but deny direct repair writes; the command outbox only accepts the named repair operations.
 
-## Known follow-up
+## Cheque bounce linkage
 
-A bounced post-invoice repair cheque must later also reduce the repair's settlement-paid projection. Until that linkage is implemented, cheque bounce handling should be covered by the accounting audit before release.
+A post-invoice repair cheque is linked to its repair through the settlement payment. If the cheque bounces, the same guarded cheque-settlement transaction restores the customer receivable and reduces the repair's paid projection by the bounced amount. A retry of the same bounce remains idempotent and cannot reduce the repair twice.

@@ -4,6 +4,7 @@ import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
 import '../../categories/domain/entities/category.dart';
 import '../../categories/domain/repositories/category_repository.dart';
 import '../domain/entities/product.dart';
@@ -33,7 +34,14 @@ class _ProductsPageState extends State<ProductsPage> {
   List<Product> _products = const [];
   List<Category> _categories = const <Category>[];
   bool _isLoading = true;
+  bool _isSaving = false;
+  bool _showInactive = false;
+  bool _lowStockOnly = false;
+  String _productType = 'all';
+  String? _selectedCategoryId;
   String? _errorMessage;
+
+  bool get _canManage => widget.membership.role.canManageInventory;
 
   @override
   void initState() {
@@ -45,15 +53,20 @@ class _ProductsPageState extends State<ProductsPage> {
   @override
   Widget build(BuildContext context) {
     final search = _searchController.text.trim().toLowerCase();
-    final filtered = _products
-        .where(
-          (product) =>
-              search.isEmpty ||
-              product.name.toLowerCase().contains(search) ||
-              (product.sku?.toLowerCase().contains(search) ?? false) ||
-              (product.barcode?.toLowerCase().contains(search) ?? false),
-        )
-        .toList(growable: false);
+    final filtered = _products.where((product) {
+      if (!_showInactive && !product.isActive) return false;
+      if (_lowStockOnly && !product.isLowStock) return false;
+      if (_productType == 'service' && !product.isService) return false;
+      if (_productType == 'stock' && product.isService) return false;
+      if (_selectedCategoryId != null &&
+          product.categoryId != _selectedCategoryId) {
+        return false;
+      }
+      return search.isEmpty ||
+          product.name.toLowerCase().contains(search) ||
+          (product.sku?.toLowerCase().contains(search) ?? false) ||
+          (product.barcode?.toLowerCase().contains(search) ?? false);
+    }).toList(growable: false);
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -76,9 +89,76 @@ class _ProductsPageState extends State<ProductsPage> {
                 const SizedBox(width: 8),
                 FilledButton.icon(
                   onPressed:
-                      widget.repository == null ? null : () => _openEditor(),
+                      widget.repository == null || !_canManage || _isSaving
+                          ? null
+                          : () => _openEditor(),
                   icon: const Icon(Icons.add),
                   label: const Text('إضافة صنف'),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (final option in const [
+                  ('all', 'الكل'),
+                  ('stock', 'أصناف مخزنية'),
+                  ('service', 'خدمات'),
+                ])
+                  ChoiceChip(
+                    label: Text(option.$2),
+                    selected: _productType == option.$1,
+                    onSelected: (_) => setState(() => _productType = option.$1),
+                  ),
+                FilterChip(
+                  label: const Text('منخفض المخزون'),
+                  selected: _lowStockOnly,
+                  onSelected: (value) => setState(() => _lowStockOnly = value),
+                ),
+                FilterChip(
+                  label: const Text('إظهار غير النشط'),
+                  selected: _showInactive,
+                  onSelected: (value) => setState(() => _showInactive = value),
+                ),
+                if (_categories.isNotEmpty)
+                  DropdownButton<String?>(
+                    value: _selectedCategoryId,
+                    hint: const Text('كل التصنيفات'),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('كل التصنيفات'),
+                      ),
+                      for (final category in _categories)
+                        DropdownMenuItem<String?>(
+                          value: category.id,
+                          child: Text(category.name),
+                        ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _selectedCategoryId = value),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'المعروض: ${filtered.length} من أصل ${_products.length} صنف',
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'تحديث الأصناف والتصنيفات',
+                  onPressed: _isLoading ? null : _refresh,
+                  icon: const Icon(Icons.refresh),
                 ),
               ],
             ),
@@ -116,7 +196,7 @@ class _ProductsPageState extends State<ProductsPage> {
         final product = products[index];
         return Card(
           child: ListTile(
-            onTap: () => _openEditor(product),
+            onTap: !_canManage || _isSaving ? null : () => _openEditor(product),
             leading: CircleAvatar(
               child: Icon(
                 product.isService
@@ -133,6 +213,7 @@ class _ProductsPageState extends State<ProductsPage> {
                 product.isService
                     ? 'خدمة'
                     : 'الرصيد: ${product.quantityOnHand.formatted}',
+                if (!product.isActive) 'غير نشط',
               ].join(' • '),
             ),
             trailing: Column(
@@ -176,6 +257,7 @@ class _ProductsPageState extends State<ProductsPage> {
         storeId: widget.membership.storeId,
         userId: widget.user.id,
       ),
+      includeInactive: true,
     );
     if (!mounted) {
       return;
@@ -197,10 +279,14 @@ class _ProductsPageState extends State<ProductsPage> {
     }
   }
 
+  Future<void> _refresh() async {
+    await Future.wait([_loadProducts(), _loadCategories()]);
+  }
+
   Future<void> _openEditor([Product? initialProduct]) async {
     final repository = widget.repository;
-    if (repository == null) {
-      _showMessage('مستودع الأصناف غير موصول بهذه البيئة.');
+    if (repository == null || !_canManage || _isSaving) {
+      _showMessage('تعديل الأصناف غير متاح بصلاحياتك الحالية.');
       return;
     }
 
@@ -216,26 +302,33 @@ class _ProductsPageState extends State<ProductsPage> {
       return;
     }
 
-    final result = await repository.saveProduct(
-      context: StoreContext(
-        storeId: widget.membership.storeId,
-        userId: widget.user.id,
-      ),
-      product: product,
-    );
-    if (!mounted) {
-      return;
-    }
-
-    if (result is FailureResult<void>) {
-      _showMessage(result.failure.message);
-      return;
-    }
-    if (result is Success<void>) {
-      _showMessage(
-        initialProduct == null ? 'تمت إضافة الصنف.' : 'تم تحديث الصنف.',
+    setState(() => _isSaving = true);
+    try {
+      final result = await repository.saveProduct(
+        context: StoreContext(
+          storeId: widget.membership.storeId,
+          userId: widget.user.id,
+        ),
+        product: product,
       );
-      await _loadProducts();
+      if (!mounted) return;
+
+      if (result is FailureResult<void>) {
+        _showMessage(result.failure.message);
+        return;
+      }
+      if (result is Success<void>) {
+        await _loadProducts();
+        if (mounted) {
+          _showMessage(
+            initialProduct == null ? 'تمت إضافة الصنف.' : 'تم تحديث الصنف.',
+          );
+        }
+      }
+    } catch (error) {
+      if (mounted) _showMessage('تعذر حفظ الصنف: $error');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 

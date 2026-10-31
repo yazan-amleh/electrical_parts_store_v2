@@ -6,10 +6,12 @@ import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
 import '../../domain/entities/sale.dart';
 import '../../domain/entities/sale_posting_plan.dart';
+import '../../domain/entities/sale_return.dart';
 import '../../domain/repositories/sale_repository.dart';
 import '../../../../infrastructure/queue/cloud_function_queue_fallback.dart';
 import '../../domain/services/sale_posting_planner.dart';
 import '../mappers/sale_command_mapper.dart';
+import '../mappers/sale_return_command_mapper.dart';
 
 class FirestoreSaleRepository implements SaleRepository {
   FirestoreSaleRepository({
@@ -76,6 +78,63 @@ class FirestoreSaleRepository implements SaleRepository {
       return FailureResult<SalePostingPlan>(_mapFailure(error));
     } catch (error) {
       return FailureResult<SalePostingPlan>(
+        InfrastructureFailure(error.toString()),
+      );
+    }
+  }
+
+  @override
+  Future<Result<SaleReturnPostingResult>> postFullSaleReturn({
+    required StoreContext context,
+    required SaleReturn saleReturn,
+    required SaleReturnPostingAccounts accounts,
+  }) async {
+    if (saleReturn.storeId != context.storeId) {
+      return const FailureResult<SaleReturnPostingResult>(
+        ValidationFailure('Sale return belongs to another store.'),
+      );
+    }
+
+    try {
+      final callable = _functions.httpsCallable('postSaleReturn');
+      final response = await callable.call<Map<String, dynamic>>(
+        SaleReturnCommandMapper.toRequest(
+          saleReturn: saleReturn,
+          accounts: accounts,
+        ),
+      );
+      final data = response.data;
+      if (data['returnId'] != saleReturn.id ||
+          data['originalSaleId'] != saleReturn.originalSaleId ||
+          data['journalEntryId'] is! String) {
+        return const FailureResult<SaleReturnPostingResult>(
+          InfrastructureFailure(
+            'The sale return service returned inconsistent identifiers.',
+          ),
+        );
+      }
+      final status = data['status'];
+      if (status != 'returned' && status != 'already_returned') {
+        return const FailureResult<SaleReturnPostingResult>(
+          InfrastructureFailure('Unexpected sale return status.'),
+        );
+      }
+
+      return Success<SaleReturnPostingResult>(
+        SaleReturnPostingResult(
+          returnId: saleReturn.id,
+          originalSaleId: saleReturn.originalSaleId,
+          journalEntryId: data['journalEntryId'] as String,
+          alreadyReturned: status == 'already_returned',
+          returnStatus: data['returnStatus'] is String
+              ? data['returnStatus'] as String
+              : null,
+        ),
+      );
+    } on firebase_functions.FirebaseFunctionsException catch (error) {
+      return FailureResult<SaleReturnPostingResult>(_mapFailure(error));
+    } catch (error) {
+      return FailureResult<SaleReturnPostingResult>(
         InfrastructureFailure(error.toString()),
       );
     }

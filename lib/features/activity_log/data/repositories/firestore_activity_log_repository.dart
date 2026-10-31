@@ -18,6 +18,8 @@ class FirestoreActivityLogRepository implements ActivityLogRepository {
   Stream<Result<List<ActivityLog>>> watchLogs({
     required StoreContext context,
     int limit = 100,
+    DateTime? fromInclusive,
+    DateTime? toExclusive,
   }) async* {
     if (context.storeId.trim().isEmpty || context.userId.trim().isEmpty) {
       yield const FailureResult<List<ActivityLog>>(
@@ -28,11 +30,35 @@ class FirestoreActivityLogRepository implements ActivityLogRepository {
       return;
     }
 
+    if (limit < 1 ||
+        limit > 500 ||
+        (fromInclusive != null &&
+            toExclusive != null &&
+            !fromInclusive.isBefore(toExclusive))) {
+      yield const FailureResult<List<ActivityLog>>(
+        ValidationFailure('Invalid activity history range or page size.'),
+      );
+      return;
+    }
+
     try {
-      final query = FirebasePaths.activityLogs(
+      Query<Map<String, dynamic>> query = FirebasePaths.activityLogs(
         _firestore,
         context.storeId,
-      ).orderBy('timestamp', descending: true).limit(limit);
+      );
+      if (fromInclusive != null) {
+        query = query.where(
+          'timestamp',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(fromInclusive.toUtc()),
+        );
+      }
+      if (toExclusive != null) {
+        query = query.where(
+          'timestamp',
+          isLessThan: Timestamp.fromDate(toExclusive.toUtc()),
+        );
+      }
+      query = query.orderBy('timestamp', descending: true).limit(limit);
       await for (final snapshot in query.snapshots()) {
         final logs = snapshot.docs
             .map(ActivityLogFirestoreMapper.fromSnapshot)

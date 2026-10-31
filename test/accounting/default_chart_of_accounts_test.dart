@@ -28,6 +28,12 @@ void main() {
     expect(accounts['1160']!.controlType, ControlType.cardReceivable);
     expect(accounts['1170']!.controlType, ControlType.inputTax);
     expect(accounts['2110']!.controlType, ControlType.supplierPayable);
+    expect(accounts['3400']!.normalSide, NormalSide.credit);
+    expect(accounts['3400']!.statementSection, StatementSection.equity);
+    expect(accounts['4200']!.normalSide, NormalSide.debit);
+    expect(accounts['4200']!.statementSection, StatementSection.revenue);
+    expect(accounts['5200']!.normalSide, NormalSide.debit);
+    expect(accounts['5200']!.statementSection, StatementSection.costOfSales);
   });
 
   test('header accounts cannot receive journal postings', () {

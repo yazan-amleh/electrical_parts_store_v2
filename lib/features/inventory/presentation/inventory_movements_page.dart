@@ -183,14 +183,6 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
                   value: InventoryMovementType.adjustment,
                   child: Text('تسوية مخزون'),
                 ),
-                DropdownMenuItem(
-                  value: InventoryMovementType.saleReturn,
-                  child: Text('مرتجع بيع / إدخال'),
-                ),
-                DropdownMenuItem(
-                  value: InventoryMovementType.purchaseReturn,
-                  child: Text('مرتجع شراء / إخراج'),
-                ),
               ],
               onChanged: _isPosting
                   ? null
@@ -245,9 +237,10 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(
-                      labelText: 'تكلفة الوحدة',
-                      prefixIcon: Icon(Icons.price_change_outlined),
+                    decoration: InputDecoration(
+                      labelText:
+                          'تكلفة الوحدة (${product.purchasePrice.currency})',
+                      prefixIcon: const Icon(Icons.price_change_outlined),
                     ),
                   ),
                 ),
@@ -403,12 +396,15 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
       return;
     }
 
-    setState(() => _isLoadingMovements = true);
+    setState(() {
+      _isLoadingMovements = true;
+      _movements = const <InventoryMovement>[];
+    });
     final result = await inventoryRepository.getMovements(
       context: _storeContext,
       productId: product.id,
     );
-    if (!mounted) {
+    if (!mounted || _selectedProduct?.id != product.id) {
       return;
     }
 
@@ -454,6 +450,8 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
       quantity.milliUnits * direction,
     );
     final now = DateTime.now().toUtc().microsecondsSinceEpoch;
+    final fullyDepletesStock = signedQuantity.isNegative &&
+        signedQuantity.milliUnits.abs() == product.quantityOnHand.milliUnits;
     final movement = InventoryMovement(
       id: ['inventory-movement-', now].join(),
       storeId: widget.membership.storeId,
@@ -461,6 +459,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
       type: _movementType,
       quantityDelta: signedQuantity,
       unitCost: unitCost,
+      totalCost: fullyDepletesStock ? product.inventoryValue : null,
       idempotencyKey: IdempotencyKey(['inventory-', now].join()),
       sourceType: 'manual_inventory',
       sourceId: null,
@@ -514,7 +513,7 @@ class _InventoryMovementsPageState extends State<InventoryMovementsPage> {
         : int.parse(parts[1].padRight(2, '0'));
     return Money(
       minorUnits: int.parse(parts.first) * 100 + fraction,
-      currency: 'ILS',
+      currency: _selectedProduct?.purchasePrice.currency ?? 'ILS',
     );
   }
 

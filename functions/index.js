@@ -1,5 +1,8 @@
 const { setGlobalOptions } = require('firebase-functions/v2');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const {
+  onDocumentCreated,
+  onDocumentWritten,
+} = require('firebase-functions/v2/firestore');
 const {
   HttpsError,
   onCall,
@@ -15,6 +18,280 @@ setGlobalOptions({
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
+const {writeActivity} = require('./activity_log_triggers');
+const { createStoreHandler, selectStoreHandler } = require('./store_onboarding');
+const {
+  updateStoreProfileHandler,
+  addStoreMemberHandler,
+  updateStoreMemberHandler,
+} = require('./settings_management');
+const {createVoucherDraftHandlers} = require('./voucher_drafts');
+const {nextVoucherNumber} = require('./accounting/voucher_numbering');
+const {
+  checkedMinorAdd,
+  readBalanceForPosting,
+  readPartyBalanceForPosting,
+  fingerprintJournal,
+  isSameLegacyJournalHeader,
+  isSameLegacyJournalLine,
+} = require('./accounting/journal_integrity');
+const {
+  fingerprintAccountTransfer,
+  sameLegacyTransfer,
+} = require('./accounting/transfer_integrity');
+const {
+  expenseFingerprint,
+  sameLegacyExpense,
+  sameLegacyExpenseLines,
+} = require('./accounting/expense_integrity');
+const {
+  fingerprintPartyPayment,
+  sameLegacyPartyPayment,
+  sameLegacyPartyPaymentLines,
+} = require('./accounting/party_payment_integrity');
+const {
+  fingerprintChequeSettlement,
+  sameLegacyChequeSettlement,
+  sameLegacyChequeLines,
+} = require('./accounting/cheque_settlement_integrity');
+const {
+  fingerprintPurchase,
+  matchesLegacyPurchaseHeader,
+  matchesLegacyPurchaseLines,
+  matchesLegacyPurchaseJournal,
+} = require('./accounting/purchase_integrity');
+const {
+  fingerprintSale,
+  matchesLegacySaleInvoice,
+  matchesLegacySaleLines,
+  matchesLegacySaleJournal,
+} = require('./accounting/sale_integrity');
+const { fingerprintSaleReturn } = require('./accounting/sale_return_integrity');
+const { fingerprintPurchaseReturn } = require('./accounting/purchase_return_integrity');
+const {
+  allocateCumulative,
+  allocateHeaderBySubtotal,
+} = require('./accounting/sale_return_allocation');
+const {
+  fingerprintPurchaseOrderReceipt,
+  legacyFingerprintPurchaseOrderReceipt,
+  matchesLegacyPurchaseOrderReceipt,
+  matchesLegacyPurchaseOrderJournalLines,
+} = require('./accounting/purchase_order_receipt_integrity');
+const {
+  fingerprintInventoryMovement,
+  matchesLegacyInventoryMovement,
+} = require('./accounting/inventory_movement_integrity');
+const {fingerprintOfferOrderConfirmation} = require('./accounting/offer_order_integrity');
+const {
+  fingerprintRepairDelivery,
+  fingerprintRepairPayment,
+  sameLegacyRepairAdvance,
+} = require('./accounting/repair_integrity');
+const {
+  MAX_AUDIT_DOCS_PER_COLLECTION,
+  MAX_AUDIT_TOTAL_DOCS,
+  readAuditPages,
+  readJournalAuditLines,
+  isJournalLinePath,
+  findIndexedOrphanJournalLines,
+  auditInteger,
+  auditSum,
+} = require('./accounting/audit_integrity');
+const {
+  createHistoryScan,
+  advanceHistoryScan,
+} = require('./accounting/history_scan');
+const {
+  startLedgerReconciliation,
+  advanceLedgerReconciliation,
+} = require('./accounting/ledger_reconciliation');
+const {
+  startJournalHeaderReconciliation,
+  advanceJournalHeaderReconciliation,
+} = require('./accounting/journal_header_reconciliation');
+const {
+  compareAuditRunCoverage,
+} = require('./accounting/audit_coverage');
+const {
+  startPathOrphanScan,
+  advancePathOrphanScan,
+} = require('./accounting/orphan_path_scan');
+const {getUnifiedAuditReport} = require('./accounting/unified_audit_report');
+const {markJournalPosting} = require('./accounting/posting_epoch');
+const {mutateChartAccount} = require('./accounting/chart_mutation');
+const {upgradeDefaultChart} = require('./accounting/default_chart_upgrade');
+const {
+  assertAccountingWritesOpen,
+  parseIds,
+  beginAccountingClose,
+  finalizeAccountingClose,
+  reopenAccountingClose,
+} = require('./accounting/period_close');
+const {
+  getCloseState,
+  startCloseAudits,
+  advanceCloseAudits,
+} = require('./accounting/close_workflow');
+const {
+  startBalanceProjectionScan, advanceBalanceProjectionScan,
+} = require('./accounting/balance_projection_scan');
+
+// Chart edits are server-only so the audit's financial mutation fence cannot
+// be bypassed by direct client updates to the chart of accounts.
+exports.mutateChartAccount = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  return mutateChartAccount({
+    db, FieldValue, HttpsError, userId: request.auth.uid,
+    data: request.data,
+    assertAccess: (member, storeId) => assertMembership(
+      member, storeId, 'modify chart of accounts', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.updateStoreProfile = onCall(async (request) => {
+  return updateStoreProfileHandler({
+    db,
+    FieldValue,
+    HttpsError,
+    request,
+  });
+});
+
+exports.addStoreMember = onCall(async (request) => {
+  return addStoreMemberHandler({
+    db,
+    auth: admin.auth(),
+    FieldValue,
+    HttpsError,
+    request,
+  });
+});
+
+exports.updateStoreMember = onCall(async (request) => {
+  return updateStoreMemberHandler({
+    db,
+    FieldValue,
+    HttpsError,
+    request,
+  });
+});
+
+exports.upgradeDefaultChart = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  return upgradeDefaultChart({
+    db, FieldValue, HttpsError, userId: request.auth.uid,
+    data: request.data,
+    assertAccess: (member, storeId) => assertMembership(
+      member, storeId, 'upgrade default chart', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+// Read-only status for a resumable close. Control documents remain private
+// to server functions and cannot be fetched directly from the client.
+exports.getAccountingCloseStatus = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  return getCloseState({
+    db, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'view accounting close', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.startAccountingCloseAudits = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  return startCloseAudits({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start accounting close checks',
+      new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.advanceAccountingCloseAudits = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  return advanceCloseAudits({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'advance accounting close checks',
+      new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+// A two-phase operational freeze: block all instrumented writes first,
+// then run and verify the four non-certifying historical source audits.
+exports.beginAccountingClose = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  return beginAccountingClose({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    throughDate: request.data.throughDate,
+    assertAccess: (member, id) => assertMembership(
+      member, id, 'begin accounting close', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.finalizeAccountingClose = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  const data = request.data;
+  return finalizeAccountingClose({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    ledgerRunId: data.ledgerRunId,
+    journalRunId: data.journalRunId,
+    orphanRunId: data.orphanRunId,
+    balanceRunId: data.balanceRunId,
+    assertAccess: (member, id) => assertMembership(
+      member, id, 'finalize accounting close', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.reopenAccountingClose = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const storeId = parseIds(request.data, HttpsError);
+  return reopenAccountingClose({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    reason: request.data.reason,
+    assertAccess: (member, id) => assertMembership(
+      member, id, 'reopen accounting close', new Set(['owner', 'admin']),
+    ),
+  });
+});
+
+exports.createStore = onCall((request) =>
+  createStoreHandler({ db, FieldValue, HttpsError, request }),
+);
+
+exports.selectStore = onCall((request) =>
+  selectStoreHandler({ db, FieldValue, HttpsError, request }),
+);
+
 const QUANTITY_SCALE = 1000;
 const MAX_LINES = 100;
 const POSTING_ROLES = new Set(['owner', 'admin', 'accountant', 'sales']);
@@ -34,10 +311,13 @@ const PURCHASE_ORDER_ROLES = new Set([
 const INVENTORY_MOVEMENT_TYPES = new Set([
   'openingBalance',
   'adjustment',
-  'saleReturn',
-  'purchaseReturn',
 ]);
 const INVENTORY_POSTING_ROLES = new Set(['owner', 'admin', 'warehouse']);
+const INVENTORY_OPENING_POSTING_ROLES = new Set([
+  'owner',
+  'admin',
+  'accountant',
+]);
 
 exports.sendChatMessageNotification = onDocumentCreated(
   'stores/{storeId}/chatRooms/{roomId}/messages/{messageId}',
@@ -143,6 +423,209 @@ exports.sendChatMessageNotification = onDocumentCreated(
 );
 
 
+function activityName(data, fallback) {
+  const candidates = [
+    data?.name,
+    data?.invoiceNumber,
+    data?.purchaseNumber,
+    data?.paymentNumber,
+    data?.repairNumber,
+    data?.offerNumber,
+  ];
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return fallback;
+}
+
+function activityMutationVerb(operation) {
+  switch (operation) {
+    case 'created':
+      return 'تمت إضافة';
+    case 'deleted':
+      return 'تم حذف';
+    default:
+      return 'تم تعديل';
+  }
+}
+
+exports.logSaleActivity = onDocumentCreated(
+  'stores/{storeId}/sales/{saleId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'saleCreated',
+    description: (data, params) =>
+      `تم تسجيل فاتورة بيع ${activityName(data, params.saleId)}`,
+    metadata: {source: 'sales'},
+  }),
+);
+
+exports.logPurchaseActivity = onDocumentCreated(
+  'stores/{storeId}/purchases/{purchaseId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'purchasePosted',
+    description: (data, params) =>
+      `تم تسجيل فاتورة شراء ${activityName(data, params.purchaseId)}`,
+    metadata: {source: 'purchases'},
+  }),
+);
+
+exports.logPartyPaymentActivity = onDocumentCreated(
+  'stores/{storeId}/party_payments/{paymentId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'paymentPosted',
+    description: (data, params) =>
+      `تم تسجيل دفعة ${activityName(data, params.paymentId)}`,
+    metadata: {source: 'party_payments'},
+  }),
+);
+
+exports.logExpenseActivity = onDocumentCreated(
+  'stores/{storeId}/expenses/{expenseId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'expensePosted',
+    description: (data, params) =>
+      `تم تسجيل مصروف ${activityName(data, params.expenseId)}`,
+    metadata: {source: 'expenses'},
+  }),
+);
+
+exports.logProductActivity = onDocumentWritten(
+  'stores/{storeId}/products/{productId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'productChanged',
+    description: (data, params, operation) =>
+      `${activityMutationVerb(operation)} الصنف ${activityName(data, params.productId)}`,
+    metadata: {source: 'products'},
+  }),
+);
+
+exports.logCategoryActivity = onDocumentWritten(
+  'stores/{storeId}/categories/{categoryId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'categoryChanged',
+    description: (data, params, operation) =>
+      `${activityMutationVerb(operation)} التصنيف ${activityName(data, params.categoryId)}`,
+    metadata: {source: 'categories'},
+  }),
+);
+
+exports.logPartyActivity = onDocumentWritten(
+  'stores/{storeId}/parties/{partyId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: (data) =>
+      data?.partyType === 'supplier' ? 'supplierChanged' : 'customerChanged',
+    description: (data, params, operation) => {
+      const label = data?.partyType === 'supplier' ? 'المورد' : 'العميل';
+      return `${activityMutationVerb(operation)} ${label} ${activityName(data, params.partyId)}`;
+    },
+    metadata: {source: 'parties'},
+  }),
+);
+
+exports.logOfferActivity = onDocumentWritten(
+  'stores/{storeId}/offers/{offerId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'offerChanged',
+    description: (data, params, operation) =>
+      `${activityMutationVerb(operation)} العرض ${activityName(data, params.offerId)}`,
+    metadata: {source: 'offers'},
+  }),
+);
+
+exports.logRepairActivity = onDocumentWritten(
+  'stores/{storeId}/repairs/{repairId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'repairChanged',
+    description: (data, params, operation) =>
+      `${activityMutationVerb(operation)} طلب الصيانة ${activityName(data, params.repairId)}`,
+    metadata: {source: 'repairs'},
+  }),
+);
+
+
+
+exports.logJournalActivity = onDocumentCreated(
+  'stores/{storeId}/journal_entries/{journalId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'accountingPosted',
+    description: (data, params) =>
+      `تم ترحيل القيد المحاسبي ${activityName(data, params.journalId)}`,
+    metadata: {source: 'journal_entries'},
+  }),
+);
+
+exports.logAccountTransferActivity = onDocumentCreated(
+  'stores/{storeId}/account_transfers/{transferId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'accountingPosted',
+    description: (data, params) =>
+      `تم تسجيل تحويل بين الحسابات ${activityName(data, params.transferId)}`,
+    metadata: {source: 'account_transfers'},
+  }),
+);
+
+exports.logSaleReturnActivity = onDocumentCreated(
+  'stores/{storeId}/sales_returns/{returnId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'saleCreated',
+    description: (data, params) =>
+      `تم تسجيل مرتجع بيع ${activityName(data, params.returnId)}`,
+    metadata: {source: 'sales_returns'},
+  }),
+);
+
+exports.logPurchaseReturnActivity = onDocumentCreated(
+  'stores/{storeId}/purchase_returns/{returnId}',
+  async (event) => writeActivity({
+    db,
+    Timestamp,
+    event,
+    type: 'purchasePosted',
+    description: (data, params) =>
+      `تم تسجيل مرتجع شراء ${activityName(data, params.returnId)}`,
+    metadata: {source: 'purchase_returns'},
+  }),
+);
+
+
 exports.postInventoryMovement = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
@@ -233,6 +716,35 @@ exports.postSale = onCall(async (request) => {
   }
 });
 
+exports.postSaleReturn = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parseSaleReturnCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return postSaleReturnInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('postSaleReturn failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The sale return could not be posted.',
+    );
+  }
+});
+
 exports.postPurchase = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
@@ -259,6 +771,35 @@ exports.postPurchase = onCall(async (request) => {
     throw new HttpsError(
       'internal',
       'The purchase could not be posted.',
+    );
+  }
+});
+
+exports.postPurchaseReturn = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+
+  const command = parsePurchaseReturnCommand(request.data);
+  try {
+    return await db.runTransaction(async (transaction) => {
+      return postPurchaseReturnInTransaction(
+        transaction,
+        request.auth.uid,
+        command,
+      );
+    });
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    console.error('postPurchaseReturn failed', {
+      message: error.message,
+      stack: error.stack,
+    });
+    throw new HttpsError(
+      'internal',
+      'The purchase return could not be posted.',
     );
   }
 });
@@ -543,6 +1084,25 @@ exports.postAccountTransfer = onCall(async (request) => {
   }
 });
 
+// Firestore can close a contended transaction before its competing attempt
+// observes the idempotency marker (emulator reports INVALID_ARGUMENT). Retry
+// only that exact transient failure through a NEW server transaction.
+// postExpenseInTransaction validates the immutable request fingerprint and
+// journal marker on every attempt, so retry cannot post twice.
+async function runExpenseTransactionWithClosedRetry(userId, command) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await db.runTransaction((transaction) =>
+        postExpenseInTransaction(transaction, userId, command),
+      );
+    } catch (error) {
+      const closedTransaction = !(error instanceof HttpsError) &&
+        /Transaction is invalid or closed/i.test(error?.message || '');
+      if (!closedTransaction || attempt === 2) throw error;
+    }
+  }
+}
+
 exports.postExpense = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
@@ -551,13 +1111,9 @@ exports.postExpense = onCall(async (request) => {
   const command = parseExpenseCommand(request.data);
 
   try {
-    return await db.runTransaction(async (transaction) => {
-      return postExpenseInTransaction(
-        transaction,
-        request.auth.uid,
-        command,
-      );
-    });
+    return await runExpenseTransactionWithClosedRetry(
+      request.auth.uid, command,
+    );
   } catch (error) {
     if (error instanceof HttpsError) {
       throw error;
@@ -572,6 +1128,21 @@ exports.postExpense = onCall(async (request) => {
     );
   }
 });
+
+// Drafts are deliberately stored separately from posted financial documents.
+// Approvals reuse the canonical idempotent journal/balance posting transaction.
+const voucherDraftWorkflow = createVoucherDraftHandlers({
+  db,
+  FieldValue,
+  HttpsError,
+  parsePartyPaymentCommand,
+  postPartyPaymentInTransaction,
+});
+exports.saveVoucherDraft = onCall(voucherDraftWorkflow.save);
+exports.updateVoucherDraft = onCall(voucherDraftWorkflow.update);
+exports.submitVoucherDraft = onCall(voucherDraftWorkflow.submit);
+exports.approveVoucherDraft = onCall(voucherDraftWorkflow.approve);
+exports.rejectVoucherDraft = onCall(voucherDraftWorkflow.reject);
 
 exports.postPartyPayment = onCall(async (request) => {
   if (!request.auth) {
@@ -618,6 +1189,10 @@ function parseInventoryMovementCommand(rawCommand) {
     invalid('movement.quantityDeltaMilliUnits must be a non-zero integer.');
   }
 
+  if (type === 'openingBalance' && quantityDeltaMilliUnits < 0) {
+    invalid('Opening inventory quantity must be positive.');
+  }
+
   return {
     storeId,
     movement: {
@@ -660,6 +1235,9 @@ async function postInventoryMovementInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.movement.occurredAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const productRef = storeRef
     .collection('products')
@@ -675,20 +1253,41 @@ async function postInventoryMovementInTransaction(
   assertMembership(
     membershipSnapshot,
     command.storeId,
-    'post inventory movements',
-    INVENTORY_POSTING_ROLES,
+    command.movement.type === 'openingBalance'
+      ? 'post opening inventory'
+      : 'post inventory movements',
+    command.movement.type === 'openingBalance'
+      ? INVENTORY_OPENING_POSTING_ROLES
+      : INVENTORY_POSTING_ROLES,
   );
 
+  const fingerprint = fingerprintInventoryMovement(command);
   const idempotencySnapshot = await transaction.get(idempotencyRef);
   if (idempotencySnapshot.exists) {
-    const existingMovementId = idempotencySnapshot.data().movementId;
-    if (existingMovementId === command.movement.id) {
-      return {
-        status: 'already_posted',
-        movementId: command.movement.id,
-      };
+    const marker = idempotencySnapshot.data();
+    if (marker.storeId !== command.storeId ||
+        marker.movementId !== command.movement.id) {
+      conflict('The inventory idempotency key is already assigned.');
     }
-    conflict('The inventory idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict(
+          'Inventory movement retry differs from the original request.',
+        );
+      }
+    } else {
+      const oldMovement = await transaction.get(movementRef);
+      if (!oldMovement.exists ||
+          !matchesLegacyInventoryMovement(oldMovement.data(), command)) {
+        conflict(
+          'Historical inventory movement cannot be verified for retry.',
+        );
+      }
+    }
+    return {
+      status: 'already_posted',
+      movementId: command.movement.id,
+    };
   }
 
   const existingMovementSnapshot = await transaction.get(movementRef);
@@ -714,20 +1313,40 @@ async function postInventoryMovementInTransaction(
     invalid('Movement currency does not match the product.');
   }
 
-  const currentQuantity = storedInt(
-    product.quantityOnHandMilliUnits,
-    0,
-  );
-  const currentInventoryValue = Number.isSafeInteger(
-    product.inventoryValueMinorUnits,
-  )
-    ? product.inventoryValueMinorUnits
-    : multiplyAndRound(
-      storedInt(product.purchasePriceMinorUnits, 0),
-      currentQuantity,
+  const currentQuantity = product.quantityOnHandMilliUnits ?? 0;
+  const currentUnitCost = product.purchasePriceMinorUnits ?? 0;
+  if (!Number.isSafeInteger(currentQuantity) || currentQuantity < 0 ||
+      !Number.isSafeInteger(currentUnitCost) || currentUnitCost < 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Inventory product quantity or purchase cost is corrupt.',
     );
-  const nextQuantity =
-    currentQuantity + command.movement.quantityDeltaMilliUnits;
+  }
+
+  const currentInventoryValue = product.inventoryValueMinorUnits ??
+    multiplyAndRound(currentUnitCost, currentQuantity);
+  if (!Number.isSafeInteger(currentInventoryValue) ||
+      currentInventoryValue < 0 ||
+      (currentQuantity === 0 && currentInventoryValue !== 0)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Inventory product valuation is corrupt.',
+    );
+  }
+
+  if (command.movement.type === 'openingBalance' &&
+      (currentQuantity !== 0 || currentInventoryValue !== 0)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Opening inventory can only be posted to an empty product balance.',
+    );
+  }
+
+  const nextQuantity = checkedMinorAdd(
+    currentQuantity,
+    command.movement.quantityDeltaMilliUnits,
+    'Inventory movement quantity',
+  );
   if (nextQuantity < 0) {
     throw new HttpsError(
       'failed-precondition',
@@ -735,16 +1354,151 @@ async function postInventoryMovementInTransaction(
     );
   }
 
-  const nextInventoryValue = command.movement.quantityDeltaMilliUnits < 0
-    ? currentInventoryValue - command.movement.totalCostMinorUnits
-    : currentInventoryValue + command.movement.totalCostMinorUnits;
+  const inventoryDelta = command.movement.quantityDeltaMilliUnits < 0
+    ? -command.movement.totalCostMinorUnits
+    : command.movement.totalCostMinorUnits;
+  const nextInventoryValue = checkedMinorAdd(
+    currentInventoryValue,
+    inventoryDelta,
+    'Inventory movement value',
+  );
   if (nextInventoryValue < 0) {
     throw new HttpsError(
       'failed-precondition',
       'The movement would create negative inventory value.',
     );
   }
+  if (nextQuantity === 0 && nextInventoryValue !== 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'A full stock depletion must remove the exact remaining inventory value.',
+    );
+  }
 
+  const isOpeningBalance = command.movement.type === 'openingBalance';
+  const openingAmount = command.movement.totalCostMinorUnits;
+  const openingJournalId = command.movement.id + '-opening-journal';
+  const openingJournalKey =
+    command.movement.idempotencyKey + '-opening-journal';
+  let openingJournalRef = null;
+  let openingJournalIdempotencyRef = null;
+  let inventoryAccountRef = null;
+  let openingEquityAccountRef = null;
+  let inventoryBalanceRef = null;
+  let openingEquityBalanceRef = null;
+  let inventoryBalanceSnapshot = null;
+  let openingEquityBalanceSnapshot = null;
+  let openingJournalFingerprint = null;
+
+  if (isOpeningBalance && openingAmount > 0) {
+    openingJournalRef = storeRef.collection('journal_entries')
+      .doc(openingJournalId);
+    openingJournalIdempotencyRef = storeRef.collection('idempotency_keys')
+      .doc(openingJournalKey);
+    inventoryAccountRef = storeRef.collection('accounts').doc('1150');
+    openingEquityAccountRef = storeRef.collection('accounts').doc('3400');
+    inventoryBalanceRef = storeRef.collection('account_balances').doc('1150');
+    openingEquityBalanceRef = storeRef.collection('account_balances')
+      .doc('3400');
+
+    const [
+      existingOpeningJournal,
+      existingOpeningJournalKey,
+      inventoryAccountSnapshot,
+      openingEquityAccountSnapshot,
+      inventoryProjectionSnapshot,
+      openingEquityProjectionSnapshot,
+    ] = await Promise.all([
+      transaction.get(openingJournalRef),
+      transaction.get(openingJournalIdempotencyRef),
+      transaction.get(inventoryAccountRef),
+      transaction.get(openingEquityAccountRef),
+      transaction.get(inventoryBalanceRef),
+      transaction.get(openingEquityBalanceRef),
+    ]);
+
+    if (existingOpeningJournal.exists || existingOpeningJournalKey.exists) {
+      conflict('Opening inventory journal identity is already in use.');
+    }
+
+    assertAccount(
+      inventoryAccountSnapshot,
+      '1150',
+      command.storeId,
+      command.movement.currency,
+      'asset',
+      'inventory',
+    );
+    assertAccount(
+      openingEquityAccountSnapshot,
+      '3400',
+      command.storeId,
+      command.movement.currency,
+      'equity',
+      'none',
+    );
+    if (inventoryAccountSnapshot.data().normalSide !== 'debit' ||
+        openingEquityAccountSnapshot.data().normalSide !== 'credit') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Opening inventory accounts have incompatible normal sides.',
+      );
+    }
+
+    inventoryBalanceSnapshot = inventoryProjectionSnapshot;
+    openingEquityBalanceSnapshot = openingEquityProjectionSnapshot;
+    // Validate projections before the first write in this transaction.
+    readBalanceForPosting(inventoryBalanceSnapshot, {
+      storeId: command.storeId,
+      accountId: '1150',
+      currency: command.movement.currency,
+    });
+    readBalanceForPosting(openingEquityBalanceSnapshot, {
+      storeId: command.storeId,
+      accountId: '3400',
+      currency: command.movement.currency,
+    });
+
+    openingJournalFingerprint = fingerprintJournal({
+      id: openingJournalId,
+      idempotencyKey: openingJournalKey,
+      postedAt: command.movement.occurredAt,
+      sourceType: 'openingInventory',
+      description: command.movement.description || 'Opening inventory',
+      currency: command.movement.currency,
+      totalDebitMinorUnits: openingAmount,
+      totalCreditMinorUnits: openingAmount,
+      lines: [
+        {
+          id: command.movement.id + '-opening-inventory',
+          accountId: '1150',
+          description: 'Opening inventory',
+          lineNumber: 1,
+          debitMinorUnits: openingAmount,
+          creditMinorUnits: 0,
+        },
+        {
+          id: command.movement.id + '-opening-equity',
+          accountId: '3400',
+          description: 'Opening balance equity',
+          lineNumber: 2,
+          debitMinorUnits: 0,
+          creditMinorUnits: openingAmount,
+        },
+      ],
+    });
+  }
+
+  // One business mutation advances the fence exactly once. Opening balances
+  // use their GL journal identity; inventory-only adjustments use movement id.
+  markJournalPosting(
+    transaction,
+    storeRef,
+    isOpeningBalance && openingAmount > 0
+      ? openingJournalId
+      : 'inventory:' + movementRef.id,
+    FieldValue,
+  );
   transaction.update(productRef, {
     quantityOnHandMilliUnits: nextQuantity,
     inventoryValueMinorUnits: nextInventoryValue,
@@ -763,18 +1517,137 @@ async function postInventoryMovementInTransaction(
     sourceId: command.movement.sourceId,
     description: command.movement.description,
     occurredAt: Timestamp.fromDate(command.movement.occurredAt),
+    journalEntryId: isOpeningBalance && openingAmount > 0
+      ? openingJournalId
+      : null,
     createdAt: FieldValue.serverTimestamp(),
   });
+
+  if (isOpeningBalance && openingAmount > 0) {
+    const description =
+      command.movement.description || 'Opening inventory';
+    transaction.set(openingJournalRef, {
+      storeId: command.storeId,
+      idempotencyKey: openingJournalKey,
+      sourceType: 'openingInventory',
+      sourceId: command.movement.productId,
+      description,
+      status: 'posted',
+      currency: command.movement.currency,
+      requestFingerprint: openingJournalFingerprint,
+      totalDebitMinorUnits: openingAmount,
+      totalCreditMinorUnits: openingAmount,
+      postedAt: Timestamp.fromDate(command.movement.occurredAt),
+    });
+    transaction.set(
+      openingJournalRef.collection('lines')
+        .doc(command.movement.id + '-opening-inventory'),
+      {
+        storeId: command.storeId,
+        entryId: openingJournalId,
+        accountId: '1150',
+        description: 'Opening inventory',
+        lineNumber: 1,
+        currency: command.movement.currency,
+        debitMinorUnits: openingAmount,
+        creditMinorUnits: 0,
+        postedAt: Timestamp.fromDate(command.movement.occurredAt),
+      },
+    );
+    transaction.set(
+      openingJournalRef.collection('lines')
+        .doc(command.movement.id + '-opening-equity'),
+      {
+        storeId: command.storeId,
+        entryId: openingJournalId,
+        accountId: '3400',
+        description: 'Opening balance equity',
+        lineNumber: 2,
+        currency: command.movement.currency,
+        debitMinorUnits: 0,
+        creditMinorUnits: openingAmount,
+        postedAt: Timestamp.fromDate(command.movement.occurredAt),
+      },
+    );
+
+    const priorInventory = readBalanceForPosting(inventoryBalanceSnapshot, {
+      storeId: command.storeId,
+      accountId: '1150',
+      currency: command.movement.currency,
+    });
+    const nextInventoryDebit = checkedMinorAdd(
+      priorInventory.debit,
+      openingAmount,
+      'Opening inventory account debit',
+    );
+    const nextInventoryNet = checkedMinorAdd(
+      nextInventoryDebit,
+      -priorInventory.credit,
+      'Opening inventory account net',
+    );
+    transaction.set(inventoryBalanceRef, {
+      storeId: command.storeId,
+      accountId: '1150',
+      currency: command.movement.currency,
+      debitMinorUnits: nextInventoryDebit,
+      creditMinorUnits: priorInventory.credit,
+      balanceMinorUnits: nextInventoryNet,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    const priorOpeningEquity = readBalanceForPosting(
+      openingEquityBalanceSnapshot,
+      {
+        storeId: command.storeId,
+        accountId: '3400',
+        currency: command.movement.currency,
+      },
+    );
+    const nextOpeningCredit = checkedMinorAdd(
+      priorOpeningEquity.credit,
+      openingAmount,
+      'Opening balance equity credit',
+    );
+    const nextOpeningNet = checkedMinorAdd(
+      priorOpeningEquity.debit,
+      -nextOpeningCredit,
+      'Opening balance equity net',
+    );
+    transaction.set(openingEquityBalanceRef, {
+      storeId: command.storeId,
+      accountId: '3400',
+      currency: command.movement.currency,
+      debitMinorUnits: priorOpeningEquity.debit,
+      creditMinorUnits: nextOpeningCredit,
+      balanceMinorUnits: nextOpeningNet,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(openingJournalIdempotencyRef, {
+      storeId: command.storeId,
+      entryId: openingJournalId,
+      idempotencyKey: openingJournalKey,
+      requestFingerprint: openingJournalFingerprint,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  }
+
   transaction.set(idempotencyRef, {
     storeId: command.storeId,
     movementId: command.movement.id,
     idempotencyKey: command.movement.idempotencyKey,
+    requestFingerprint: fingerprint,
+    journalEntryId: isOpeningBalance && openingAmount > 0
+      ? openingJournalId
+      : null,
     createdAt: FieldValue.serverTimestamp(),
   });
 
   return {
     status: 'posted',
     movementId: command.movement.id,
+    journalEntryId: isOpeningBalance && openingAmount > 0
+      ? openingJournalId
+      : null,
   };
 }
 
@@ -820,8 +1693,12 @@ function parseJournalEntryCommand(rawCommand) {
       invalid('Each journal line must contain exactly one side.');
     }
 
-    totalDebitMinorUnits += debitMinorUnits;
-    totalCreditMinorUnits += creditMinorUnits;
+    totalDebitMinorUnits = checkedMinorAdd(
+      totalDebitMinorUnits, debitMinorUnits, 'Journal total debit',
+    );
+    totalCreditMinorUnits = checkedMinorAdd(
+      totalCreditMinorUnits, creditMinorUnits, 'Journal total credit',
+    );
     lines.push({
       id: lineId,
       accountId: safeId(
@@ -872,6 +1749,9 @@ async function postJournalEntryInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.entry.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const journalRef = storeRef
     .collection('journal_entries')
@@ -888,16 +1768,41 @@ async function postJournalEntryInTransaction(
     PAYMENT_POSTING_ROLES,
   );
 
+  const fingerprint = fingerprintJournal(command.entry);
   const idempotencySnapshot = await transaction.get(idempotencyRef);
   if (idempotencySnapshot.exists) {
-    const existingEntryId = idempotencySnapshot.data().entryId;
-    if (existingEntryId === command.entry.id) {
-      return {
-        status: 'already_posted',
-        entryId: command.entry.id,
-      };
+    const marker = idempotencySnapshot.data();
+    if (marker.entryId !== command.entry.id) {
+      conflict('The journal idempotency key is already assigned.');
     }
-    conflict('The journal idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('The journal idempotency key was reused with different data.');
+      }
+    } else {
+      // Pre-fingerprint V2 entries must also be verified before acknowledging
+      // a retry. Never claim a changed amount was already posted.
+      const oldJournal = await transaction.get(journalRef);
+      if (!oldJournal.exists ||
+          !isSameLegacyJournalHeader(oldJournal.data(), command.entry)) {
+        conflict('The historical journal cannot be verified for this retry.');
+      }
+      const oldLines = await transaction.get(journalRef.collection('lines'));
+      if (oldLines.size !== command.entry.lines.length) {
+        conflict('The historical journal lines differ from this retry.');
+      }
+      for (const line of command.entry.lines) {
+        const oldLine = oldLines.docs.find((doc) => doc.id === line.id);
+        if (!oldLine ||
+            !isSameLegacyJournalLine(oldLine.data(), line, command.entry)) {
+          conflict('The historical journal lines differ from this retry.');
+        }
+      }
+    }
+    return {
+      status: 'already_posted',
+      entryId: command.entry.id,
+    };
   }
 
   const existingJournalSnapshot = await transaction.get(journalRef);
@@ -942,10 +1847,18 @@ async function postJournalEntryInTransaction(
       credit: 0,
     };
     deltas.set(line.accountId, {
-      debit: previous.debit + line.debitMinorUnits,
-      credit: previous.credit + line.creditMinorUnits,
+      debit: checkedMinorAdd(
+        previous.debit, line.debitMinorUnits, 'Account debit delta',
+      ),
+      credit: checkedMinorAdd(
+        previous.credit, line.creditMinorUnits, 'Account credit delta',
+      ),
     });
   }
+
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
 
   transaction.set(journalRef, {
     storeId: command.storeId,
@@ -954,6 +1867,7 @@ async function postJournalEntryInTransaction(
     description: command.entry.description,
     status: 'posted',
     currency: command.entry.currency,
+    requestFingerprint: fingerprint,
     totalDebitMinorUnits: command.entry.totalDebitMinorUnits,
     totalCreditMinorUnits: command.entry.totalCreditMinorUnits,
     postedAt: Timestamp.fromDate(command.entry.postedAt),
@@ -978,12 +1892,21 @@ async function postJournalEntryInTransaction(
 
   for (const accountId of accountIds) {
     const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const previousDebit = storedInt(balance.debitMinorUnits, 0);
-    const previousCredit = storedInt(balance.creditMinorUnits, 0);
+    const previous = readBalanceForPosting(balanceSnapshot, {
+      storeId: command.storeId,
+      accountId,
+      currency: command.entry.currency,
+    });
     const delta = deltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      previous.debit, delta.debit, 'Running account debit balance',
+    );
+    const nextCredit = checkedMinorAdd(
+      previous.credit, delta.credit, 'Running account credit balance',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Running account net balance',
+    );
 
     transaction.set(
       storeRef.collection('account_balances').doc(accountId),
@@ -991,10 +1914,9 @@ async function postJournalEntryInTransaction(
         storeId: command.storeId,
         accountId,
         currency: command.entry.currency,
-        debitMinorUnits: previousDebit + delta.debit,
-        creditMinorUnits: previousCredit + delta.credit,
-        balanceMinorUnits:
-          previousDebit + delta.debit - previousCredit - delta.credit,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -1004,6 +1926,7 @@ async function postJournalEntryInTransaction(
     storeId: command.storeId,
     entryId: command.entry.id,
     idempotencyKey: command.entry.idempotencyKey,
+    requestFingerprint: fingerprint,
     createdAt: FieldValue.serverTimestamp(),
   });
 
@@ -1058,6 +1981,9 @@ async function postAccountTransferInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.transfer.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const transferRef = storeRef
     .collection('account_transfers')
@@ -1083,20 +2009,46 @@ async function postAccountTransferInTransaction(
     PAYMENT_POSTING_ROLES,
   );
 
+  const transferFingerprint = fingerprintAccountTransfer(command.transfer);
   const transferIdempotencySnapshot = await transaction.get(
     transferIdempotencyRef,
   );
   if (transferIdempotencySnapshot.exists) {
-    const existingTransferId =
-      transferIdempotencySnapshot.data().transferId;
-    if (existingTransferId === command.transfer.id) {
-      return {
-        status: 'already_posted',
-        transferId: command.transfer.id,
-        journalEntryId,
-      };
+    const marker = transferIdempotencySnapshot.data();
+    if (marker.transferId !== command.transfer.id) {
+      conflict('The transfer idempotency key is already assigned.');
     }
-    conflict('The transfer idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== transferFingerprint) {
+        conflict('The transfer key was replayed with changed financial details.');
+      }
+    } else {
+      // Preserve existing V2 transfer retries, but never trust a matching ID
+      // alone when an old marker predates request fingerprints.
+      const oldTransfer = await transaction.get(transferRef);
+      const oldJournal = await transaction.get(journalRef);
+      const oldJournalMarker = await transaction.get(journalIdempotencyRef);
+      if (!oldTransfer.exists ||
+          !sameLegacyTransfer(
+            oldTransfer.data(), command.transfer, journalEntryId,
+          ) ||
+          !oldJournal.exists ||
+          oldJournal.data().status !== 'posted' ||
+          oldJournal.data().sourceType !== 'accountTransfer' ||
+          oldJournal.data().totalDebitMinorUnits !==
+            command.transfer.amountMinorUnits ||
+          oldJournal.data().totalCreditMinorUnits !==
+            command.transfer.amountMinorUnits ||
+          !oldJournalMarker.exists ||
+          oldJournalMarker.data().entryId !== journalEntryId) {
+        conflict('The historical transfer cannot be verified for this retry.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      transferId: command.transfer.id,
+      journalEntryId,
+    };
   }
 
   const existingTransferSnapshot = await transaction.get(transferRef);
@@ -1202,6 +2154,7 @@ async function postAccountTransferInTransaction(
     {
       storeId: command.storeId,
       idempotencyKey: command.transfer.idempotencyKey,
+      requestFingerprint: transferFingerprint,
       postedAt: Timestamp.fromDate(command.transfer.postedAt),
       fromAccountId: command.transfer.fromAccountId,
       toAccountId: command.transfer.toAccountId,
@@ -1214,9 +2167,11 @@ async function postAccountTransferInTransaction(
     },
   );
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: 'accountTransfer',
@@ -1240,27 +2195,33 @@ async function postAccountTransferInTransaction(
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-
+    const previous = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.transfer.currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      previous.debit, delta.debit, 'Transfer account debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      previous.credit, delta.credit, 'Transfer account credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Transfer account net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
         storeId: command.storeId,
         accountId,
         currency: command.transfer.currency,
-        debitMinorUnits: currentDebit + delta.debit,
-        creditMinorUnits: currentCredit + delta.credit,
-        balanceMinorUnits:
-          currentDebit + delta.debit - currentCredit - delta.credit,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -1272,6 +2233,7 @@ async function postAccountTransferInTransaction(
       storeId: command.storeId,
       transferId: command.transfer.id,
       idempotencyKey: command.transfer.idempotencyKey,
+      requestFingerprint: transferFingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
@@ -1352,6 +2314,7 @@ function parseExpenseCommand(rawCommand) {
     expense.taxMinorUnits,
     'expense.taxMinorUnits',
   );
+  checkedMinorAdd(amountMinorUnits, taxMinorUnits, 'Expense inclusive tax total');
   if (taxMinorUnits > 0 && !accounts.inputTaxAccountId) {
     invalid('An input tax account is required when tax is present.');
   }
@@ -1391,6 +2354,9 @@ function parseExpenseCommand(rawCommand) {
 
 async function postExpenseInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.expense.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const expenseRef = storeRef
     .collection('expenses')
@@ -1414,6 +2380,9 @@ async function postExpenseInTransaction(transaction, userId, command) {
   const supplierLedgerRef = isCreditExpense
     ? storeRef.collection('party_ledger_entries').doc(supplierLedgerId)
     : null;
+  const supplierRef = isCreditExpense
+    ? storeRef.collection('parties').doc(command.expense.supplierId)
+    : null;
   const supplierBalanceId = isCreditExpense
     ? 'supplier-' + command.expense.supplierId
     : null;
@@ -1429,20 +2398,54 @@ async function postExpenseInTransaction(transaction, userId, command) {
     PAYMENT_POSTING_ROLES,
   );
 
+  const fingerprint = expenseFingerprint(command);
   const expenseIdempotencySnapshot = await transaction.get(
     expenseIdempotencyRef,
   );
   if (expenseIdempotencySnapshot.exists) {
-    const existingExpenseId =
-      expenseIdempotencySnapshot.data().expenseId;
-    if (existingExpenseId === command.expense.id) {
-      return {
-        status: 'already_posted',
-        expenseId: command.expense.id,
-        journalEntryId,
-      };
+    const marker = expenseIdempotencySnapshot.data();
+    if (marker.expenseId !== command.expense.id) {
+      conflict('The expense idempotency key is already assigned.');
     }
-    conflict('The expense idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('Expense idempotency key reused with different financial data.');
+      }
+    } else {
+      const oldExpense = await transaction.get(expenseRef);
+      const oldJournal = await transaction.get(journalRef);
+      const oldMarker = await transaction.get(journalIdempotencyRef);
+      const inclusiveTotal = checkedMinorAdd(
+        command.expense.amountMinorUnits, command.expense.taxMinorUnits,
+        'Expense total',
+      );
+      if (!oldExpense.exists ||
+          !sameLegacyExpense(
+            oldExpense.data(), command, journalEntryId, inclusiveTotal,
+          ) ||
+          !oldJournal.exists ||
+          oldJournal.data().storeId !== command.storeId ||
+          oldJournal.data().status !== 'posted' ||
+          oldJournal.data().sourceType !== 'expense' ||
+          oldJournal.data().currency !== command.expense.currency ||
+          oldJournal.data().totalDebitMinorUnits !== inclusiveTotal ||
+          oldJournal.data().totalCreditMinorUnits !== inclusiveTotal ||
+          !oldMarker.exists ||
+          oldMarker.data().entryId !== journalEntryId) {
+        conflict('Historical expense could not be verified for replay.');
+      }
+      const oldLines = await transaction.get(journalRef.collection('lines'));
+      if (!sameLegacyExpenseLines(
+        oldLines, command, journalEntryId, inclusiveTotal,
+      )) {
+        conflict('Historical expense journal lines differ from this replay.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      expenseId: command.expense.id,
+      journalEntryId,
+    };
   }
 
   const existingExpenseSnapshot = await transaction.get(expenseRef);
@@ -1465,6 +2468,11 @@ async function postExpenseInTransaction(transaction, userId, command) {
   let supplierLedgerSnapshot = null;
   let supplierBalanceSnapshot = null;
   if (isCreditExpense) {
+    const supplierSnapshot = await transaction.get(supplierRef);
+    assertParty(
+      supplierSnapshot, command.storeId, command.expense.supplierId,
+      'supplier',
+    );
     supplierLedgerSnapshot = await transaction.get(supplierLedgerRef);
     if (supplierLedgerSnapshot.exists) {
       conflict('A supplier ledger entry for this expense already exists.');
@@ -1552,8 +2560,10 @@ async function postExpenseInTransaction(transaction, userId, command) {
     );
   }
 
-  const totalMinorUnits =
-    command.expense.amountMinorUnits + command.expense.taxMinorUnits;
+  const totalMinorUnits = checkedMinorAdd(
+    command.expense.amountMinorUnits, command.expense.taxMinorUnits,
+    'Expense total',
+  );
   const accountDeltas = new Map();
   addDelta(
     accountDeltas,
@@ -1606,6 +2616,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
   const expenseData = {
     storeId: command.storeId,
     idempotencyKey: command.expense.idempotencyKey,
+    requestFingerprint: fingerprint,
     postedAt: Timestamp.fromDate(command.expense.postedAt),
     paymentMethod: command.expense.paymentMethod,
     expenseAccountId: command.expense.expenseAccountId,
@@ -1621,9 +2632,11 @@ async function postExpenseInTransaction(transaction, userId, command) {
   };
   transaction.set(expenseRef, expenseData);
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: 'expense',
@@ -1640,6 +2653,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
       journalRef.collection('lines').doc(line.id),
       {
         ...line,
+        currency: command.expense.currency,
         entryId: journalEntryId,
         postedAt: Timestamp.fromDate(command.expense.postedAt),
       },
@@ -1647,13 +2661,22 @@ async function postExpenseInTransaction(transaction, userId, command) {
   }
 
   if (isCreditExpense) {
-    const balance = supplierBalanceSnapshot.exists
-      ? supplierBalanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const nextDebit = currentDebit;
-    const nextCredit = currentCredit + totalMinorUnits;
+    const prior = readPartyBalanceForPosting(
+      supplierBalanceSnapshot,
+      {
+        storeId: command.storeId,
+        partyId: command.expense.supplierId,
+        partyType: 'supplier',
+        currency: command.expense.currency,
+      },
+    );
+    const nextDebit = prior.debit;
+    const nextCredit = checkedMinorAdd(
+      prior.credit, totalMinorUnits, 'Supplier payable balance',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Supplier payable net balance',
+    );
 
     transaction.set(
       supplierLedgerRef,
@@ -1679,26 +2702,31 @@ async function postExpenseInTransaction(transaction, userId, command) {
         currency: command.expense.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-    const nextDebit = currentDebit + delta.debit;
-    const nextCredit = currentCredit + delta.credit;
-
+    const prior = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.expense.currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      prior.debit, delta.debit, 'Expense account debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      prior.credit, delta.credit, 'Expense account credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Expense account net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
@@ -1707,7 +2735,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
         currency: command.expense.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -1719,6 +2747,7 @@ async function postExpenseInTransaction(transaction, userId, command) {
       storeId: command.storeId,
       expenseId: command.expense.id,
       idempotencyKey: command.expense.idempotencyKey,
+      requestFingerprint: fingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
@@ -1828,6 +2857,9 @@ async function postPartyPaymentInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.payment.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const paymentRef = storeRef
     .collection('party_payments')
@@ -1864,20 +2896,55 @@ async function postPartyPaymentInTransaction(
     PAYMENT_POSTING_ROLES,
   );
 
+  const fingerprint = fingerprintPartyPayment(command);
   const paymentIdempotencySnapshot = await transaction.get(
     paymentIdempotencyRef,
   );
   if (paymentIdempotencySnapshot.exists) {
-    const existingPaymentId =
-      paymentIdempotencySnapshot.data().paymentId;
-    if (existingPaymentId === command.payment.id) {
-      return {
-        status: 'already_posted',
-        paymentId: command.payment.id,
-        journalEntryId,
-      };
+    const marker = paymentIdempotencySnapshot.data();
+    if (marker.paymentId !== command.payment.id) {
+      conflict('The payment idempotency key is already assigned.');
     }
-    conflict('The payment idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('Payment idempotency key reused with changed financial details.');
+      }
+    } else {
+      const previousPayment = await transaction.get(paymentRef);
+      const previousJournal = await transaction.get(journalRef);
+      const previousJournalMarker = await transaction.get(journalIdempotencyRef);
+      const type = command.payment.partyType === 'customer'
+        ? 'customerReceipt' : 'supplierPayment';
+      if (!previousPayment.exists ||
+          !sameLegacyPartyPayment(
+            previousPayment.data(), command, journalEntryId,
+          ) ||
+          !previousJournal.exists ||
+          previousJournal.data().storeId !== command.storeId ||
+          previousJournal.data().status !== 'posted' ||
+          previousJournal.data().sourceType !== type ||
+          previousJournal.data().currency !== command.payment.currency ||
+          previousJournal.data().totalDebitMinorUnits !==
+            command.payment.amountMinorUnits ||
+          previousJournal.data().totalCreditMinorUnits !==
+            command.payment.amountMinorUnits ||
+          !previousJournalMarker.exists ||
+          previousJournalMarker.data().entryId !== journalEntryId) {
+        conflict('Historical party payment cannot be verified for replay.');
+      }
+      const previousLines = await transaction.get(journalRef.collection('lines'));
+      if (!sameLegacyPartyPaymentLines(
+        previousLines, command, journalEntryId,
+      )) {
+        conflict('Historical party payment journal lines differ from replay.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      paymentId: command.payment.id,
+      journalEntryId,
+      voucherNumber: marker.voucherNumber || null,
+    };
   }
 
   const existingPaymentSnapshot = await transaction.get(paymentRef);
@@ -1946,7 +3013,35 @@ async function postPartyPaymentInTransaction(
 
   const partyBalanceSnapshot = await transaction.get(partyBalanceRef);
 
+  // Allocate a receipt/payment serial in the same transaction as its journal.
+  // Retried idempotent commands return before this read and never increment it.
   const isCustomerPayment = command.payment.partyType === 'customer';
+  const voucherScope = nextVoucherNumber({
+    storeId: command.storeId,
+    partyType: command.payment.partyType,
+    postedAt: command.payment.postedAt,
+    sequence: null,
+  });
+  const voucherYear = voucherScope.year;
+  const voucherPeriod = voucherScope.period;
+  const voucherKind = voucherScope.kind;
+  const voucherSequenceRef = storeRef.collection('voucher_sequences')
+    .doc(voucherKind + '-' + voucherPeriod);
+  const voucherSequenceSnapshot = await transaction.get(voucherSequenceRef);
+  let voucherSequence;
+  try {
+    voucherSequence = nextVoucherNumber({
+      storeId: command.storeId,
+      partyType: command.payment.partyType,
+      postedAt: command.payment.postedAt,
+      sequence: voucherSequenceSnapshot.exists
+        ? voucherSequenceSnapshot.data() : null,
+    });
+  } catch (error) {
+    conflict(error.message);
+  }
+  const voucherNumber = voucherSequence.voucherNumber;
+  const nextVoucherSerial = voucherSequence.serial;
   const settlementAccountType =
     !isCustomerPayment && command.payment.paymentMethod === 'cheque'
       ? 'liability'
@@ -2027,6 +3122,7 @@ async function postPartyPaymentInTransaction(
   const paymentData = {
     storeId: command.storeId,
     idempotencyKey: command.payment.idempotencyKey,
+    requestFingerprint: fingerprint,
     postedAt: Timestamp.fromDate(command.payment.postedAt),
     partyType: command.payment.partyType,
     partyId: command.payment.partyId,
@@ -2035,6 +3131,7 @@ async function postPartyPaymentInTransaction(
     currency: command.payment.currency,
     description: command.payment.description,
     journalEntryId,
+    voucherNumber,
     status: command.payment.paymentMethod === 'cheque'
       ? 'pending'
       : 'posted',
@@ -2046,6 +3143,14 @@ async function postPartyPaymentInTransaction(
     createdAt: FieldValue.serverTimestamp(),
   };
   transaction.set(paymentRef, paymentData);
+  transaction.set(voucherSequenceRef, {
+    storeId: command.storeId,
+    kind: voucherKind,
+    year: voucherYear,
+    period: voucherPeriod,
+    lastNumber: nextVoucherSerial,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
 
   transaction.set(
     partyLedgerRef,
@@ -2065,21 +3170,26 @@ async function postPartyPaymentInTransaction(
     },
   );
 
-  const partyBalance = partyBalanceSnapshot.exists
-    ? partyBalanceSnapshot.data()
-    : {};
-  const currentPartyDebit = storedInt(
-    partyBalance.debitMinorUnits,
-    0,
+  const previousParty = readPartyBalanceForPosting(
+    partyBalanceSnapshot,
+    {
+      storeId: command.storeId,
+      partyId: command.payment.partyId,
+      partyType: command.payment.partyType,
+      currency: command.payment.currency,
+    },
   );
-  const currentPartyCredit = storedInt(
-    partyBalance.creditMinorUnits,
-    0,
+  const nextPartyDebit = checkedMinorAdd(
+    previousParty.debit, isCustomerPayment ? 0 : amount,
+    'Party settlement debit',
   );
-  const nextPartyDebit = currentPartyDebit +
-    (isCustomerPayment ? 0 : amount);
-  const nextPartyCredit = currentPartyCredit +
-    (isCustomerPayment ? amount : 0);
+  const nextPartyCredit = checkedMinorAdd(
+    previousParty.credit, isCustomerPayment ? amount : 0,
+    'Party settlement credit',
+  );
+  const nextPartyNet = checkedMinorAdd(
+    nextPartyDebit, -nextPartyCredit, 'Party settlement net',
+  );
   transaction.set(
     partyBalanceRef,
     {
@@ -2089,14 +3199,16 @@ async function postPartyPaymentInTransaction(
       currency: command.payment.currency,
       debitMinorUnits: nextPartyDebit,
       creditMinorUnits: nextPartyCredit,
-      balanceMinorUnits: nextPartyDebit - nextPartyCredit,
+      balanceMinorUnits: nextPartyNet,
       updatedAt: FieldValue.serverTimestamp(),
     },
   );
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: command.payment.partyType === 'customer'
@@ -2115,6 +3227,7 @@ async function postPartyPaymentInTransaction(
       journalRef.collection('lines').doc(line.id),
       {
         ...line,
+        currency: command.payment.currency,
         entryId: journalEntryId,
         postedAt: Timestamp.fromDate(command.payment.postedAt),
       },
@@ -2122,19 +3235,24 @@ async function postPartyPaymentInTransaction(
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-    const nextDebit = currentDebit + delta.debit;
-    const nextCredit = currentCredit + delta.credit;
-
+    const previous = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: command.payment.currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      previous.debit, delta.debit, 'Payment GL debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      previous.credit, delta.credit, 'Payment GL credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Payment GL net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
@@ -2143,7 +3261,7 @@ async function postPartyPaymentInTransaction(
         currency: command.payment.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -2155,7 +3273,9 @@ async function postPartyPaymentInTransaction(
       storeId: command.storeId,
       paymentId: command.payment.id,
       idempotencyKey: command.payment.idempotencyKey,
+      requestFingerprint: fingerprint,
       journalEntryId,
+      voucherNumber,
       createdAt: FieldValue.serverTimestamp(),
     },
   );
@@ -2173,6 +3293,7 @@ async function postPartyPaymentInTransaction(
     status: 'posted',
     paymentId: command.payment.id,
     journalEntryId,
+    voucherNumber,
   };
 }
 
@@ -2318,6 +3439,9 @@ async function postPurchaseInTransaction(
   allowedRoles = POSTING_ROLES,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.purchase.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const purchaseRef = storeRef
     .collection('purchases')
@@ -2361,19 +3485,47 @@ async function postPurchaseInTransaction(
     allowedRoles,
   );
 
+  const fingerprint = fingerprintPurchase(command);
   const purchaseIdempotencySnapshot = await transaction.get(
     purchaseIdempotencyRef,
   );
   if (purchaseIdempotencySnapshot.exists) {
-    const existingPurchaseId = purchaseIdempotencySnapshot.data().purchaseId;
-    if (existingPurchaseId === command.purchase.id) {
-      return {
-        status: 'already_posted',
-        purchaseId: command.purchase.id,
-        journalEntryId,
-      };
+    const marker = purchaseIdempotencySnapshot.data();
+    if (marker.purchaseId !== command.purchase.id) {
+      conflict('The purchase idempotency key is already assigned.');
     }
-    conflict('The purchase idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('The purchase key was reused with changed invoice details.');
+      }
+    } else {
+      const oldInvoice = await transaction.get(purchaseRef);
+      const oldJournal = await transaction.get(journalRef);
+      const oldMarker = await transaction.get(journalIdempotencyRef);
+      if (!oldInvoice.exists ||
+          !oldJournal.exists ||
+          !oldMarker.exists ||
+          oldMarker.data().entryId !== journalEntryId ||
+          !matchesLegacyPurchaseHeader(
+            oldInvoice.data(), command, journalEntryId,
+          )) {
+        conflict('Historical purchase cannot be verified for replay.');
+      }
+      const invoiceLines = await transaction.get(purchaseRef.collection('lines'));
+      const journalLines = await transaction.get(journalRef.collection('lines'));
+      if (!matchesLegacyPurchaseLines(invoiceLines, command) ||
+          !matchesLegacyPurchaseJournal(
+            oldJournal.data(), journalLines, command,
+            journalEntryId, oldInvoice.data(),
+          )) {
+        conflict('Historical purchase lines/journal differ from replay.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      purchaseId: command.purchase.id,
+      journalEntryId,
+    };
   }
 
   const existingPurchaseSnapshot = await transaction.get(purchaseRef);
@@ -2582,15 +3734,21 @@ async function postPurchaseInTransaction(
       invalid('Purchase line discount exceeds its gross total.');
     }
     const totalMinorUnits = grossMinorUnits - line.discountMinorUnits;
-    subtotalMinorUnits += totalMinorUnits;
+    subtotalMinorUnits = checkedMinorAdd(
+      subtotalMinorUnits, totalMinorUnits, 'Purchase subtotal',
+    );
 
     const previous = receivedByProduct.get(line.productId) || {
       quantity: 0,
       cost: 0,
     };
     receivedByProduct.set(line.productId, {
-      quantity: previous.quantity + baseQuantityMilliUnits,
-      cost: previous.cost + totalMinorUnits,
+      quantity: checkedMinorAdd(
+        previous.quantity, baseQuantityMilliUnits, 'Purchased product quantity',
+      ),
+      cost: checkedMinorAdd(
+        previous.cost, totalMinorUnits, 'Purchased product cost',
+      ),
     });
 
     storedLines.push({
@@ -2614,8 +3772,9 @@ async function postPurchaseInTransaction(
     invalid('A purchase total must be greater than zero.');
   }
 
-  const grandTotalMinorUnits =
-    subtotalMinorUnits + command.purchase.taxMinorUnits;
+  const grandTotalMinorUnits = checkedMinorAdd(
+    subtotalMinorUnits, command.purchase.taxMinorUnits, 'Purchase grand total',
+  );
   if (grandTotalMinorUnits <= 0) {
     invalid('A purchase total must be greater than zero.');
   }
@@ -2623,19 +3782,32 @@ async function postPurchaseInTransaction(
   const nextProducts = new Map();
   for (const [productId, receipt] of receivedByProduct) {
     const product = productSnapshots.get(productId).data();
-    const currentQuantity = storedInt(
-      product.quantityOnHandMilliUnits,
-      0,
+    const currentQuantity = product.quantityOnHandMilliUnits ?? 0;
+    const currentUnitCost = product.purchasePriceMinorUnits ?? 0;
+    if (!Number.isSafeInteger(currentQuantity) || currentQuantity < 0 ||
+        !Number.isSafeInteger(currentUnitCost) || currentUnitCost < 0) {
+      throw new HttpsError(
+        'failed-precondition', 'Product quantity or cost is corrupt.',
+      );
+    }
+    // The stored inventory value is authoritative. Multiplying a rounded
+    // average unit cost may silently change historical stock value.
+    const currentTotalCost = product.inventoryValueMinorUnits ??
+      (currentQuantity > 0
+        ? multiplyAndRound(currentUnitCost, currentQuantity) : 0);
+    if (!Number.isSafeInteger(currentTotalCost) ||
+        currentTotalCost < 0 ||
+        (currentQuantity === 0 && currentTotalCost !== 0)) {
+      throw new HttpsError(
+        'failed-precondition', 'Product inventory value is corrupt.',
+      );
+    }
+    const nextQuantity = checkedMinorAdd(
+      currentQuantity, receipt.quantity, 'Purchase stock quantity',
     );
-    const currentUnitCost = storedInt(
-      product.purchasePriceMinorUnits,
-      0,
+    const nextTotalCost = checkedMinorAdd(
+      currentTotalCost, receipt.cost, 'Purchase stock value',
     );
-    const currentTotalCost = currentQuantity > 0
-      ? multiplyAndRound(currentUnitCost, currentQuantity)
-      : 0;
-    const nextQuantity = currentQuantity + receipt.quantity;
-    const nextTotalCost = currentTotalCost + receipt.cost;
     const nextUnitCost = divideAndRound(
       nextTotalCost,
       nextQuantity,
@@ -2669,8 +3841,9 @@ async function postPurchaseInTransaction(
     grandTotalMinorUnits,
   );
 
-  const totalDebitMinorUnits = subtotalMinorUnits +
-    command.purchase.taxMinorUnits;
+  const totalDebitMinorUnits = checkedMinorAdd(
+    subtotalMinorUnits, command.purchase.taxMinorUnits, 'Purchase GL debit',
+  );
   const totalCreditMinorUnits = grandTotalMinorUnits;
   if (totalDebitMinorUnits !== totalCreditMinorUnits) {
     throw new HttpsError(
@@ -2714,6 +3887,7 @@ async function postPurchaseInTransaction(
   const purchaseData = {
     storeId: command.storeId,
     idempotencyKey: command.purchase.idempotencyKey,
+    requestFingerprint: fingerprint,
     postedAt: Timestamp.fromDate(command.purchase.postedAt),
     paymentMethod: command.purchase.paymentMethod,
     supplierId: command.purchase.supplierId,
@@ -2776,9 +3950,11 @@ async function postPurchaseInTransaction(
     );
   }
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: 'purchase',
@@ -2795,6 +3971,7 @@ async function postPurchaseInTransaction(
       journalRef.collection('lines').doc(line.id),
       {
         ...line,
+        currency: command.purchase.currency,
         entryId: journalEntryId,
         postedAt: Timestamp.fromDate(command.purchase.postedAt),
       },
@@ -2802,13 +3979,21 @@ async function postPurchaseInTransaction(
   }
 
   if (isCreditPurchase) {
-    const balance = supplierBalanceSnapshot.exists
-      ? supplierBalanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const nextDebit = currentDebit;
-    const nextCredit = currentCredit + grandTotalMinorUnits;
+    const prior = readPartyBalanceForPosting(
+      supplierBalanceSnapshot, {
+        storeId: command.storeId,
+        partyId: command.purchase.supplierId,
+        partyType: 'supplier',
+        currency: command.purchase.currency,
+      },
+    );
+    const nextDebit = prior.debit;
+    const nextCredit = checkedMinorAdd(
+      prior.credit, grandTotalMinorUnits, 'Purchase supplier payable',
+    );
+    const nextPartyNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Purchase supplier net balance',
+    );
 
     transaction.set(
       supplierLedgerRef,
@@ -2834,26 +4019,30 @@ async function postPurchaseInTransaction(
         currency: command.purchase.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextPartyNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-    const nextDebit = currentDebit + delta.debit;
-    const nextCredit = currentCredit + delta.credit;
-
+    const prior = readBalanceForPosting(
+      balanceSnapshots.get(accountId), {
+        storeId: command.storeId,
+        accountId,
+        currency: command.purchase.currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      prior.debit, delta.debit, 'Purchase GL account debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      prior.credit, delta.credit, 'Purchase GL account credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Purchase GL account net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
@@ -2862,7 +4051,7 @@ async function postPurchaseInTransaction(
         currency: command.purchase.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -2874,6 +4063,7 @@ async function postPurchaseInTransaction(
       storeId: command.storeId,
       purchaseId: command.purchase.id,
       idempotencyKey: command.purchase.idempotencyKey,
+      requestFingerprint: fingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
@@ -2895,6 +4085,1325 @@ async function postPurchaseInTransaction(
   };
 }
 
+
+
+function parsePurchaseReturnCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const rawReturn = asObject(command.purchaseReturn, 'purchaseReturn');
+  const postingAccounts = asObject(
+    command.postingAccounts,
+    'postingAccounts',
+  );
+
+  let lines = null;
+  if (rawReturn.lines != null) {
+    if (!Array.isArray(rawReturn.lines) ||
+        rawReturn.lines.length === 0 ||
+        rawReturn.lines.length > MAX_LINES) {
+      invalid('Purchase return lines must contain between 1 and 100 items.');
+    }
+    lines = rawReturn.lines.map((rawLine, index) => {
+      const line = asObject(
+        rawLine,
+        'purchaseReturn.lines[' + index + ']',
+      );
+      return {
+        lineId: safeId(
+          line.lineId,
+          'purchaseReturn.lines[' + index + '].lineId',
+        ),
+        quantityMilliUnits: positiveInt(
+          line.quantityMilliUnits,
+          'purchaseReturn.lines[' + index + '].quantityMilliUnits',
+        ),
+      };
+    });
+    if (new Set(lines.map((line) => line.lineId)).size !== lines.length) {
+      invalid('Purchase return line ids must be unique.');
+    }
+  }
+
+  const accounts = {
+    settlementAccountId: optionalSafeId(
+      postingAccounts.settlementAccountId,
+      'settlementAccountId',
+    ),
+    supplierPayableAccountId: optionalSafeId(
+      postingAccounts.supplierPayableAccountId,
+      'supplierPayableAccountId',
+    ),
+    inventoryAccountId: safeId(
+      postingAccounts.inventoryAccountId,
+      'inventoryAccountId',
+    ),
+    inputTaxAccountId: optionalSafeId(
+      postingAccounts.inputTaxAccountId,
+      'inputTaxAccountId',
+    ),
+    purchaseReturnVarianceAccountId: safeId(
+      postingAccounts.purchaseReturnVarianceAccountId,
+      'purchaseReturnVarianceAccountId',
+    ),
+  };
+
+  return {
+    storeId,
+    purchaseReturn: {
+      id: safeId(rawReturn.id, 'purchase return id'),
+      idempotencyKey: safeId(
+        rawReturn.idempotencyKey,
+        'purchase return idempotency key',
+      ),
+      originalPurchaseId: safeId(
+        rawReturn.originalPurchaseId,
+        'original purchase id',
+      ),
+      postedAt: parseDate(rawReturn.postedAt, 'purchaseReturn.postedAt'),
+      reason: optionalText(rawReturn.reason, 'purchaseReturn.reason'),
+      lines,
+    },
+    accounts,
+  };
+}
+
+function storedPurchaseReturnInt(value, label) {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Stored purchase return source is invalid: ' + label + '.',
+    );
+  }
+  return value;
+}
+
+function purchaseReturnAllocation(args) {
+  try {
+    return allocateCumulative(args);
+  } catch (error) {
+    throw new HttpsError(
+      'failed-precondition',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+function purchaseReturnTaxAllocation(args) {
+  try {
+    return allocateHeaderBySubtotal(args);
+  } catch (error) {
+    throw new HttpsError(
+      'failed-precondition',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+function cumulativePurchaseReturnAmount(
+  sourceTotal,
+  sourceQuantity,
+  returnedQuantity,
+  label,
+) {
+  if (returnedQuantity === 0) {
+    return 0;
+  }
+  return purchaseReturnAllocation({
+    sourceTotal,
+    sourceQuantity,
+    alreadyReturnedQuantity: 0,
+    alreadyAllocated: 0,
+    returnQuantity: returnedQuantity,
+    label,
+  }).nextAllocated;
+}
+
+async function postPurchaseReturnInTransaction(
+  transaction,
+  userId,
+  command,
+) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction,
+    storeRef,
+    HttpsError,
+    command.purchaseReturn.postedAt,
+  );
+
+  const memberRef = storeRef.collection('members').doc(userId);
+  const returnRef = storeRef
+    .collection('purchase_returns')
+    .doc(command.purchaseReturn.id);
+  const returnKeyRef = storeRef
+    .collection('purchase_return_idempotency')
+    .doc(command.purchaseReturn.idempotencyKey);
+  const originalPurchaseRef = storeRef
+    .collection('purchases')
+    .doc(command.purchaseReturn.originalPurchaseId);
+  const journalEntryId = command.purchaseReturn.id + '-journal';
+  const journalKey = command.purchaseReturn.idempotencyKey + ':journal';
+  const journalRef = storeRef
+    .collection('journal_entries')
+    .doc(journalEntryId);
+  const journalKeyRef = storeRef
+    .collection('idempotency_keys')
+    .doc(journalKey);
+
+  const membership = await transaction.get(memberRef);
+  assertMembership(
+    membership,
+    command.storeId,
+    'post purchase returns',
+    POSTING_ROLES,
+  );
+
+  const fingerprint = fingerprintPurchaseReturn(command);
+  const existingKey = await transaction.get(returnKeyRef);
+  if (existingKey.exists) {
+    const markerData = existingKey.data();
+    if (markerData.returnId !== command.purchaseReturn.id ||
+        markerData.originalPurchaseId !==
+          command.purchaseReturn.originalPurchaseId ||
+        markerData.requestFingerprint !== fingerprint) {
+      conflict('Purchase return key was reused with changed details.');
+    }
+    const existingReturn = await transaction.get(returnRef);
+    if (!existingReturn.exists) {
+      conflict('Purchase return marker exists without its return document.');
+    }
+    return {
+      status: 'already_returned',
+      returnId: command.purchaseReturn.id,
+      originalPurchaseId: command.purchaseReturn.originalPurchaseId,
+      journalEntryId,
+      returnStatus: existingReturn.data().completedOriginalPurchase === true
+        ? 'full'
+        : 'partial',
+    };
+  }
+
+  if ((await transaction.get(returnRef)).exists) {
+    conflict('The purchase return id already exists.');
+  }
+  if ((await transaction.get(journalRef)).exists ||
+      (await transaction.get(journalKeyRef)).exists) {
+    conflict('The purchase return journal identity already exists.');
+  }
+
+  const originalSnapshot = await transaction.get(originalPurchaseRef);
+  if (!originalSnapshot.exists) {
+    invalid('Original purchase was not found.');
+  }
+  const original = originalSnapshot.data();
+  if (original.storeId !== command.storeId || original.status !== 'posted') {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original purchase is not a posted purchase for this store.',
+    );
+  }
+  if (original.returnStatus === 'full' || original.returnId) {
+    conflict('The original purchase has already been fully returned.');
+  }
+
+  const originalPostedAt = original.postedAt?.toDate?.();
+  if (!(originalPostedAt instanceof Date) ||
+      Number.isNaN(originalPostedAt.getTime())) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original purchase posting date is invalid.',
+    );
+  }
+  if (command.purchaseReturn.postedAt.getTime() <
+      originalPostedAt.getTime()) {
+    throw new HttpsError(
+      'failed-precondition',
+      'A purchase return cannot be posted before the original purchase.',
+    );
+  }
+
+  const currency = stringValue(
+    original.currency,
+    'stored purchase currency',
+  );
+  const originalSubtotal = storedPurchaseReturnInt(
+    original.subtotalMinorUnits,
+    'subtotalMinorUnits',
+  );
+  const originalTax = storedPurchaseReturnInt(
+    original.taxMinorUnits,
+    'taxMinorUnits',
+  );
+  const originalTotal = storedPurchaseReturnInt(
+    original.totalMinorUnits,
+    'totalMinorUnits',
+  );
+  if (originalSubtotal <= 0 ||
+      checkedMinorAdd(
+        originalSubtotal,
+        originalTax,
+        'Purchase return source total',
+      ) !== originalTotal) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original purchase totals do not reconcile.',
+    );
+  }
+
+  const originalJournalId = stringValue(
+    original.journalEntryId,
+    'stored purchase journalEntryId',
+  );
+  const originalJournalRef = storeRef
+    .collection('journal_entries')
+    .doc(originalJournalId);
+  const originalJournal = await transaction.get(originalJournalRef);
+  const originalJournalData = originalJournal.data();
+  if (!originalJournal.exists ||
+      originalJournalData.sourceType !== 'purchase' ||
+      originalJournalData.status !== 'posted' ||
+      originalJournalData.currency !== currency ||
+      originalJournalData.totalDebitMinorUnits !== originalTotal ||
+      originalJournalData.totalCreditMinorUnits !== originalTotal) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original purchase journal is missing or invalid.',
+    );
+  }
+  const originalJournalLines = await transaction.get(
+    originalJournalRef.collection('lines'),
+  );
+  const originalJournalLineById = new Map(
+    originalJournalLines.docs.map((doc) => [doc.id, doc.data()]),
+  );
+
+  const paymentMethod = stringValue(
+    original.paymentMethod,
+    'stored purchase paymentMethod',
+  );
+  if (!PURCHASE_PAYMENT_METHODS.has(paymentMethod)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original purchase payment method is unsupported.',
+    );
+  }
+  const isCredit = paymentMethod === 'credit';
+  const supplierId = original.supplierId == null
+    ? null
+    : safeId(original.supplierId, 'stored supplierId');
+  if (isCredit && !supplierId) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original credit purchase has no supplier.',
+    );
+  }
+
+  const paymentAccountId = isCredit
+    ? command.accounts.supplierPayableAccountId
+    : command.accounts.settlementAccountId;
+  if (!paymentAccountId) {
+    invalid(
+      isCredit
+        ? 'A supplier payable account is required for this return.'
+        : 'A settlement account is required for this return.',
+    );
+  }
+
+  const originalInventoryLine = originalJournalLineById.get(
+    command.purchaseReturn.originalPurchaseId + '-inventory',
+  );
+  if (!originalInventoryLine ||
+      originalInventoryLine.accountId !==
+        command.accounts.inventoryAccountId ||
+      originalInventoryLine.debitMinorUnits !== originalSubtotal ||
+      originalInventoryLine.creditMinorUnits !== 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original purchase inventory line does not reconcile.',
+    );
+  }
+
+  const originalSettlementLine = originalJournalLineById.get(
+    command.purchaseReturn.originalPurchaseId + '-settlement',
+  );
+  if (!originalSettlementLine ||
+      originalSettlementLine.accountId !== paymentAccountId ||
+      originalSettlementLine.debitMinorUnits !== 0 ||
+      originalSettlementLine.creditMinorUnits !== originalTotal) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original purchase settlement line does not reconcile.',
+    );
+  }
+
+  const originalTaxLine = originalJournalLineById.get(
+    command.purchaseReturn.originalPurchaseId + '-input-tax',
+  );
+  if (originalTax > 0 &&
+      (!command.accounts.inputTaxAccountId ||
+       !originalTaxLine ||
+       originalTaxLine.accountId !== command.accounts.inputTaxAccountId ||
+       originalTaxLine.debitMinorUnits !== originalTax ||
+       originalTaxLine.creditMinorUnits !== 0)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original purchase input-tax line does not reconcile.',
+    );
+  }
+
+  const originalLineSnapshot = await transaction.get(
+    originalPurchaseRef.collection('lines'),
+  );
+  if (originalLineSnapshot.empty ||
+      originalLineSnapshot.size > MAX_LINES) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original purchase has no verifiable line snapshot.',
+    );
+  }
+
+  const originalLines = [];
+  const originalLinesById = new Map();
+  let verifiedSubtotal = 0;
+  for (const document of originalLineSnapshot.docs) {
+    const line = asObject(document.data(), 'stored purchase line');
+    const lineId = safeId(
+      line.id || document.id,
+      'stored purchase line id',
+    );
+    if (lineId !== document.id || originalLinesById.has(lineId)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Original purchase line identity is invalid.',
+      );
+    }
+    const quantity = storedPurchaseReturnInt(
+      line.quantityMilliUnits,
+      'line.quantityMilliUnits',
+    );
+    const baseQuantity = storedPurchaseReturnInt(
+      line.baseQuantityMilliUnits,
+      'line.baseQuantityMilliUnits',
+    );
+    const lineTotal = storedPurchaseReturnInt(
+      line.totalMinorUnits,
+      'line.totalMinorUnits',
+    );
+    const discount = storedPurchaseReturnInt(
+      line.discountMinorUnits,
+      'line.discountMinorUnits',
+    );
+    const gross = storedPurchaseReturnInt(
+      line.grossTotalMinorUnits,
+      'line.grossTotalMinorUnits',
+    );
+    if (quantity <= 0 ||
+        baseQuantity <= 0 ||
+        discount > gross ||
+        gross - discount !== lineTotal) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Original purchase line totals are invalid.',
+      );
+    }
+
+    const normalized = {
+      id: lineId,
+      productId: safeId(line.productId, 'stored purchase product id'),
+      description: stringValue(
+        line.description,
+        'stored purchase line description',
+      ),
+      quantityMilliUnits: quantity,
+      unitFactorToBaseMilliUnits: storedPurchaseReturnInt(
+        line.unitFactorToBaseMilliUnits,
+        'line.unitFactorToBaseMilliUnits',
+      ),
+      baseQuantityMilliUnits: baseQuantity,
+      unitCostMinorUnits: storedPurchaseReturnInt(
+        line.unitCostMinorUnits,
+        'line.unitCostMinorUnits',
+      ),
+      discountMinorUnits: discount,
+      grossTotalMinorUnits: gross,
+      totalMinorUnits: lineTotal,
+      unitId: line.unitId ?? null,
+      unitName: line.unitName ?? null,
+    };
+    originalLines.push(normalized);
+    originalLinesById.set(lineId, normalized);
+    verifiedSubtotal = checkedMinorAdd(
+      verifiedSubtotal,
+      lineTotal,
+      'Original purchase line subtotal',
+    );
+  }
+  if (verifiedSubtotal !== originalSubtotal) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original purchase lines do not reconcile to its posted subtotal.',
+    );
+  }
+
+  const priorProjection = new Map();
+  const rawReturnedLines = original.returnedLines;
+  if (rawReturnedLines != null && !Array.isArray(rawReturnedLines)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original purchase return projection is malformed.',
+    );
+  }
+  if (Array.isArray(rawReturnedLines)) {
+    for (const rawProjection of rawReturnedLines) {
+      const projection = asObject(
+        rawProjection,
+        'stored purchase returned line projection',
+      );
+      const lineId = safeId(
+        projection.lineId,
+        'stored purchase returned line id',
+      );
+      const sourceLine = originalLinesById.get(lineId);
+      if (!sourceLine || priorProjection.has(lineId)) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Purchase return projection has an invalid line id.',
+        );
+      }
+      const returnedQuantity = storedPurchaseReturnInt(
+        projection.returnedQuantityMilliUnits,
+        'returnedQuantityMilliUnits',
+      );
+      const returnedBaseQuantity = storedPurchaseReturnInt(
+        projection.returnedBaseQuantityMilliUnits,
+        'returnedBaseQuantityMilliUnits',
+      );
+      const allocatedSubtotal = storedPurchaseReturnInt(
+        projection.allocatedSubtotalMinorUnits,
+        'allocatedSubtotalMinorUnits',
+      );
+      if (returnedQuantity <= 0 ||
+          returnedQuantity > sourceLine.quantityMilliUnits) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Stored purchase returned quantity exceeds the source line.',
+        );
+      }
+
+      const expectedBase = cumulativePurchaseReturnAmount(
+        sourceLine.baseQuantityMilliUnits,
+        sourceLine.quantityMilliUnits,
+        returnedQuantity,
+        'stored purchase return base quantity',
+      );
+      const expectedSubtotal = cumulativePurchaseReturnAmount(
+        sourceLine.totalMinorUnits,
+        sourceLine.quantityMilliUnits,
+        returnedQuantity,
+        'stored purchase return subtotal',
+      );
+      if (returnedBaseQuantity !== expectedBase ||
+          allocatedSubtotal !== expectedSubtotal) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Stored purchase return allocation does not reconcile.',
+        );
+      }
+      priorProjection.set(lineId, {
+        lineId,
+        returnedQuantityMilliUnits: returnedQuantity,
+        returnedBaseQuantityMilliUnits: returnedBaseQuantity,
+        allocatedSubtotalMinorUnits: allocatedSubtotal,
+      });
+    }
+  }
+
+  if (original.returnStatus === 'partial' && priorProjection.size === 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Partial purchase return has no verifiable projection.',
+    );
+  }
+  if (original.returnStatus == null && priorProjection.size > 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Purchase return projection exists without a return status.',
+    );
+  }
+
+  let priorReturnedSubtotal = 0;
+  for (const projection of priorProjection.values()) {
+    priorReturnedSubtotal = checkedMinorAdd(
+      priorReturnedSubtotal,
+      projection.allocatedSubtotalMinorUnits,
+      'Stored purchase returned subtotal',
+    );
+  }
+  const storedReturnedSubtotal = original.returnedSubtotalMinorUnits == null
+    ? priorReturnedSubtotal
+    : storedPurchaseReturnInt(
+        original.returnedSubtotalMinorUnits,
+        'returnedSubtotalMinorUnits',
+      );
+  const priorReturnedTax = original.returnedTaxMinorUnits == null
+    ? 0
+    : storedPurchaseReturnInt(
+        original.returnedTaxMinorUnits,
+        'returnedTaxMinorUnits',
+      );
+  if (storedReturnedSubtotal !== priorReturnedSubtotal ||
+      priorReturnedSubtotal > originalSubtotal ||
+      priorReturnedTax > originalTax) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Stored purchase return totals do not reconcile.',
+    );
+  }
+  const expectedPriorTax = priorReturnedSubtotal === 0
+    ? 0
+    : purchaseReturnTaxAllocation({
+        sourceTotal: originalTax,
+        sourceSubtotal: originalSubtotal,
+        alreadyReturnedSubtotal: 0,
+        alreadyAllocated: 0,
+        returnSubtotal: priorReturnedSubtotal,
+        label: 'stored purchase return tax',
+      }).nextAllocated;
+  if (priorReturnedTax !== expectedPriorTax) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Stored purchase return tax does not reconcile.',
+    );
+  }
+
+  const requestedByLine = new Map();
+  if (command.purchaseReturn.lines == null) {
+    for (const line of originalLines) {
+      const prior = priorProjection.get(line.id);
+      const already = prior?.returnedQuantityMilliUnits ?? 0;
+      const remaining = line.quantityMilliUnits - already;
+      if (remaining > 0) {
+        requestedByLine.set(line.id, remaining);
+      }
+    }
+  } else {
+    for (const line of command.purchaseReturn.lines) {
+      if (!originalLinesById.has(line.lineId)) {
+        invalid(
+          'Purchase return references a line outside the original purchase.',
+        );
+      }
+      requestedByLine.set(line.lineId, line.quantityMilliUnits);
+    }
+  }
+  if (requestedByLine.size === 0) {
+    conflict('The original purchase has no remaining quantity to return.');
+  }
+
+  const returnedLines = [];
+  const nextProjection = new Map(priorProjection);
+  const requestedBaseByProduct = new Map();
+  let returnSubtotal = 0;
+
+  for (const [lineId, requestedQuantity] of requestedByLine) {
+    const line = originalLinesById.get(lineId);
+    const prior = priorProjection.get(lineId) || {
+      lineId,
+      returnedQuantityMilliUnits: 0,
+      returnedBaseQuantityMilliUnits: 0,
+      allocatedSubtotalMinorUnits: 0,
+    };
+
+    const subtotalAllocation = purchaseReturnAllocation({
+      sourceTotal: line.totalMinorUnits,
+      sourceQuantity: line.quantityMilliUnits,
+      alreadyReturnedQuantity: prior.returnedQuantityMilliUnits,
+      alreadyAllocated: prior.allocatedSubtotalMinorUnits,
+      returnQuantity: requestedQuantity,
+      label: 'purchase return line subtotal',
+    });
+    const baseAllocation = purchaseReturnAllocation({
+      sourceTotal: line.baseQuantityMilliUnits,
+      sourceQuantity: line.quantityMilliUnits,
+      alreadyReturnedQuantity: prior.returnedQuantityMilliUnits,
+      alreadyAllocated: prior.returnedBaseQuantityMilliUnits,
+      returnQuantity: requestedQuantity,
+      label: 'purchase return line base quantity',
+    });
+    if (baseAllocation.allocated <= 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Returned purchase inventory quantity rounded to zero.',
+      );
+    }
+
+    const priorDiscount = cumulativePurchaseReturnAmount(
+      line.discountMinorUnits,
+      line.quantityMilliUnits,
+      prior.returnedQuantityMilliUnits,
+      'stored purchase return discount',
+    );
+    const nextDiscount = cumulativePurchaseReturnAmount(
+      line.discountMinorUnits,
+      line.quantityMilliUnits,
+      subtotalAllocation.nextReturnedQuantity,
+      'purchase return discount',
+    );
+
+    returnSubtotal = checkedMinorAdd(
+      returnSubtotal,
+      subtotalAllocation.allocated,
+      'Purchase return subtotal',
+    );
+    nextProjection.set(lineId, {
+      lineId,
+      returnedQuantityMilliUnits:
+        subtotalAllocation.nextReturnedQuantity,
+      returnedBaseQuantityMilliUnits: baseAllocation.nextAllocated,
+      allocatedSubtotalMinorUnits: subtotalAllocation.nextAllocated,
+    });
+
+    const currentProductQuantity =
+      requestedBaseByProduct.get(line.productId) ?? 0;
+    requestedBaseByProduct.set(
+      line.productId,
+      checkedMinorAdd(
+        currentProductQuantity,
+        baseAllocation.allocated,
+        'Purchase return product quantity',
+      ),
+    );
+
+    returnedLines.push({
+      id: line.id,
+      productId: line.productId,
+      description: line.description,
+      quantityMilliUnits: requestedQuantity,
+      baseQuantityMilliUnits: baseAllocation.allocated,
+      unitCostMinorUnits: line.unitCostMinorUnits,
+      discountMinorUnits: nextDiscount - priorDiscount,
+      refundSubtotalMinorUnits: subtotalAllocation.allocated,
+      unitId: line.unitId,
+      unitName: line.unitName,
+      inventoryCarryingValueMinorUnits: 0,
+    });
+  }
+
+  if (returnSubtotal <= 0) {
+    invalid('The selected purchase return has no financial effect.');
+  }
+
+  const nextReturnedSubtotal = checkedMinorAdd(
+    priorReturnedSubtotal,
+    returnSubtotal,
+    'Cumulative purchase returned subtotal',
+  );
+  const taxAllocation = purchaseReturnTaxAllocation({
+    sourceTotal: originalTax,
+    sourceSubtotal: originalSubtotal,
+    alreadyReturnedSubtotal: priorReturnedSubtotal,
+    alreadyAllocated: priorReturnedTax,
+    returnSubtotal,
+    label: 'purchase return tax',
+  });
+  const returnTax = taxAllocation.allocated;
+  const nextReturnedTax = taxAllocation.nextAllocated;
+  const returnTotal = checkedMinorAdd(
+    returnSubtotal,
+    returnTax,
+    'Purchase return total',
+  );
+
+  const productUpdates = new Map();
+  const movementWrites = [];
+  let inventoryCarryingValue = 0;
+
+  for (const [productId, requestedBaseQuantity] of requestedBaseByProduct) {
+    const productRef = storeRef.collection('products').doc(productId);
+    const productSnapshot = await transaction.get(productRef);
+    if (!productSnapshot.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Returned purchase product no longer exists: ' + productId,
+      );
+    }
+    const product = productSnapshot.data();
+    if (product.storeId !== command.storeId ||
+        product.currency !== currency ||
+        product.isService === true) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Returned purchase product projection is incompatible.',
+      );
+    }
+
+    const currentQuantity = storedPurchaseReturnInt(
+      product.quantityOnHandMilliUnits,
+      'product.quantityOnHandMilliUnits',
+    );
+    const currentUnitCost = storedPurchaseReturnInt(
+      product.purchasePriceMinorUnits ?? 0,
+      'product.purchasePriceMinorUnits',
+    );
+    const currentValue = product.inventoryValueMinorUnits == null
+      ? (currentQuantity === 0
+          ? 0
+          : multiplyAndRound(currentUnitCost, currentQuantity))
+      : storedPurchaseReturnInt(
+          product.inventoryValueMinorUnits,
+          'product.inventoryValueMinorUnits',
+        );
+    if (currentQuantity === 0 && currentValue !== 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Returned purchase product valuation is corrupt.',
+      );
+    }
+    if (requestedBaseQuantity > currentQuantity) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Purchase return quantity exceeds current stock for product ' +
+          productId + '.',
+      );
+    }
+
+    const carryingAllocation = requestedBaseQuantity === currentQuantity
+      ? {
+          allocated: currentValue,
+          nextAllocated: currentValue,
+        }
+      : purchaseReturnAllocation({
+          sourceTotal: currentValue,
+          sourceQuantity: currentQuantity,
+          alreadyReturnedQuantity: 0,
+          alreadyAllocated: 0,
+          returnQuantity: requestedBaseQuantity,
+          label: 'purchase return inventory carrying value',
+        });
+    const carryingValue = carryingAllocation.allocated;
+    const nextQuantity = currentQuantity - requestedBaseQuantity;
+    const nextValue = currentValue - carryingValue;
+    if (nextQuantity === 0 && nextValue !== 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Full purchase return stock depletion left inventory value behind.',
+      );
+    }
+    const nextUnitCost = nextQuantity === 0
+      ? 0
+      : divideAndRound(nextValue, nextQuantity);
+
+    productUpdates.set(productId, {
+      productRef,
+      nextQuantity,
+      nextValue,
+      nextUnitCost,
+      carryingValue,
+      requestedBaseQuantity,
+    });
+    inventoryCarryingValue = checkedMinorAdd(
+      inventoryCarryingValue,
+      carryingValue,
+      'Purchase return inventory carrying value',
+    );
+
+    const productLines = returnedLines.filter(
+      (line) => line.productId === productId,
+    );
+    let allocatedBase = 0;
+    let allocatedValue = 0;
+    for (const line of productLines) {
+      const lineCarrying = line.baseQuantityMilliUnits ===
+          requestedBaseQuantity && productLines.length === 1
+        ? {
+            allocated: carryingValue,
+            nextAllocated: carryingValue,
+          }
+        : purchaseReturnAllocation({
+            sourceTotal: carryingValue,
+            sourceQuantity: requestedBaseQuantity,
+            alreadyReturnedQuantity: allocatedBase,
+            alreadyAllocated: allocatedValue,
+            returnQuantity: line.baseQuantityMilliUnits,
+            label: 'purchase return line carrying value',
+          });
+      line.inventoryCarryingValueMinorUnits = lineCarrying.allocated;
+      allocatedBase += line.baseQuantityMilliUnits;
+      allocatedValue = lineCarrying.nextAllocated;
+
+      const movementId =
+        command.purchaseReturn.id + '-inventory-' + line.id;
+      const movementKey =
+        command.purchaseReturn.idempotencyKey + ':inventory:' + line.id;
+      const movementRef = storeRef
+        .collection('inventory_movements')
+        .doc(movementId);
+      const movementKeyRef = storeRef
+        .collection('inventory_idempotency')
+        .doc(movementKey);
+      if ((await transaction.get(movementRef)).exists ||
+          (await transaction.get(movementKeyRef)).exists) {
+        conflict('Purchase return inventory identity already exists.');
+      }
+      movementWrites.push({
+        movementId,
+        movementKey,
+        movementRef,
+        movementKeyRef,
+        productId,
+        baseQuantity: line.baseQuantityMilliUnits,
+        carryingValue: line.inventoryCarryingValueMinorUnits,
+      });
+    }
+    if (allocatedBase !== requestedBaseQuantity ||
+        allocatedValue !== carryingValue) {
+      throw new HttpsError(
+        'internal',
+        'Purchase return carrying-value allocation did not reconcile.',
+      );
+    }
+  }
+
+  const valuationVariance = returnSubtotal - inventoryCarryingValue;
+  if (!Number.isSafeInteger(valuationVariance)) {
+    invalid('Purchase return valuation variance is too large.');
+  }
+
+  const allComplete = originalLines.every((line) => {
+    const projection = nextProjection.get(line.id);
+    return projection?.returnedQuantityMilliUnits ===
+      line.quantityMilliUnits;
+  });
+  if (allComplete &&
+      (nextReturnedSubtotal !== originalSubtotal ||
+       nextReturnedTax !== originalTax)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Completed purchase return does not reconcile to the original invoice.',
+    );
+  }
+
+  const accountIds = [
+    paymentAccountId,
+    command.accounts.inventoryAccountId,
+    command.accounts.purchaseReturnVarianceAccountId,
+    ...(originalTax > 0 ? [command.accounts.inputTaxAccountId] : []),
+  ].filter(Boolean);
+  if (new Set(accountIds).size !== accountIds.length) {
+    invalid('Purchase return posting accounts must be distinct.');
+  }
+
+  const accountRefs = new Map(
+    accountIds.map((id) => [
+      id,
+      storeRef.collection('accounts').doc(id),
+    ]),
+  );
+  const accountSnapshots = new Map();
+  const balanceRefs = new Map();
+  const balanceSnapshots = new Map();
+  for (const [id, ref] of accountRefs) {
+    accountSnapshots.set(id, await transaction.get(ref));
+    const balanceRef = storeRef.collection('account_balances').doc(id);
+    balanceRefs.set(id, balanceRef);
+    balanceSnapshots.set(id, await transaction.get(balanceRef));
+  }
+
+  if (isCredit) {
+    assertAccount(
+      accountSnapshots.get(paymentAccountId),
+      paymentAccountId,
+      command.storeId,
+      currency,
+      'liability',
+      'supplierPayable',
+    );
+  } else {
+    assertAccount(
+      accountSnapshots.get(paymentAccountId),
+      paymentAccountId,
+      command.storeId,
+      currency,
+      'asset',
+      paymentAccountControlType(paymentMethod),
+    );
+  }
+  assertAccount(
+    accountSnapshots.get(command.accounts.inventoryAccountId),
+    command.accounts.inventoryAccountId,
+    command.storeId,
+    currency,
+    'asset',
+    'inventory',
+  );
+  if (originalTax > 0) {
+    assertAccount(
+      accountSnapshots.get(command.accounts.inputTaxAccountId),
+      command.accounts.inputTaxAccountId,
+      command.storeId,
+      currency,
+      'asset',
+      'inputTax',
+    );
+  }
+  assertAccount(
+    accountSnapshots.get(command.accounts.purchaseReturnVarianceAccountId),
+    command.accounts.purchaseReturnVarianceAccountId,
+    command.storeId,
+    currency,
+    'expense',
+  );
+  if (accountSnapshots
+      .get(command.accounts.purchaseReturnVarianceAccountId)
+      .data().normalSide !== 'debit') {
+    invalid('Purchase return variance account must be debit-normal.');
+  }
+
+  let supplierLedgerRef = null;
+  let supplierBalanceRef = null;
+  let supplierBalanceSnapshot = null;
+  if (isCredit) {
+    const supplierRef = storeRef.collection('parties').doc(supplierId);
+    assertParty(
+      await transaction.get(supplierRef),
+      command.storeId,
+      supplierId,
+      'supplier',
+    );
+    supplierLedgerRef = storeRef
+      .collection('party_ledger_entries')
+      .doc(command.purchaseReturn.id + '-supplier');
+    if ((await transaction.get(supplierLedgerRef)).exists) {
+      conflict('Purchase return supplier ledger identity already exists.');
+    }
+    supplierBalanceRef = storeRef
+      .collection('party_balances')
+      .doc('supplier-' + supplierId);
+    supplierBalanceSnapshot = await transaction.get(supplierBalanceRef);
+  }
+
+  const accountDeltas = new Map();
+  addDelta(accountDeltas, paymentAccountId, returnTotal, 0);
+  if (returnTax > 0) {
+    addDelta(
+      accountDeltas,
+      command.accounts.inputTaxAccountId,
+      0,
+      returnTax,
+    );
+  }
+  if (inventoryCarryingValue > 0) {
+    addDelta(
+      accountDeltas,
+      command.accounts.inventoryAccountId,
+      0,
+      inventoryCarryingValue,
+    );
+  }
+  if (valuationVariance > 0) {
+    addDelta(
+      accountDeltas,
+      command.accounts.purchaseReturnVarianceAccountId,
+      0,
+      valuationVariance,
+    );
+  } else if (valuationVariance < 0) {
+    addDelta(
+      accountDeltas,
+      command.accounts.purchaseReturnVarianceAccountId,
+      -valuationVariance,
+      0,
+    );
+  }
+
+  const journalLines = [
+    {
+      id: command.purchaseReturn.id + '-settlement',
+      accountId: paymentAccountId,
+      description: isCredit
+        ? 'Supplier payable reversal'
+        : 'Supplier refund received',
+      debitMinorUnits: returnTotal,
+      creditMinorUnits: 0,
+    },
+  ];
+  if (returnTax > 0) {
+    journalLines.push({
+      id: command.purchaseReturn.id + '-input-tax',
+      accountId: command.accounts.inputTaxAccountId,
+      description: 'Input tax reversal',
+      debitMinorUnits: 0,
+      creditMinorUnits: returnTax,
+    });
+  }
+  if (inventoryCarryingValue > 0) {
+    journalLines.push({
+      id: command.purchaseReturn.id + '-inventory',
+      accountId: command.accounts.inventoryAccountId,
+      description: 'Inventory returned to supplier',
+      debitMinorUnits: 0,
+      creditMinorUnits: inventoryCarryingValue,
+    });
+  }
+  if (valuationVariance > 0) {
+    journalLines.push({
+      id: command.purchaseReturn.id + '-variance',
+      accountId: command.accounts.purchaseReturnVarianceAccountId,
+      description: 'Purchase return valuation variance',
+      debitMinorUnits: 0,
+      creditMinorUnits: valuationVariance,
+    });
+  } else if (valuationVariance < 0) {
+    journalLines.push({
+      id: command.purchaseReturn.id + '-variance',
+      accountId: command.accounts.purchaseReturnVarianceAccountId,
+      description: 'Purchase return valuation variance',
+      debitMinorUnits: -valuationVariance,
+      creditMinorUnits: 0,
+    });
+  }
+
+  let totalDebits = 0;
+  let totalCredits = 0;
+  for (let index = 0; index < journalLines.length; index++) {
+    journalLines[index].lineNumber = index + 1;
+    totalDebits = checkedMinorAdd(
+      totalDebits,
+      journalLines[index].debitMinorUnits,
+      'Purchase return journal debit',
+    );
+    totalCredits = checkedMinorAdd(
+      totalCredits,
+      journalLines[index].creditMinorUnits,
+      'Purchase return journal credit',
+    );
+  }
+  if (totalDebits !== totalCredits || totalDebits <= 0) {
+    throw new HttpsError(
+      'internal',
+      'Generated purchase return journal is not balanced.',
+    );
+  }
+
+  for (const item of productUpdates.values()) {
+    transaction.update(item.productRef, {
+      quantityOnHandMilliUnits: item.nextQuantity,
+      purchasePriceMinorUnits: item.nextUnitCost,
+      inventoryValueMinorUnits: item.nextValue,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  for (const item of movementWrites) {
+    const unitCost = item.baseQuantity === 0
+      ? 0
+      : divideAndRound(item.carryingValue, item.baseQuantity);
+    transaction.set(item.movementRef, {
+      storeId: command.storeId,
+      productId: item.productId,
+      type: 'purchaseReturnIssue',
+      quantityDeltaMilliUnits: -item.baseQuantity,
+      unitCostMinorUnits: unitCost,
+      totalCostMinorUnits: item.carryingValue,
+      currency,
+      idempotencyKey: item.movementKey,
+      sourceType: 'purchaseReturn',
+      sourceId: command.purchaseReturn.id,
+      occurredAt: Timestamp.fromDate(command.purchaseReturn.postedAt),
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(item.movementKeyRef, {
+      storeId: command.storeId,
+      movementId: item.movementId,
+      idempotencyKey: item.movementKey,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  markJournalPosting(
+    transaction,
+    storeRef,
+    journalEntryId,
+    FieldValue,
+  );
+  transaction.set(journalRef, {
+    storeId: command.storeId,
+    idempotencyKey: journalKey,
+    sourceType: 'purchaseReturn',
+    sourceId: command.purchaseReturn.id,
+    description: command.purchaseReturn.reason || 'Purchase return',
+    status: 'posted',
+    currency,
+    totalDebitMinorUnits: totalDebits,
+    totalCreditMinorUnits: totalCredits,
+    postedAt: Timestamp.fromDate(command.purchaseReturn.postedAt),
+  });
+  for (const line of journalLines) {
+    transaction.set(journalRef.collection('lines').doc(line.id), {
+      ...line,
+      storeId: command.storeId,
+      entryId: journalEntryId,
+      currency,
+      postedAt: Timestamp.fromDate(command.purchaseReturn.postedAt),
+    });
+  }
+
+  if (isCredit) {
+    const prior = readPartyBalanceForPosting(
+      supplierBalanceSnapshot,
+      {
+        storeId: command.storeId,
+        partyId: supplierId,
+        partyType: 'supplier',
+        currency,
+      },
+    );
+    const nextDebit = checkedMinorAdd(
+      prior.debit,
+      returnTotal,
+      'Purchase return supplier debit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit,
+      -prior.credit,
+      'Purchase return supplier net',
+    );
+    transaction.set(supplierLedgerRef, {
+      storeId: command.storeId,
+      partyType: 'supplier',
+      partyId: supplierId,
+      sourceType: 'purchaseReturn',
+      sourceId: command.purchaseReturn.id,
+      currency,
+      debitMinorUnits: returnTotal,
+      creditMinorUnits: 0,
+      description: command.purchaseReturn.reason || 'Purchase return',
+      postedAt: Timestamp.fromDate(command.purchaseReturn.postedAt),
+    });
+    transaction.set(supplierBalanceRef, {
+      storeId: command.storeId,
+      partyType: 'supplier',
+      partyId: supplierId,
+      currency,
+      debitMinorUnits: nextDebit,
+      creditMinorUnits: prior.credit,
+      balanceMinorUnits: nextNet,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  for (const accountId of accountIds) {
+    const prior = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId) || {
+      debit: 0,
+      credit: 0,
+    };
+    const nextDebit = checkedMinorAdd(
+      prior.debit,
+      delta.debit,
+      'Purchase return GL debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      prior.credit,
+      delta.credit,
+      'Purchase return GL credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit,
+      -nextCredit,
+      'Purchase return GL net',
+    );
+    transaction.set(balanceRefs.get(accountId), {
+      storeId: command.storeId,
+      accountId,
+      currency,
+      debitMinorUnits: nextDebit,
+      creditMinorUnits: nextCredit,
+      balanceMinorUnits: nextNet,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  const returnType =
+    command.purchaseReturn.lines == null &&
+    priorReturnedSubtotal === 0 &&
+    allComplete
+      ? 'full'
+      : 'partial';
+
+  transaction.set(returnRef, {
+    storeId: command.storeId,
+    idempotencyKey: command.purchaseReturn.idempotencyKey,
+    requestFingerprint: fingerprint,
+    originalPurchaseId: command.purchaseReturn.originalPurchaseId,
+    postedAt: Timestamp.fromDate(command.purchaseReturn.postedAt),
+    reason: command.purchaseReturn.reason,
+    currency,
+    subtotalMinorUnits: returnSubtotal,
+    taxMinorUnits: returnTax,
+    totalMinorUnits: returnTotal,
+    inventoryCarryingValueMinorUnits: inventoryCarryingValue,
+    valuationVarianceMinorUnits: valuationVariance,
+    paymentMethod,
+    supplierId,
+    journalEntryId,
+    status: 'posted',
+    returnType,
+    completedOriginalPurchase: allComplete,
+    lines: returnedLines,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  const projectionRows = originalLines
+    .map((line) => nextProjection.get(line.id))
+    .filter(Boolean);
+  const originalUpdate = {
+    returnStatus: allComplete ? 'full' : 'partial',
+    returnIds: FieldValue.arrayUnion(command.purchaseReturn.id),
+    returnedSubtotalMinorUnits: nextReturnedSubtotal,
+    returnedTaxMinorUnits: nextReturnedTax,
+    returnedLines: projectionRows,
+    returnedAt: Timestamp.fromDate(command.purchaseReturn.postedAt),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  if (allComplete) {
+    originalUpdate.returnId = command.purchaseReturn.id;
+  }
+  transaction.update(originalPurchaseRef, originalUpdate);
+
+  transaction.set(returnKeyRef, {
+    storeId: command.storeId,
+    returnId: command.purchaseReturn.id,
+    originalPurchaseId: command.purchaseReturn.originalPurchaseId,
+    idempotencyKey: command.purchaseReturn.idempotencyKey,
+    requestFingerprint: fingerprint,
+    journalEntryId,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  transaction.set(journalKeyRef, {
+    storeId: command.storeId,
+    entryId: journalEntryId,
+    idempotencyKey: journalKey,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    status: 'returned',
+    returnId: command.purchaseReturn.id,
+    originalPurchaseId: command.purchaseReturn.originalPurchaseId,
+    journalEntryId,
+    returnStatus: allComplete ? 'full' : 'partial',
+    inventoryCarryingValueMinorUnits: inventoryCarryingValue,
+    valuationVarianceMinorUnits: valuationVariance,
+  };
+}
 
 function parsePurchaseOrderCreateCommand(rawCommand) {
   const command = asObject(rawCommand, 'command');
@@ -2973,6 +5482,28 @@ function parsePurchaseOrderReceiveCommand(rawCommand) {
     invalid('Unsupported purchase payment method.');
   }
 
+  let lines = null;
+  if (command.lines != null) {
+    if (!Array.isArray(command.lines) ||
+        command.lines.length === 0 ||
+        command.lines.length > MAX_LINES) {
+      invalid('Receipt lines must contain between 1 and 100 items.');
+    }
+    lines = command.lines.map((rawLine, index) => {
+      const line = asObject(rawLine, 'lines[' + index + ']');
+      return {
+        lineId: safeId(line.lineId, 'receipt line id'),
+        quantityMilliUnits: positiveInt(
+          line.quantityMilliUnits,
+          'receipt quantityMilliUnits',
+        ),
+      };
+    });
+    if (new Set(lines.map((line) => line.lineId)).size !== lines.length) {
+      invalid('Receipt line ids must be unique.');
+    }
+  }
+
   const postingAccounts = asObject(
     command.postingAccounts,
     'postingAccounts',
@@ -3019,6 +5550,7 @@ function parsePurchaseOrderReceiveCommand(rawCommand) {
     paymentMethod,
     currency: stringValue(command.currency, 'currency'),
     taxMinorUnits,
+    lines,
     accounts,
   };
 }
@@ -3114,7 +5646,9 @@ async function createPurchaseOrderInTransaction(
       line.unitCostMinorUnits,
       baseQuantityMilliUnits,
     );
-    totalMinorUnits += lineTotalMinorUnits;
+    totalMinorUnits = checkedMinorAdd(
+      totalMinorUnits, lineTotalMinorUnits, 'Purchase order total',
+    );
     storedLines.push({
       id: line.id,
       productId: line.productId,
@@ -3208,6 +5742,9 @@ async function receivePurchaseOrderInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const orderRef = storeRef
     .collection('purchase_orders')
@@ -3224,18 +5761,69 @@ async function receivePurchaseOrderInTransaction(
     PURCHASE_ORDER_ROLES,
   );
 
+  const fingerprint = fingerprintPurchaseOrderReceipt(command);
   const idempotencySnapshot = await transaction.get(receiptIdempotencyRef);
   if (idempotencySnapshot.exists) {
     const previous = idempotencySnapshot.data();
-    if (previous.orderId === command.orderId) {
-      return {
-        status: 'already_received',
-        orderId: command.orderId,
-        purchaseId: previous.purchaseId,
-        journalEntryId: previous.journalEntryId,
-      };
+    if (previous.storeId !== command.storeId ||
+        previous.orderId !== command.orderId ||
+        previous.receiptId !== command.receiptId ||
+        previous.purchaseId !== command.receiptId ||
+        previous.journalEntryId !== command.receiptId + '-journal') {
+      conflict('The purchase order receipt key is already assigned.');
     }
-    conflict('The purchase order receipt key is already assigned.');
+    if (previous.requestFingerprint != null) {
+      const legacyFingerprint = command.lines == null
+        ? legacyFingerprintPurchaseOrderReceipt(command)
+        : null;
+      if (previous.requestFingerprint !== fingerprint &&
+          previous.requestFingerprint !== legacyFingerprint) {
+        conflict('Receipt retry differs from the original financial request.');
+      }
+    } else {
+      const historicalPurchaseRef = storeRef.collection('purchases')
+        .doc(command.receiptId);
+      const historicalJournalRef = storeRef.collection('journal_entries')
+        .doc(command.receiptId + '-journal');
+      const historicalOrder = await transaction.get(orderRef);
+      const historicalPurchase = await transaction.get(historicalPurchaseRef);
+      const historicalJournal = await transaction.get(historicalJournalRef);
+      if (!historicalOrder.exists ||
+          !historicalPurchase.exists ||
+          !historicalJournal.exists ||
+          !matchesLegacyPurchaseOrderReceipt(
+            previous, historicalOrder.data(), historicalPurchase.data(),
+            historicalJournal.data(), command,
+          )) {
+        conflict('Historical purchase order receipt cannot be verified.');
+      }
+      const lineNames = [
+        command.receiptId + '-inventory',
+        ...(command.taxMinorUnits > 0
+          ? [command.receiptId + '-input-tax'] : []),
+        command.receiptId + '-settlement',
+      ];
+      const historicLines = [];
+      for (const name of lineNames) {
+        historicLines.push(await transaction.get(
+          historicalJournalRef.collection('lines').doc(name),
+        ));
+      }
+      if (!matchesLegacyPurchaseOrderJournalLines(
+        historicLines, historicalPurchase.data(), command,
+      )) {
+        conflict('Historical receipt journal accounts do not match replay.');
+      }
+    }
+    const orderStatus = previous.orderStatus || 'completed';
+    return {
+      status: 'already_received',
+      orderId: command.orderId,
+      purchaseId: command.receiptId,
+      journalEntryId: command.receiptId + '-journal',
+      orderStatus,
+      completed: orderStatus === 'completed',
+    };
   }
 
   const orderSnapshot = await transaction.get(orderRef);
@@ -3245,14 +5833,6 @@ async function receivePurchaseOrderInTransaction(
   const order = orderSnapshot.data();
   if (order.storeId !== command.storeId) {
     deny('Purchase order belongs to another store.');
-  }
-  if (order.status === 'completed' && order.receiptId === command.receiptId) {
-    return {
-      status: 'already_received',
-      orderId: command.orderId,
-      purchaseId: command.receiptId,
-      journalEntryId: order.journalEntryId || '',
-    };
   }
   if (order.status !== 'pending') {
     conflict('Only pending purchase orders can be received.');
@@ -3265,23 +5845,39 @@ async function receivePurchaseOrderInTransaction(
   if (rawLines.length === 0 || rawLines.length > MAX_LINES) {
     invalid('The purchase order has no receivable lines.');
   }
-  const purchaseLines = rawLines.map((rawLine, index) => {
+
+  const normalizedLines = [];
+  const lineById = new Map();
+  for (let index = 0; index < rawLines.length; index++) {
+    const rawLine = rawLines[index];
     const line = asObject(rawLine, 'stored order line ' + index);
-    const receivedQuantity = storedInt(
-      line.receivedQuantityMilliUnits,
-      0,
-    );
-    if (receivedQuantity !== 0) {
-      invalid('Partial purchase order receipts are not supported yet.');
+    const id = safeId(line.id, 'stored order line id');
+    if (lineById.has(id)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Purchase order contains duplicate line ids.',
+      );
     }
-    return {
-      id: safeId(line.id, 'stored order line id'),
+    const orderedQuantity = positiveInt(
+      line.quantityMilliUnits,
+      'stored order quantityMilliUnits',
+    );
+    const receivedQuantity = line.receivedQuantityMilliUnits ?? 0;
+    if (!Number.isSafeInteger(receivedQuantity) ||
+        receivedQuantity < 0 ||
+        receivedQuantity > orderedQuantity) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Purchase order received quantity is corrupt.',
+      );
+    }
+    const normalized = {
+      rawLine,
+      id,
       productId: safeId(line.productId, 'stored order product id'),
       description: stringValue(line.productName, 'stored product name'),
-      quantityMilliUnits: positiveInt(
-        line.quantityMilliUnits,
-        'stored order quantityMilliUnits',
-      ),
+      quantityMilliUnits: orderedQuantity,
+      receivedQuantityMilliUnits: receivedQuantity,
       unitFactorToBaseMilliUnits: positiveInt(
         line.unitFactorToBaseMilliUnits,
         'stored order unitFactorToBaseMilliUnits',
@@ -3290,13 +5886,84 @@ async function receivePurchaseOrderInTransaction(
         line.unitCostMinorUnits,
         'stored order unitCostMinorUnits',
       ),
-      discountMinorUnits: 0,
       unitId: optionalSafeId(line.unitId, 'stored order unitId'),
       unitName: line.unitName == null
         ? null
         : stringValue(line.unitName, 'stored order unitName'),
     };
-  });
+    normalizedLines.push(normalized);
+    lineById.set(id, normalized);
+  }
+
+  const requested = new Map();
+  if (command.lines == null) {
+    for (const line of normalizedLines) {
+      const remaining =
+        line.quantityMilliUnits - line.receivedQuantityMilliUnits;
+      if (remaining > 0) {
+        requested.set(line.id, remaining);
+      }
+    }
+  } else {
+    for (const requestLine of command.lines) {
+      const source = lineById.get(requestLine.lineId);
+      if (!source) {
+        invalid('Receipt references a line outside the purchase order.');
+      }
+      const remaining =
+        source.quantityMilliUnits - source.receivedQuantityMilliUnits;
+      if (requestLine.quantityMilliUnits > remaining) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Receipt quantity exceeds the remaining ordered quantity.',
+        );
+      }
+      requested.set(requestLine.lineId, requestLine.quantityMilliUnits);
+    }
+  }
+  if (requested.size === 0) {
+    conflict('The purchase order has no remaining quantity to receive.');
+  }
+
+  const purchaseLines = [];
+  const updatedLines = [];
+  for (const line of normalizedLines) {
+    const receiveQuantity = requested.get(line.id) ?? 0;
+    const nextReceived = checkedMinorAdd(
+      line.receivedQuantityMilliUnits,
+      receiveQuantity,
+      'Purchase order received quantity',
+    );
+    if (nextReceived > line.quantityMilliUnits) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Receipt would exceed the ordered quantity.',
+      );
+    }
+
+    updatedLines.push({
+      ...line.rawLine,
+      receivedQuantityMilliUnits: nextReceived,
+    });
+
+    if (receiveQuantity <= 0) {
+      continue;
+    }
+    purchaseLines.push({
+      id: line.id,
+      productId: line.productId,
+      description: line.description,
+      quantityMilliUnits: receiveQuantity,
+      unitFactorToBaseMilliUnits: line.unitFactorToBaseMilliUnits,
+      unitCostMinorUnits: line.unitCostMinorUnits,
+      discountMinorUnits: 0,
+      unitId: line.unitId,
+      unitName: line.unitName,
+    });
+  }
+  if (purchaseLines.length === 0) {
+    invalid('Receipt must contain at least one positive line quantity.');
+  }
 
   const purchaseCommand = {
     storeId: command.storeId,
@@ -3320,25 +5987,32 @@ async function receivePurchaseOrderInTransaction(
     PURCHASE_ORDER_ROLES,
   );
 
-  const completedLines = rawLines.map((rawLine) => ({
-    ...rawLine,
-    receivedQuantityMilliUnits: rawLine.quantityMilliUnits,
-  }));
-  transaction.update(orderRef, {
-    status: 'completed',
+  const completed = updatedLines.every((line) =>
+    line.receivedQuantityMilliUnits === line.quantityMilliUnits,
+  );
+  const orderStatus = completed ? 'completed' : 'pending';
+  const orderUpdate = {
+    status: orderStatus,
     receiptId: command.receiptId,
+    receiptIds: FieldValue.arrayUnion(command.receiptId),
     journalEntryId: result.journalEntryId,
-    completedAt: Timestamp.fromDate(command.postedAt),
-    lines: completedLines,
+    lines: updatedLines,
+    lastReceivedAt: Timestamp.fromDate(command.postedAt),
     updatedAt: FieldValue.serverTimestamp(),
-  });
+  };
+  if (completed) {
+    orderUpdate.completedAt = Timestamp.fromDate(command.postedAt);
+  }
+  transaction.update(orderRef, orderUpdate);
   transaction.set(receiptIdempotencyRef, {
     storeId: command.storeId,
     orderId: command.orderId,
     receiptId: command.receiptId,
     idempotencyKey: command.idempotencyKey,
+    requestFingerprint: fingerprint,
     purchaseId: result.purchaseId,
     journalEntryId: result.journalEntryId,
+    orderStatus,
     createdAt: FieldValue.serverTimestamp(),
   });
 
@@ -3347,6 +6021,8 @@ async function receivePurchaseOrderInTransaction(
     orderId: command.orderId,
     purchaseId: result.purchaseId,
     journalEntryId: result.journalEntryId,
+    orderStatus,
+    completed,
   };
 }
 
@@ -3509,6 +6185,9 @@ async function postSaleInTransaction(
   allowedRoles = POSTING_ROLES,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.sale.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const saleRef = storeRef.collection('sales').doc(command.sale.id);
   const saleIdempotencyRef = storeRef
@@ -3548,19 +6227,45 @@ async function postSaleInTransaction(
     allowedRoles,
   );
 
-  const saleIdempotencySnapshot = await transaction.get(
-    saleIdempotencyRef,
-  );
+  const fingerprint = fingerprintSale(command);
+  const saleIdempotencySnapshot = await transaction.get(saleIdempotencyRef);
   if (saleIdempotencySnapshot.exists) {
-    const existingSaleId = saleIdempotencySnapshot.data().saleId;
-    if (existingSaleId === command.sale.id) {
-      return {
-        status: 'already_posted',
-        saleId: command.sale.id,
-        journalEntryId,
-      };
+    const marker = saleIdempotencySnapshot.data();
+    if (marker.saleId !== command.sale.id) {
+      conflict('The sale idempotency key is already assigned.');
     }
-    conflict('The sale idempotency key is already assigned.');
+    if (marker.requestFingerprint != null) {
+      if (marker.requestFingerprint !== fingerprint) {
+        conflict('Sale key was reused with changed invoice details.');
+      }
+    } else {
+      const oldInvoice = await transaction.get(saleRef);
+      const oldJournal = await transaction.get(journalRef);
+      const oldMarker = await transaction.get(journalIdempotencyRef);
+      if (!oldInvoice.exists ||
+          !oldJournal.exists ||
+          !oldMarker.exists ||
+          oldMarker.data().entryId !== journalEntryId ||
+          !matchesLegacySaleInvoice(
+            oldInvoice.data(), command, journalEntryId,
+          )) {
+        conflict('Historical sale cannot be verified for retry.');
+      }
+      const invoiceLines = await transaction.get(saleRef.collection('lines'));
+      const journalLines = await transaction.get(journalRef.collection('lines'));
+      if (!matchesLegacySaleLines(invoiceLines, command) ||
+          !matchesLegacySaleJournal(
+            oldJournal.data(), journalLines, command,
+            journalEntryId, oldInvoice.data(),
+          )) {
+        conflict('Historical sale lines/journal differ from retry.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      saleId: command.sale.id,
+      journalEntryId,
+    };
   }
 
   const existingSaleSnapshot = await transaction.get(saleRef);
@@ -3771,10 +6476,13 @@ async function postSaleInTransaction(
       invalid('Product currency does not match the sale currency.');
     }
 
-    const purchasePriceMinorUnits = storedInt(
-      product.purchasePriceMinorUnits,
-      0,
-    );
+    const purchasePriceMinorUnits = product.purchasePriceMinorUnits ?? 0;
+    if (!Number.isSafeInteger(purchasePriceMinorUnits) ||
+        purchasePriceMinorUnits < 0) {
+      throw new HttpsError(
+        'failed-precondition', 'Product purchase cost is corrupt.',
+      );
+    }
     if (line.isService) {
       if (line.unitCostMinorUnits !== 0) {
         invalid('A service line must have zero inventory cost.');
@@ -3810,8 +6518,12 @@ async function postSaleInTransaction(
         baseQuantityMilliUnits,
       );
 
-    subtotalMinorUnits += totalMinorUnits;
-    costTotalMinorUnits += costMinorUnits;
+    subtotalMinorUnits = checkedMinorAdd(
+      subtotalMinorUnits, totalMinorUnits, 'Sale subtotal',
+    );
+    costTotalMinorUnits = checkedMinorAdd(
+      costTotalMinorUnits, costMinorUnits, 'Sale COGS total',
+    );
 
     if (!line.isService) {
       const previousIssued = issuedByProduct.get(line.productId) || {
@@ -3819,8 +6531,12 @@ async function postSaleInTransaction(
         cost: 0,
       };
       issuedByProduct.set(line.productId, {
-        quantity: previousIssued.quantity + baseQuantityMilliUnits,
-        cost: previousIssued.cost + costMinorUnits,
+        quantity: checkedMinorAdd(
+          previousIssued.quantity, baseQuantityMilliUnits, 'Sale issue quantity',
+        ),
+        cost: checkedMinorAdd(
+          previousIssued.cost, costMinorUnits, 'Sale issue cost',
+        ),
       });
     }
 
@@ -3848,8 +6564,9 @@ async function postSaleInTransaction(
     invalid('A sale total must be greater than zero.');
   }
 
-  const grandTotalMinorUnits =
-    subtotalMinorUnits + command.sale.taxMinorUnits;
+  const grandTotalMinorUnits = checkedMinorAdd(
+    subtotalMinorUnits, command.sale.taxMinorUnits, 'Sale gross total',
+  );
   if (grandTotalMinorUnits <= 0) {
     invalid('A sale total must be greater than zero.');
   }
@@ -3858,31 +6575,119 @@ async function postSaleInTransaction(
   for (const [productId, issued] of issuedByProduct) {
     const productSnapshot = productSnapshots.get(productId);
     const product = productSnapshot.data();
-    const currentQuantity = storedInt(
-      product.quantityOnHandMilliUnits,
-      0,
+    const currentQuantity = product.quantityOnHandMilliUnits ?? 0;
+    const currentUnitCost = product.purchasePriceMinorUnits ?? 0;
+    if (!Number.isSafeInteger(currentQuantity) || currentQuantity < 0 ||
+        !Number.isSafeInteger(currentUnitCost) || currentUnitCost < 0) {
+      throw new HttpsError(
+        'failed-precondition', 'Sale product quantity or price is corrupt.',
+      );
+    }
+    const currentInventoryValue = product.inventoryValueMinorUnits ??
+      multiplyAndRound(currentUnitCost, currentQuantity);
+    if (!Number.isSafeInteger(currentInventoryValue) ||
+        currentInventoryValue < 0 ||
+        (currentQuantity === 0 && currentInventoryValue !== 0)) {
+      throw new HttpsError(
+        'failed-precondition', 'Sale product inventory value is corrupt.',
+      );
+    }
+    const nextQuantity = checkedMinorAdd(
+      currentQuantity, -issued.quantity, 'Sale stock quantity',
     );
-    const currentUnitCost = storedInt(
-      product.purchasePriceMinorUnits,
-      0,
-    );
-    const currentInventoryValue = storedInt(
-      product.inventoryValueMinorUnits,
-      multiplyAndRound(currentUnitCost, currentQuantity),
-    );
-    const nextQuantity = currentQuantity - issued.quantity;
     if (nextQuantity < 0) {
       throw new HttpsError(
         'failed-precondition',
         'The sale would create negative stock for ' + productId + '.',
       );
     }
-    const nextInventoryValue = currentInventoryValue - issued.cost;
+
+    // purchasePriceMinorUnits is a rounded average while
+    // inventoryValueMinorUnits is the authoritative accumulated valuation.
+    // On full depletion only, allocate the residual rounding difference to
+    // the sale lines/COGS so zero stock can never retain (or overdraw) value.
+    if (nextQuantity === 0 && issued.cost !== currentInventoryValue) {
+      const adjustment = checkedMinorAdd(
+        currentInventoryValue,
+        -issued.cost,
+        'Sale full-depletion cost adjustment',
+      );
+      const productLines = storedLines.filter(
+        (line) => !line.isService && line.productId === productId,
+      );
+      if (productLines.length === 0) {
+        throw new HttpsError(
+          'internal',
+          'Sale depletion adjustment has no matching inventory line.',
+        );
+      }
+
+      if (adjustment > 0) {
+        const line = productLines[productLines.length - 1];
+        line.costTotalMinorUnits = checkedMinorAdd(
+          line.costTotalMinorUnits,
+          adjustment,
+          'Sale line depletion cost',
+        );
+        line.costAllocationAdjustmentMinorUnits = checkedMinorAdd(
+          line.costAllocationAdjustmentMinorUnits ?? 0,
+          adjustment,
+          'Sale line depletion adjustment',
+        );
+      } else if (adjustment < 0) {
+        let remainingReduction = -adjustment;
+        for (let index = productLines.length - 1;
+          index >= 0 && remainingReduction > 0;
+          index--) {
+          const line = productLines[index];
+          const reduction = Math.min(
+            line.costTotalMinorUnits,
+            remainingReduction,
+          );
+          line.costTotalMinorUnits -= reduction;
+          line.costAllocationAdjustmentMinorUnits = checkedMinorAdd(
+            line.costAllocationAdjustmentMinorUnits ?? 0,
+            -reduction,
+            'Sale line depletion adjustment',
+          );
+          remainingReduction -= reduction;
+        }
+        if (remainingReduction !== 0) {
+          throw new HttpsError(
+            'internal',
+            'Sale depletion adjustment exceeds provisional COGS.',
+          );
+        }
+      }
+
+      costTotalMinorUnits = checkedMinorAdd(
+        costTotalMinorUnits,
+        adjustment,
+        'Sale COGS depletion adjustment',
+      );
+      if (costTotalMinorUnits < 0) {
+        throw new HttpsError(
+          'internal',
+          'Sale depletion adjustment produced negative COGS.',
+        );
+      }
+      issued.cost = currentInventoryValue;
+    }
+
+    const nextInventoryValue = checkedMinorAdd(
+      currentInventoryValue, -issued.cost, 'Sale stock value',
+    );
     if (nextInventoryValue < 0) {
       throw new HttpsError(
         'failed-precondition',
         'The sale would create negative inventory value for ' +
           productId + '.',
+      );
+    }
+    if (nextQuantity === 0 && nextInventoryValue !== 0) {
+      throw new HttpsError(
+        'internal',
+        'A fully depleted product retained an inventory value.',
       );
     }
     nextProducts.set(productId, {
@@ -3927,11 +6732,15 @@ async function postSaleInTransaction(
     );
   }
 
-  const totalDebitMinorUnits = grandTotalMinorUnits +
-    costTotalMinorUnits;
-  const totalCreditMinorUnits = subtotalMinorUnits +
-    command.sale.taxMinorUnits +
-    costTotalMinorUnits;
+  const totalDebitMinorUnits = checkedMinorAdd(
+    grandTotalMinorUnits, costTotalMinorUnits, 'Sale total debits',
+  );
+  const totalCreditMinorUnits = checkedMinorAdd(
+    checkedMinorAdd(
+      subtotalMinorUnits, command.sale.taxMinorUnits, 'Sale sales + tax',
+    ),
+    costTotalMinorUnits, 'Sale total credits',
+  );
   if (totalDebitMinorUnits !== totalCreditMinorUnits) {
     throw new HttpsError(
       'internal',
@@ -3987,7 +6796,7 @@ async function postSaleInTransaction(
         storeId: command.storeId,
         accountId: command.accounts.inventoryAccountId,
         description: 'Inventory issue',
-        lineNumber: journalLines.length + 1,
+        lineNumber: journalLines.length + 2,
         debitMinorUnits: zero,
         creditMinorUnits: costTotalMinorUnits,
       },
@@ -3997,6 +6806,7 @@ async function postSaleInTransaction(
   const saleData = {
     storeId: command.storeId,
     idempotencyKey: command.sale.idempotencyKey,
+    requestFingerprint: fingerprint,
     postedAt: Timestamp.fromDate(command.sale.postedAt),
     paymentMethod: command.sale.paymentMethod,
     customerId: command.sale.customerId,
@@ -4006,6 +6816,9 @@ async function postSaleInTransaction(
     taxMinorUnits: command.sale.taxMinorUnits,
     totalMinorUnits: grandTotalMinorUnits,
     costTotalMinorUnits,
+    // Keep a bounded immutable invoice snapshot for reliable period analytics.
+    // Retain the lines subcollection for individual invoice item access.
+    lines: storedLines,
     journalEntryId,
     status: 'posted',
     createdAt: FieldValue.serverTimestamp(),
@@ -4059,9 +6872,11 @@ async function postSaleInTransaction(
     );
   }
 
-  transaction.set(
-    journalRef,
-    {
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
+
+  transaction.set(journalRef, {
       storeId: command.storeId,
       idempotencyKey: journalIdempotencyKey,
       sourceType: 'sale',
@@ -4078,6 +6893,7 @@ async function postSaleInTransaction(
       journalRef.collection('lines').doc(line.id),
       {
         ...line,
+        currency: command.sale.currency,
         entryId: journalEntryId,
         postedAt: Timestamp.fromDate(command.sale.postedAt),
       },
@@ -4085,13 +6901,21 @@ async function postSaleInTransaction(
   }
 
   if (isCreditSale) {
-    const balance = customerBalanceSnapshot.exists
-      ? customerBalanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const nextDebit = currentDebit + grandTotalMinorUnits;
-    const nextCredit = currentCredit;
+    const prior = readPartyBalanceForPosting(
+      customerBalanceSnapshot, {
+        storeId: command.storeId,
+        partyId: command.sale.customerId,
+        partyType: 'customer',
+        currency: command.sale.currency,
+      },
+    );
+    const nextDebit = checkedMinorAdd(
+      prior.debit, grandTotalMinorUnits, 'Sale customer receivable',
+    );
+    const nextCredit = prior.credit;
+    const nextPartyNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Sale customer net receivable',
+    );
 
     transaction.set(
       customerLedgerRef,
@@ -4117,26 +6941,32 @@ async function postSaleInTransaction(
         currency: command.sale.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextPartyNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
   }
 
   for (const accountId of accountIds) {
-    const balanceSnapshot = balanceSnapshots.get(accountId);
-    const balance = balanceSnapshot.exists
-      ? balanceSnapshot.data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
-    const delta = accountDeltas.get(accountId) || {
-      debit: 0,
-      credit: 0,
-    };
-    const nextDebit = currentDebit + delta.debit;
-    const nextCredit = currentCredit + delta.credit;
-
+    const prior = readBalanceForPosting(
+      balanceSnapshots.get(accountId), {
+        storeId: command.storeId,
+        accountId,
+        currency: command.sale.currency,
+      },
+    );
+    // Optional tax and service-only COGS accounts can legitimately have
+    // no posting delta, but existing balances must still validate.
+    const delta = accountDeltas.get(accountId) || { debit: 0, credit: 0 };
+    const nextDebit = checkedMinorAdd(
+      prior.debit, delta.debit, 'Sale GL account debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      prior.credit, delta.credit, 'Sale GL account credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Sale GL account net',
+    );
     transaction.set(
       balanceRefs.get(accountId),
       {
@@ -4145,7 +6975,7 @@ async function postSaleInTransaction(
         currency: command.sale.currency,
         debitMinorUnits: nextDebit,
         creditMinorUnits: nextCredit,
-        balanceMinorUnits: nextDebit - nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -4157,6 +6987,7 @@ async function postSaleInTransaction(
       storeId: command.storeId,
       saleId: command.sale.id,
       idempotencyKey: command.sale.idempotencyKey,
+      requestFingerprint: fingerprint,
       journalEntryId,
       createdAt: FieldValue.serverTimestamp(),
     },
@@ -4175,6 +7006,1309 @@ async function postSaleInTransaction(
     status: 'posted',
     saleId: command.sale.id,
     journalEntryId,
+  };
+}
+
+
+
+function parseSaleReturnCommand(rawCommand) {
+  const command = asObject(rawCommand, 'command');
+  const storeId = safeId(command.storeId, 'storeId');
+  const rawReturn = asObject(command.saleReturn, 'saleReturn');
+  const postingAccounts = asObject(
+    command.postingAccounts,
+    'postingAccounts',
+  );
+
+  let lines = null;
+  if (rawReturn.lines != null) {
+    if (!Array.isArray(rawReturn.lines) ||
+        rawReturn.lines.length === 0 ||
+        rawReturn.lines.length > MAX_LINES) {
+      invalid('Sale return lines must contain between 1 and 100 items.');
+    }
+    lines = rawReturn.lines.map((rawLine, index) => {
+      const line = asObject(
+        rawLine,
+        'saleReturn.lines[' + index + ']',
+      );
+      return {
+        lineId: safeId(
+          line.lineId,
+          'saleReturn.lines[' + index + '].lineId',
+        ),
+        quantityMilliUnits: positiveInt(
+          line.quantityMilliUnits,
+          'saleReturn.lines[' + index + '].quantityMilliUnits',
+        ),
+      };
+    });
+    if (new Set(lines.map((line) => line.lineId)).size !== lines.length) {
+      invalid('Sale return line ids must be unique.');
+    }
+  }
+
+  const accounts = {
+    settlementAccountId: optionalSafeId(
+      postingAccounts.settlementAccountId,
+      'settlementAccountId',
+    ),
+    customerReceivableAccountId: optionalSafeId(
+      postingAccounts.customerReceivableAccountId,
+      'customerReceivableAccountId',
+    ),
+    salesReturnsAccountId: safeId(
+      postingAccounts.salesReturnsAccountId,
+      'salesReturnsAccountId',
+    ),
+    inventoryAccountId: safeId(
+      postingAccounts.inventoryAccountId,
+      'inventoryAccountId',
+    ),
+    costOfSalesAccountId: safeId(
+      postingAccounts.costOfSalesAccountId,
+      'costOfSalesAccountId',
+    ),
+    taxAccountId: optionalSafeId(
+      postingAccounts.taxAccountId,
+      'taxAccountId',
+    ),
+  };
+  return {
+    storeId,
+    saleReturn: {
+      id: safeId(rawReturn.id, 'sale return id'),
+      idempotencyKey: safeId(
+        rawReturn.idempotencyKey,
+        'sale return idempotency key',
+      ),
+      originalSaleId: safeId(
+        rawReturn.originalSaleId,
+        'original sale id',
+      ),
+      postedAt: parseDate(rawReturn.postedAt, 'saleReturn.postedAt'),
+      reason: optionalText(rawReturn.reason, 'saleReturn.reason'),
+      lines,
+    },
+    accounts,
+  };
+}
+
+function storedSaleReturnInt(value, label) {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Stored sale return source is invalid: ' + label + '.',
+    );
+  }
+  return value;
+}
+
+function saleReturnAllocation(args) {
+  try {
+    return allocateCumulative(args);
+  } catch (error) {
+    throw new HttpsError(
+      'failed-precondition',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+function saleReturnTaxAllocation(args) {
+  try {
+    return allocateHeaderBySubtotal(args);
+  } catch (error) {
+    throw new HttpsError(
+      'failed-precondition',
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+function cumulativeSaleReturnAmount(
+  sourceTotal,
+  sourceQuantity,
+  returnedQuantity,
+  label,
+) {
+  if (returnedQuantity === 0) {
+    return 0;
+  }
+  return saleReturnAllocation({
+    sourceTotal,
+    sourceQuantity,
+    alreadyReturnedQuantity: 0,
+    alreadyAllocated: 0,
+    returnQuantity: returnedQuantity,
+    label,
+  }).nextAllocated;
+}
+
+async function postSaleReturnInTransaction(
+  transaction,
+  userId,
+  command,
+) {
+  const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.saleReturn.postedAt,
+  );
+  const memberRef = storeRef.collection('members').doc(userId);
+  const returnRef = storeRef
+    .collection('sales_returns')
+    .doc(command.saleReturn.id);
+  const returnKeyRef = storeRef
+    .collection('sale_return_idempotency')
+    .doc(command.saleReturn.idempotencyKey);
+  const originalSaleRef = storeRef
+    .collection('sales')
+    .doc(command.saleReturn.originalSaleId);
+  const journalEntryId = command.saleReturn.id + '-journal';
+  const journalKey = command.saleReturn.idempotencyKey + ':journal';
+  const journalRef = storeRef
+    .collection('journal_entries')
+    .doc(journalEntryId);
+  const journalKeyRef = storeRef
+    .collection('idempotency_keys')
+    .doc(journalKey);
+
+  const membership = await transaction.get(memberRef);
+  assertMembership(
+    membership,
+    command.storeId,
+    'post sale returns',
+    POSTING_ROLES,
+  );
+
+  const fingerprint = fingerprintSaleReturn(command);
+  const existingKey = await transaction.get(returnKeyRef);
+  if (existingKey.exists) {
+    const marker = existingKey.data();
+    if (marker.returnId !== command.saleReturn.id ||
+        marker.originalSaleId !== command.saleReturn.originalSaleId ||
+        marker.requestFingerprint !== fingerprint) {
+      conflict('Sale return key was reused with changed details.');
+    }
+    const existingReturn = await transaction.get(returnRef);
+    if (!existingReturn.exists) {
+      conflict('Sale return marker exists without its return document.');
+    }
+    return {
+      status: 'already_returned',
+      returnId: command.saleReturn.id,
+      originalSaleId: command.saleReturn.originalSaleId,
+      journalEntryId,
+      returnStatus: existingReturn.data().completedOriginalSale === true
+        ? 'full'
+        : 'partial',
+    };
+  }
+
+  if ((await transaction.get(returnRef)).exists) {
+    conflict('The sale return id already exists.');
+  }
+  if ((await transaction.get(journalRef)).exists ||
+      (await transaction.get(journalKeyRef)).exists) {
+    conflict('The sale return journal identity already exists.');
+  }
+
+  const originalSnapshot = await transaction.get(originalSaleRef);
+  if (!originalSnapshot.exists) {
+    invalid('Original sale was not found.');
+  }
+  const original = originalSnapshot.data();
+  if (original.storeId !== command.storeId || original.status !== 'posted') {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale is not a posted sale for this store.',
+    );
+  }
+  if (original.returnStatus === 'full' || original.returnId) {
+    conflict('The original sale has already been fully returned.');
+  }
+
+  const originalPostedAt = original.postedAt?.toDate?.();
+  if (!(originalPostedAt instanceof Date) ||
+      Number.isNaN(originalPostedAt.getTime())) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale posting date is invalid.',
+    );
+  }
+  if (command.saleReturn.postedAt.getTime() < originalPostedAt.getTime()) {
+    throw new HttpsError(
+      'failed-precondition',
+      'A sale return cannot be posted before the original sale.',
+    );
+  }
+
+  const currency = stringValue(original.currency, 'stored sale currency');
+  const subtotal = storedSaleReturnInt(
+    original.subtotalMinorUnits,
+    'subtotalMinorUnits',
+  );
+  const tax = storedSaleReturnInt(
+    original.taxMinorUnits,
+    'taxMinorUnits',
+  );
+  const total = storedSaleReturnInt(
+    original.totalMinorUnits,
+    'totalMinorUnits',
+  );
+  const cost = storedSaleReturnInt(
+    original.costTotalMinorUnits,
+    'costTotalMinorUnits',
+  );
+  if (subtotal <= 0 ||
+      checkedMinorAdd(subtotal, tax, 'Sale return source total') !== total) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale totals do not reconcile.',
+    );
+  }
+
+  const originalJournalId = stringValue(
+    original.journalEntryId,
+    'stored sale journalEntryId',
+  );
+  const originalJournalRef = storeRef
+    .collection('journal_entries')
+    .doc(originalJournalId);
+  const originalJournal = await transaction.get(originalJournalRef);
+  const originalJournalData = originalJournal.data();
+  const expectedOriginalJournalTotal = checkedMinorAdd(
+    total,
+    cost,
+    'Original sale journal total',
+  );
+  if (!originalJournal.exists ||
+      originalJournalData.sourceType !== 'sale' ||
+      originalJournalData.status !== 'posted' ||
+      originalJournalData.currency !== currency ||
+      originalJournalData.totalDebitMinorUnits !== expectedOriginalJournalTotal ||
+      originalJournalData.totalCreditMinorUnits !== expectedOriginalJournalTotal) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale journal is missing or invalid.',
+    );
+  }
+  const originalJournalLines = await transaction.get(
+    originalJournalRef.collection('lines'),
+  );
+  const originalLineById = new Map(
+    originalJournalLines.docs.map((doc) => [doc.id, doc.data()]),
+  );
+
+  const paymentMethod = stringValue(
+    original.paymentMethod,
+    'stored sale paymentMethod',
+  );
+  const isCredit = paymentMethod === 'credit';
+  const customerId = original.customerId == null
+    ? null
+    : safeId(original.customerId, 'stored customerId');
+  if (isCredit && !customerId) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original credit sale has no customer.',
+    );
+  }
+  const paymentAccountId = isCredit
+    ? command.accounts.customerReceivableAccountId
+    : command.accounts.settlementAccountId;
+  if (!paymentAccountId) {
+    invalid(
+      isCredit
+        ? 'A customer receivable account is required for this return.'
+        : 'A settlement account is required for this return.',
+    );
+  }
+
+  const originalSettlement = originalLineById.get(
+    command.saleReturn.originalSaleId + '-settlement',
+  );
+  if (!originalSettlement ||
+      originalSettlement.accountId !== paymentAccountId) {
+    invalid('Return settlement account must match the original sale.');
+  }
+  if (originalSettlement.debitMinorUnits !== total ||
+      originalSettlement.creditMinorUnits !== 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale settlement line does not reconcile to the invoice.',
+    );
+  }
+  const originalSales = originalLineById.get(
+    command.saleReturn.originalSaleId + '-sales',
+  );
+  if (!originalSales ||
+      originalSales.debitMinorUnits !== 0 ||
+      originalSales.creditMinorUnits !== subtotal) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale revenue line does not reconcile to the invoice.',
+    );
+  }
+  const originalInventory = originalLineById.get(
+    command.saleReturn.originalSaleId + '-inventory',
+  );
+  const originalCost = originalLineById.get(
+    command.saleReturn.originalSaleId + '-cost',
+  );
+  if (cost > 0 &&
+      (!originalInventory ||
+       !originalCost ||
+       originalInventory.accountId !== command.accounts.inventoryAccountId ||
+       originalCost.accountId !== command.accounts.costOfSalesAccountId)) {
+    invalid('Return inventory/COGS accounts must match the original sale.');
+  }
+  if (cost > 0 &&
+      (originalInventory.debitMinorUnits !== 0 ||
+       originalInventory.creditMinorUnits !== cost ||
+       originalCost.debitMinorUnits !== cost ||
+       originalCost.creditMinorUnits !== 0)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale inventory/COGS lines do not reconcile to the invoice.',
+    );
+  }
+  const originalTax = originalLineById.get(
+    command.saleReturn.originalSaleId + '-tax',
+  );
+  if (tax > 0 &&
+      (!command.accounts.taxAccountId ||
+       !originalTax ||
+       originalTax.accountId !== command.accounts.taxAccountId)) {
+    invalid('Return tax account must match the original sale.');
+  }
+  if (tax > 0 &&
+      (originalTax.debitMinorUnits !== 0 ||
+       originalTax.creditMinorUnits !== tax)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale tax line does not reconcile to the invoice.',
+    );
+  }
+
+  let rawLines = Array.isArray(original.lines) ? original.lines : null;
+  if (!rawLines || rawLines.length === 0) {
+    const lineSnapshot = await transaction.get(
+      originalSaleRef.collection('lines'),
+    );
+    rawLines = lineSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  }
+  if (!rawLines || rawLines.length === 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale has no verifiable line snapshot.',
+    );
+  }
+
+  const originalLines = [];
+  const originalLinesById = new Map();
+  let verifiedSubtotal = 0;
+  let verifiedCost = 0;
+  for (const rawLine of rawLines) {
+    const line = asObject(rawLine, 'stored sale line');
+    const lineId = safeId(line.id, 'stored sale line id');
+    if (originalLinesById.has(lineId)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Original sale contains duplicate line ids.',
+      );
+    }
+    const quantity = storedSaleReturnInt(
+      line.quantityMilliUnits,
+      'line.quantityMilliUnits',
+    );
+    const baseQuantity = storedSaleReturnInt(
+      line.baseQuantityMilliUnits,
+      'line.baseQuantityMilliUnits',
+    );
+    const lineTotal = storedSaleReturnInt(
+      line.totalMinorUnits,
+      'line.totalMinorUnits',
+    );
+    const lineCost = storedSaleReturnInt(
+      line.costTotalMinorUnits,
+      'line.costTotalMinorUnits',
+    );
+    if (quantity <= 0 || baseQuantity <= 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Original sale line quantity is invalid.',
+      );
+    }
+    if (line.isService === true && lineCost !== 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Service line has inventory cost in original sale.',
+      );
+    }
+
+    const normalized = {
+      id: lineId,
+      productId: safeId(line.productId, 'stored sale product id'),
+      description: stringValue(
+        line.description,
+        'stored sale line description',
+      ),
+      quantityMilliUnits: quantity,
+      baseQuantityMilliUnits: baseQuantity,
+      unitPriceMinorUnits: storedSaleReturnInt(
+        line.unitPriceMinorUnits,
+        'line.unitPriceMinorUnits',
+      ),
+      discountMinorUnits: storedSaleReturnInt(
+        line.discountMinorUnits,
+        'line.discountMinorUnits',
+      ),
+      totalMinorUnits: lineTotal,
+      unitCostMinorUnits: storedSaleReturnInt(
+        line.unitCostMinorUnits,
+        'line.unitCostMinorUnits',
+      ),
+      costTotalMinorUnits: lineCost,
+      unitId: line.unitId ?? null,
+      unitName: line.unitName ?? null,
+      isService: line.isService === true,
+    };
+    originalLines.push(normalized);
+    originalLinesById.set(lineId, normalized);
+    verifiedSubtotal = checkedMinorAdd(
+      verifiedSubtotal,
+      lineTotal,
+      'Original sale line subtotal',
+    );
+    verifiedCost = checkedMinorAdd(
+      verifiedCost,
+      lineCost,
+      'Original sale line cost',
+    );
+  }
+  if (verifiedSubtotal !== subtotal || verifiedCost !== cost) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale lines do not reconcile to its posted totals.',
+    );
+  }
+
+  const priorProjection = new Map();
+  const rawReturnedLines = original.returnedLines;
+  if (rawReturnedLines != null && !Array.isArray(rawReturnedLines)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Original sale return projection is malformed.',
+    );
+  }
+  if (Array.isArray(rawReturnedLines)) {
+    for (const rawProjection of rawReturnedLines) {
+      const projection = asObject(
+        rawProjection,
+        'stored sale returned line projection',
+      );
+      const lineId = safeId(
+        projection.lineId,
+        'stored returned line id',
+      );
+      const sourceLine = originalLinesById.get(lineId);
+      if (!sourceLine || priorProjection.has(lineId)) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Original sale return projection has an invalid line id.',
+        );
+      }
+      const returnedQuantity = storedSaleReturnInt(
+        projection.returnedQuantityMilliUnits,
+        'returnedQuantityMilliUnits',
+      );
+      const returnedBaseQuantity = storedSaleReturnInt(
+        projection.returnedBaseQuantityMilliUnits,
+        'returnedBaseQuantityMilliUnits',
+      );
+      const allocatedSubtotal = storedSaleReturnInt(
+        projection.allocatedSubtotalMinorUnits,
+        'allocatedSubtotalMinorUnits',
+      );
+      const allocatedCost = storedSaleReturnInt(
+        projection.allocatedCostMinorUnits,
+        'allocatedCostMinorUnits',
+      );
+      if (returnedQuantity <= 0 ||
+          returnedQuantity > sourceLine.quantityMilliUnits) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Stored returned quantity exceeds the original sale line.',
+        );
+      }
+      const expectedBase = cumulativeSaleReturnAmount(
+        sourceLine.baseQuantityMilliUnits,
+        sourceLine.quantityMilliUnits,
+        returnedQuantity,
+        'stored return base quantity',
+      );
+      const expectedSubtotal = cumulativeSaleReturnAmount(
+        sourceLine.totalMinorUnits,
+        sourceLine.quantityMilliUnits,
+        returnedQuantity,
+        'stored return subtotal',
+      );
+      const expectedCost = cumulativeSaleReturnAmount(
+        sourceLine.costTotalMinorUnits,
+        sourceLine.quantityMilliUnits,
+        returnedQuantity,
+        'stored return cost',
+      );
+      if (returnedBaseQuantity !== expectedBase ||
+          allocatedSubtotal !== expectedSubtotal ||
+          allocatedCost !== expectedCost) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Stored sale return allocation does not reconcile.',
+        );
+      }
+      priorProjection.set(lineId, {
+        lineId,
+        returnedQuantityMilliUnits: returnedQuantity,
+        returnedBaseQuantityMilliUnits: returnedBaseQuantity,
+        allocatedSubtotalMinorUnits: allocatedSubtotal,
+        allocatedCostMinorUnits: allocatedCost,
+      });
+    }
+  }
+
+  if (original.returnStatus === 'partial' && priorProjection.size === 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Partial return status has no verifiable return projection.',
+    );
+  }
+  if (original.returnStatus == null && priorProjection.size > 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Return projection exists without a return status.',
+    );
+  }
+
+  let priorReturnedSubtotal = 0;
+  let priorReturnedCost = 0;
+  for (const projection of priorProjection.values()) {
+    priorReturnedSubtotal = checkedMinorAdd(
+      priorReturnedSubtotal,
+      projection.allocatedSubtotalMinorUnits,
+      'Stored returned subtotal',
+    );
+    priorReturnedCost = checkedMinorAdd(
+      priorReturnedCost,
+      projection.allocatedCostMinorUnits,
+      'Stored returned cost',
+    );
+  }
+  const storedReturnedSubtotal = original.returnedSubtotalMinorUnits == null
+    ? priorReturnedSubtotal
+    : storedSaleReturnInt(
+        original.returnedSubtotalMinorUnits,
+        'returnedSubtotalMinorUnits',
+      );
+  const storedReturnedCost = original.returnedCostMinorUnits == null
+    ? priorReturnedCost
+    : storedSaleReturnInt(
+        original.returnedCostMinorUnits,
+        'returnedCostMinorUnits',
+      );
+  const priorReturnedTax = original.returnedTaxMinorUnits == null
+    ? 0
+    : storedSaleReturnInt(
+        original.returnedTaxMinorUnits,
+        'returnedTaxMinorUnits',
+      );
+  if (storedReturnedSubtotal !== priorReturnedSubtotal ||
+      storedReturnedCost !== priorReturnedCost ||
+      priorReturnedSubtotal > subtotal ||
+      priorReturnedCost > cost ||
+      priorReturnedTax > tax) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Stored sale return totals do not reconcile.',
+    );
+  }
+  const expectedPriorTax = priorReturnedSubtotal === 0
+    ? 0
+    : saleReturnTaxAllocation({
+        sourceTotal: tax,
+        sourceSubtotal: subtotal,
+        alreadyReturnedSubtotal: 0,
+        alreadyAllocated: 0,
+        returnSubtotal: priorReturnedSubtotal,
+        label: 'stored return tax',
+      }).nextAllocated;
+  if (priorReturnedTax !== expectedPriorTax) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Stored sale return tax allocation does not reconcile.',
+    );
+  }
+
+  const requestedByLine = new Map();
+  if (command.saleReturn.lines == null) {
+    for (const line of originalLines) {
+      const prior = priorProjection.get(line.id);
+      const already = prior?.returnedQuantityMilliUnits ?? 0;
+      const remaining = line.quantityMilliUnits - already;
+      if (remaining > 0) {
+        requestedByLine.set(line.id, remaining);
+      }
+    }
+  } else {
+    for (const line of command.saleReturn.lines) {
+      const source = originalLinesById.get(line.lineId);
+      if (!source) {
+        invalid('Sale return references a line outside the original sale.');
+      }
+      requestedByLine.set(line.lineId, line.quantityMilliUnits);
+    }
+  }
+  if (requestedByLine.size === 0) {
+    conflict('The original sale has no remaining quantity to return.');
+  }
+
+  const productUpdates = new Map();
+  const movementWrites = [];
+  const returnedLines = [];
+  const nextProjection = new Map(priorProjection);
+  let returnSubtotal = 0;
+  let returnCost = 0;
+
+  for (const [lineId, requestedQuantity] of requestedByLine) {
+    const line = originalLinesById.get(lineId);
+    const prior = priorProjection.get(lineId) || {
+      lineId,
+      returnedQuantityMilliUnits: 0,
+      returnedBaseQuantityMilliUnits: 0,
+      allocatedSubtotalMinorUnits: 0,
+      allocatedCostMinorUnits: 0,
+    };
+
+    const subtotalAllocation = saleReturnAllocation({
+      sourceTotal: line.totalMinorUnits,
+      sourceQuantity: line.quantityMilliUnits,
+      alreadyReturnedQuantity: prior.returnedQuantityMilliUnits,
+      alreadyAllocated: prior.allocatedSubtotalMinorUnits,
+      returnQuantity: requestedQuantity,
+      label: 'sale return line subtotal',
+    });
+    const costAllocation = saleReturnAllocation({
+      sourceTotal: line.costTotalMinorUnits,
+      sourceQuantity: line.quantityMilliUnits,
+      alreadyReturnedQuantity: prior.returnedQuantityMilliUnits,
+      alreadyAllocated: prior.allocatedCostMinorUnits,
+      returnQuantity: requestedQuantity,
+      label: 'sale return line cost',
+    });
+    const baseAllocation = saleReturnAllocation({
+      sourceTotal: line.baseQuantityMilliUnits,
+      sourceQuantity: line.quantityMilliUnits,
+      alreadyReturnedQuantity: prior.returnedQuantityMilliUnits,
+      alreadyAllocated: prior.returnedBaseQuantityMilliUnits,
+      returnQuantity: requestedQuantity,
+      label: 'sale return line base quantity',
+    });
+
+    const priorDiscount = cumulativeSaleReturnAmount(
+      line.discountMinorUnits,
+      line.quantityMilliUnits,
+      prior.returnedQuantityMilliUnits,
+      'stored return discount',
+    );
+    const nextDiscount = cumulativeSaleReturnAmount(
+      line.discountMinorUnits,
+      line.quantityMilliUnits,
+      subtotalAllocation.nextReturnedQuantity,
+      'sale return discount',
+    );
+    const returnedDiscount = nextDiscount - priorDiscount;
+
+    returnSubtotal = checkedMinorAdd(
+      returnSubtotal,
+      subtotalAllocation.allocated,
+      'Sale return subtotal',
+    );
+    returnCost = checkedMinorAdd(
+      returnCost,
+      costAllocation.allocated,
+      'Sale return cost',
+    );
+
+    const projection = {
+      lineId,
+      returnedQuantityMilliUnits:
+        subtotalAllocation.nextReturnedQuantity,
+      returnedBaseQuantityMilliUnits: baseAllocation.nextAllocated,
+      allocatedSubtotalMinorUnits: subtotalAllocation.nextAllocated,
+      allocatedCostMinorUnits: costAllocation.nextAllocated,
+    };
+    nextProjection.set(lineId, projection);
+
+    returnedLines.push({
+      id: line.id,
+      productId: line.productId,
+      description: line.description,
+      quantityMilliUnits: requestedQuantity,
+      baseQuantityMilliUnits: baseAllocation.allocated,
+      unitPriceMinorUnits: line.unitPriceMinorUnits,
+      discountMinorUnits: returnedDiscount,
+      totalMinorUnits: subtotalAllocation.allocated,
+      unitCostMinorUnits: line.unitCostMinorUnits,
+      costTotalMinorUnits: costAllocation.allocated,
+      unitId: line.unitId,
+      unitName: line.unitName,
+      isService: line.isService,
+    });
+
+    if (line.isService) {
+      continue;
+    }
+    if (baseAllocation.allocated <= 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Returned inventory quantity rounded to zero.',
+      );
+    }
+
+    const existingProductUpdate = productUpdates.get(line.productId);
+    let productRef;
+    let currentQuantity;
+    let currentValue;
+    if (existingProductUpdate) {
+      productRef = existingProductUpdate.productRef;
+      currentQuantity = existingProductUpdate.nextQuantity;
+      currentValue = existingProductUpdate.nextValue;
+    } else {
+      productRef = storeRef.collection('products').doc(line.productId);
+      const productSnapshot = await transaction.get(productRef);
+      if (!productSnapshot.exists) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Returned product no longer exists: ' + line.productId,
+        );
+      }
+      const product = productSnapshot.data();
+      if (product.storeId !== command.storeId ||
+          product.currency !== currency ||
+          product.isService === true) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Returned product projection is incompatible.',
+        );
+      }
+      currentQuantity = storedSaleReturnInt(
+        product.quantityOnHandMilliUnits,
+        'product.quantityOnHandMilliUnits',
+      );
+      currentValue = storedSaleReturnInt(
+        product.inventoryValueMinorUnits,
+        'product.inventoryValueMinorUnits',
+      );
+    }
+    const nextQuantity = checkedMinorAdd(
+      currentQuantity,
+      baseAllocation.allocated,
+      'Sale return inventory quantity',
+    );
+    const nextValue = checkedMinorAdd(
+      currentValue,
+      costAllocation.allocated,
+      'Sale return inventory value',
+    );
+    const nextUnitCost = divideAndRound(nextValue, nextQuantity);
+    productUpdates.set(line.productId, {
+      productRef,
+      nextQuantity,
+      nextValue,
+      nextUnitCost,
+    });
+
+    const movementId = command.saleReturn.id + '-inventory-' + lineId;
+    const movementKey =
+      command.saleReturn.idempotencyKey + ':inventory:' + lineId;
+    const movementRef = storeRef
+      .collection('inventory_movements')
+      .doc(movementId);
+    const movementKeyRef = storeRef
+      .collection('inventory_idempotency')
+      .doc(movementKey);
+    if ((await transaction.get(movementRef)).exists ||
+        (await transaction.get(movementKeyRef)).exists) {
+      conflict('Sale return inventory identity already exists.');
+    }
+    movementWrites.push({
+      movementId,
+      movementKey,
+      movementRef,
+      movementKeyRef,
+      productId: line.productId,
+      baseQuantity: baseAllocation.allocated,
+      lineCost: costAllocation.allocated,
+      unitCost: line.unitCostMinorUnits,
+    });
+  }
+
+  if (returnSubtotal === 0 && returnCost === 0) {
+    invalid('The selected return lines have no financial or inventory effect.');
+  }
+
+  const nextReturnedSubtotal = checkedMinorAdd(
+    priorReturnedSubtotal,
+    returnSubtotal,
+    'Cumulative returned subtotal',
+  );
+  const nextReturnedCost = checkedMinorAdd(
+    priorReturnedCost,
+    returnCost,
+    'Cumulative returned cost',
+  );
+  const taxAllocation = returnSubtotal === 0
+    ? {
+        allocated: 0,
+        nextAllocated: priorReturnedTax,
+      }
+    : saleReturnTaxAllocation({
+        sourceTotal: tax,
+        sourceSubtotal: subtotal,
+        alreadyReturnedSubtotal: priorReturnedSubtotal,
+        alreadyAllocated: priorReturnedTax,
+        returnSubtotal,
+        label: 'sale return tax',
+      });
+  const returnTax = taxAllocation.allocated;
+  const nextReturnedTax = taxAllocation.nextAllocated;
+  const returnTotal = checkedMinorAdd(
+    returnSubtotal,
+    returnTax,
+    'Sale return total',
+  );
+
+  const allComplete = originalLines.every((line) => {
+    const projection = nextProjection.get(line.id);
+    return projection?.returnedQuantityMilliUnits ===
+      line.quantityMilliUnits;
+  });
+  if (allComplete &&
+      (nextReturnedSubtotal !== subtotal ||
+       nextReturnedCost !== cost ||
+       nextReturnedTax !== tax)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Completed sale return does not reconcile to the original invoice.',
+    );
+  }
+
+  const accountIds = [
+    paymentAccountId,
+    command.accounts.salesReturnsAccountId,
+    command.accounts.inventoryAccountId,
+    command.accounts.costOfSalesAccountId,
+    ...(tax > 0 ? [command.accounts.taxAccountId] : []),
+  ].filter(Boolean);
+  if (new Set(accountIds).size !== accountIds.length) {
+    invalid('Sale return posting accounts must be distinct.');
+  }
+  const accountRefs = new Map(
+    accountIds.map((id) => [
+      id,
+      storeRef.collection('accounts').doc(id),
+    ]),
+  );
+  const accountSnapshots = new Map();
+  const balanceRefs = new Map();
+  const balanceSnapshots = new Map();
+  for (const [id, ref] of accountRefs) {
+    accountSnapshots.set(id, await transaction.get(ref));
+    const balanceRef = storeRef.collection('account_balances').doc(id);
+    balanceRefs.set(id, balanceRef);
+    balanceSnapshots.set(id, await transaction.get(balanceRef));
+  }
+
+  if (isCredit) {
+    assertAccount(
+      accountSnapshots.get(paymentAccountId),
+      paymentAccountId,
+      command.storeId,
+      currency,
+      'asset',
+      'customerReceivable',
+    );
+  } else {
+    assertAccount(
+      accountSnapshots.get(paymentAccountId),
+      paymentAccountId,
+      command.storeId,
+      currency,
+      'asset',
+      paymentAccountControlType(paymentMethod),
+    );
+  }
+  assertAccount(
+    accountSnapshots.get(command.accounts.salesReturnsAccountId),
+    command.accounts.salesReturnsAccountId,
+    command.storeId,
+    currency,
+    'revenue',
+  );
+  if (accountSnapshots.get(command.accounts.salesReturnsAccountId)
+      .data().normalSide !== 'debit') {
+    invalid('Sales returns account must be debit-normal.');
+  }
+  assertAccount(
+    accountSnapshots.get(command.accounts.inventoryAccountId),
+    command.accounts.inventoryAccountId,
+    command.storeId,
+    currency,
+    'asset',
+    'inventory',
+  );
+  assertAccount(
+    accountSnapshots.get(command.accounts.costOfSalesAccountId),
+    command.accounts.costOfSalesAccountId,
+    command.storeId,
+    currency,
+    'expense',
+  );
+  if (tax > 0) {
+    assertAccount(
+      accountSnapshots.get(command.accounts.taxAccountId),
+      command.accounts.taxAccountId,
+      command.storeId,
+      currency,
+      'liability',
+      'tax',
+    );
+  }
+
+  let customerLedgerRef = null;
+  let customerBalanceRef = null;
+  let customerBalanceSnapshot = null;
+  if (isCredit && returnTotal > 0) {
+    const customerRef = storeRef.collection('parties').doc(customerId);
+    assertParty(
+      await transaction.get(customerRef),
+      command.storeId,
+      customerId,
+      'customer',
+    );
+    customerLedgerRef = storeRef
+      .collection('party_ledger_entries')
+      .doc(command.saleReturn.id + '-customer');
+    if ((await transaction.get(customerLedgerRef)).exists) {
+      conflict('Sale return customer ledger identity already exists.');
+    }
+    customerBalanceRef = storeRef
+      .collection('party_balances')
+      .doc('customer-' + customerId);
+    customerBalanceSnapshot = await transaction.get(customerBalanceRef);
+  }
+
+  const accountDeltas = new Map();
+  if (returnSubtotal > 0) {
+    addDelta(
+      accountDeltas,
+      command.accounts.salesReturnsAccountId,
+      returnSubtotal,
+      0,
+    );
+  }
+  if (returnTax > 0) {
+    addDelta(
+      accountDeltas,
+      command.accounts.taxAccountId,
+      returnTax,
+      0,
+    );
+  }
+  if (returnTotal > 0) {
+    addDelta(accountDeltas, paymentAccountId, 0, returnTotal);
+  }
+  if (returnCost > 0) {
+    addDelta(
+      accountDeltas,
+      command.accounts.inventoryAccountId,
+      returnCost,
+      0,
+    );
+    addDelta(
+      accountDeltas,
+      command.accounts.costOfSalesAccountId,
+      0,
+      returnCost,
+    );
+  }
+
+  const journalLines = [];
+  if (returnSubtotal > 0) {
+    journalLines.push({
+      id: command.saleReturn.id + '-sales-return',
+      accountId: command.accounts.salesReturnsAccountId,
+      description: 'Sales return',
+      debitMinorUnits: returnSubtotal,
+      creditMinorUnits: 0,
+    });
+  }
+  if (returnTax > 0) {
+    journalLines.push({
+      id: command.saleReturn.id + '-tax',
+      accountId: command.accounts.taxAccountId,
+      description: 'Output tax reversal',
+      debitMinorUnits: returnTax,
+      creditMinorUnits: 0,
+    });
+  }
+  if (returnTotal > 0) {
+    journalLines.push({
+      id: command.saleReturn.id + '-settlement',
+      accountId: paymentAccountId,
+      description:
+        isCredit ? 'Customer receivable reversal' : 'Customer refund',
+      debitMinorUnits: 0,
+      creditMinorUnits: returnTotal,
+    });
+  }
+  if (returnCost > 0) {
+    journalLines.push(
+      {
+        id: command.saleReturn.id + '-inventory',
+        accountId: command.accounts.inventoryAccountId,
+        description: 'Inventory restored from sale return',
+        debitMinorUnits: returnCost,
+        creditMinorUnits: 0,
+      },
+      {
+        id: command.saleReturn.id + '-cogs',
+        accountId: command.accounts.costOfSalesAccountId,
+        description: 'Cost of sales reversal',
+        debitMinorUnits: 0,
+        creditMinorUnits: returnCost,
+      },
+    );
+  }
+  if (journalLines.length < 2) {
+    invalid('Sale return must produce a balanced accounting effect.');
+  }
+  for (let i = 0; i < journalLines.length; i++) {
+    journalLines[i].lineNumber = i + 1;
+  }
+  const journalTotal = checkedMinorAdd(
+    returnTotal,
+    returnCost,
+    'Sale return journal total',
+  );
+
+  for (const item of productUpdates.values()) {
+    transaction.update(item.productRef, {
+      quantityOnHandMilliUnits: item.nextQuantity,
+      purchasePriceMinorUnits: item.nextUnitCost,
+      inventoryValueMinorUnits: item.nextValue,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+  for (const item of movementWrites) {
+    transaction.set(item.movementRef, {
+      storeId: command.storeId,
+      productId: item.productId,
+      type: 'saleReturnReceipt',
+      quantityDeltaMilliUnits: item.baseQuantity,
+      unitCostMinorUnits: item.unitCost,
+      totalCostMinorUnits: item.lineCost,
+      currency,
+      idempotencyKey: item.movementKey,
+      sourceType: 'saleReturn',
+      sourceId: command.saleReturn.id,
+      occurredAt: Timestamp.fromDate(command.saleReturn.postedAt),
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(item.movementKeyRef, {
+      storeId: command.storeId,
+      movementId: item.movementId,
+      idempotencyKey: item.movementKey,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  markJournalPosting(transaction, storeRef, journalEntryId, FieldValue);
+  transaction.set(journalRef, {
+    storeId: command.storeId,
+    idempotencyKey: journalKey,
+    sourceType: 'saleReturn',
+    sourceId: command.saleReturn.id,
+    description: command.saleReturn.reason || 'Sale return',
+    status: 'posted',
+    currency,
+    totalDebitMinorUnits: journalTotal,
+    totalCreditMinorUnits: journalTotal,
+    postedAt: Timestamp.fromDate(command.saleReturn.postedAt),
+  });
+  for (const line of journalLines) {
+    transaction.set(journalRef.collection('lines').doc(line.id), {
+      ...line,
+      storeId: command.storeId,
+      entryId: journalEntryId,
+      currency,
+      postedAt: Timestamp.fromDate(command.saleReturn.postedAt),
+    });
+  }
+
+  if (isCredit && returnTotal > 0) {
+    const prior = readPartyBalanceForPosting(customerBalanceSnapshot, {
+      storeId: command.storeId,
+      partyId: customerId,
+      partyType: 'customer',
+      currency,
+    });
+    const nextCredit = checkedMinorAdd(
+      prior.credit,
+      returnTotal,
+      'Sale return customer credit',
+    );
+    const nextNet = checkedMinorAdd(
+      prior.debit,
+      -nextCredit,
+      'Sale return customer net',
+    );
+    transaction.set(customerLedgerRef, {
+      storeId: command.storeId,
+      partyType: 'customer',
+      partyId: customerId,
+      sourceType: 'saleReturn',
+      sourceId: command.saleReturn.id,
+      currency,
+      debitMinorUnits: 0,
+      creditMinorUnits: returnTotal,
+      description: command.saleReturn.reason || 'Sale return',
+      postedAt: Timestamp.fromDate(command.saleReturn.postedAt),
+    });
+    transaction.set(customerBalanceRef, {
+      storeId: command.storeId,
+      partyType: 'customer',
+      partyId: customerId,
+      currency,
+      debitMinorUnits: prior.debit,
+      creditMinorUnits: nextCredit,
+      balanceMinorUnits: nextNet,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  for (const accountId of accountIds) {
+    const prior = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency,
+      },
+    );
+    const delta = accountDeltas.get(accountId) || {
+      debit: 0,
+      credit: 0,
+    };
+    const nextDebit = checkedMinorAdd(
+      prior.debit,
+      delta.debit,
+      'Sale return GL debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      prior.credit,
+      delta.credit,
+      'Sale return GL credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit,
+      -nextCredit,
+      'Sale return GL net',
+    );
+    transaction.set(balanceRefs.get(accountId), {
+      storeId: command.storeId,
+      accountId,
+      currency,
+      debitMinorUnits: nextDebit,
+      creditMinorUnits: nextCredit,
+      balanceMinorUnits: nextNet,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  const returnType =
+    command.saleReturn.lines == null &&
+    priorReturnedSubtotal === 0 &&
+    allComplete
+      ? 'full'
+      : 'partial';
+
+  transaction.set(returnRef, {
+    storeId: command.storeId,
+    idempotencyKey: command.saleReturn.idempotencyKey,
+    requestFingerprint: fingerprint,
+    originalSaleId: command.saleReturn.originalSaleId,
+    postedAt: Timestamp.fromDate(command.saleReturn.postedAt),
+    reason: command.saleReturn.reason,
+    currency,
+    subtotalMinorUnits: returnSubtotal,
+    taxMinorUnits: returnTax,
+    totalMinorUnits: returnTotal,
+    costTotalMinorUnits: returnCost,
+    paymentMethod,
+    customerId,
+    journalEntryId,
+    status: 'posted',
+    returnType,
+    completedOriginalSale: allComplete,
+    lines: returnedLines,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  const projectionRows = originalLines
+    .map((line) => nextProjection.get(line.id))
+    .filter(Boolean);
+  const originalUpdate = {
+    returnStatus: allComplete ? 'full' : 'partial',
+    returnIds: FieldValue.arrayUnion(command.saleReturn.id),
+    returnedSubtotalMinorUnits: nextReturnedSubtotal,
+    returnedTaxMinorUnits: nextReturnedTax,
+    returnedCostMinorUnits: nextReturnedCost,
+    returnedLines: projectionRows,
+    returnedAt: Timestamp.fromDate(command.saleReturn.postedAt),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  if (allComplete) {
+    originalUpdate.returnId = command.saleReturn.id;
+  }
+  transaction.update(originalSaleRef, originalUpdate);
+
+  transaction.set(returnKeyRef, {
+    storeId: command.storeId,
+    returnId: command.saleReturn.id,
+    originalSaleId: command.saleReturn.originalSaleId,
+    idempotencyKey: command.saleReturn.idempotencyKey,
+    requestFingerprint: fingerprint,
+    journalEntryId,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  transaction.set(journalKeyRef, {
+    storeId: command.storeId,
+    entryId: journalEntryId,
+    idempotencyKey: journalKey,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    status: 'returned',
+    returnId: command.saleReturn.id,
+    originalSaleId: command.saleReturn.originalSaleId,
+    journalEntryId,
+    returnStatus: allComplete ? 'full' : 'partial',
   };
 }
 
@@ -4997,8 +9131,27 @@ async function confirmOfferOrderInTransaction(transaction, userId, command) {
     invalid('Offer order was not found.');
   }
   const order = orderSnapshot.data();
+  const fingerprint = fingerprintOfferOrderConfirmation(command);
   if (confirmationSnapshot.exists) {
     const data = confirmationSnapshot.data();
+    if (data.storeId !== command.storeId ||
+        data.orderId !== command.orderId ||
+        data.saleId == null ||
+        data.journalEntryId == null) {
+      conflict('Offer confirmation marker is inconsistent.');
+    }
+    if (data.requestFingerprint != null) {
+      if (data.requestFingerprint !== fingerprint) {
+        conflict(
+          'Offer confirmation retry differs from the original request.',
+        );
+      }
+    } else if (order.status !== 'confirmed' ||
+        order.saleId !== data.saleId ||
+        order.journalEntryId !== data.journalEntryId ||
+        order.paymentMethod !== command.paymentMethod) {
+      conflict('Historical offer confirmation cannot be verified.');
+    }
     return {
       status: 'already_confirmed',
       orderId: command.orderId,
@@ -5007,6 +9160,11 @@ async function confirmOfferOrderInTransaction(transaction, userId, command) {
     };
   }
   if (order.status === 'confirmed') {
+    if (order.paymentMethod !== command.paymentMethod) {
+      conflict(
+        'Confirmed offer order payment method differs from the retry.',
+      );
+    }
     return {
       status: 'already_confirmed',
       orderId: command.orderId,
@@ -5114,6 +9272,7 @@ async function confirmOfferOrderInTransaction(transaction, userId, command) {
     saleId: result.saleId,
     journalEntryId: result.journalEntryId,
     idempotencyKey: command.idempotencyKey,
+    requestFingerprint: fingerprint,
     createdAt: FieldValue.serverTimestamp(),
   });
   return {
@@ -5193,19 +9352,33 @@ function parseChequeSettlementCommand(rawCommand) {
   };
 }
 
+// A competing cheque settlement can close one Firestore transaction before
+// the contender observes its durable idempotency marker. Only retry this
+// specific transient error in a FRESH transaction. The settlement fingerprint
+// and unique journal identity are checked again on every retry.
+async function runChequeTransactionWithClosedRetry(userId, command) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await db.runTransaction((transaction) =>
+        settleChequeInTransaction(transaction, userId, command),
+      );
+    } catch (error) {
+      const closedTransaction = !(error instanceof HttpsError) &&
+        /Transaction is invalid or closed/i.test(error?.message || '');
+      if (!closedTransaction || attempt === 2) throw error;
+    }
+  }
+}
+
 exports.settleCheque = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Authentication is required.');
   }
   const command = parseChequeSettlementCommand(request.data);
   try {
-    return await db.runTransaction(async (transaction) => {
-      return settleChequeInTransaction(
-        transaction,
-        request.auth.uid,
-        command,
-      );
-    });
+    return await runChequeTransactionWithClosedRetry(
+      request.auth.uid, command,
+    );
   } catch (error) {
     if (error instanceof HttpsError) {
       throw error;
@@ -5223,6 +9396,9 @@ exports.settleCheque = onCall(async (request) => {
 
 async function settleChequeInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.postedAt,
+  );
   const memberRef = storeRef.collection('members').doc(userId);
   const chequeRef = storeRef.collection('party_payments').doc(command.chequeId);
   const settlementIdempotencyRef = storeRef
@@ -5244,18 +9420,44 @@ async function settleChequeInTransaction(transaction, userId, command) {
     'settle cheques',
     PAYMENT_POSTING_ROLES,
   );
+  const fingerprint = fingerprintChequeSettlement(command);
   const idempotencySnapshot = await transaction.get(settlementIdempotencyRef);
   if (idempotencySnapshot.exists) {
     const existing = idempotencySnapshot.data();
-    if (existing.chequeId === command.chequeId &&
-        existing.action === command.action) {
-      return {
-        status: command.action === 'clear' ? 'cleared' : 'bounced',
-        chequeId: command.chequeId,
-        journalEntryId: existing.journalEntryId,
-      };
+    if (existing.chequeId !== command.chequeId ||
+        existing.action !== command.action ||
+        existing.journalEntryId !== journalEntryId) {
+      conflict('The cheque settlement idempotency key is already assigned.');
     }
-    conflict('The cheque settlement idempotency key is already assigned.');
+    if (existing.requestFingerprint != null) {
+      if (existing.requestFingerprint !== fingerprint) {
+        conflict('Cheque settlement retry changed its financial details.');
+      }
+    } else {
+      const previousCheque = await transaction.get(chequeRef);
+      const previousJournal = await transaction.get(journalRef);
+      const previousMarker = await transaction.get(journalIdempotencyRef);
+      if (!previousCheque.exists || !previousJournal.exists ||
+          !previousMarker.exists ||
+          previousMarker.data().entryId !== journalEntryId ||
+          !sameLegacyChequeSettlement(
+            previousJournal.data(), previousCheque.data(),
+            command, journalEntryId,
+          )) {
+        conflict('Cannot confirm old cheque settlement for retry.');
+      }
+      const previousLines = await transaction.get(journalRef.collection('lines'));
+      if (!sameLegacyChequeLines(
+        previousLines, previousCheque.data(), command, journalEntryId,
+      )) {
+        conflict('Historical cheque journal differs from settlement request.');
+      }
+    }
+    return {
+      status: command.action === 'clear' ? 'cleared' : 'bounced',
+      chequeId: command.chequeId,
+      journalEntryId,
+    };
   }
 
   const chequeSnapshot = await transaction.get(chequeRef);
@@ -5342,6 +9544,43 @@ async function settleChequeInTransaction(transaction, userId, command) {
   let bouncedPartyLedgerRef;
   let bouncedPartyBalanceRef;
   let bouncedPartyBalance = {};
+  let repairRef = null;
+  let repairPaidAfterBounce = null;
+  if (command.action === 'bounce' && cheque.repairId != null) {
+    if (!isCustomerCheque || cheque.paymentKind !== 'settlement') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Only customer repair settlement cheques may link to a repair.',
+      );
+    }
+    const repairId = safeId(cheque.repairId, 'repairId');
+    repairRef = storeRef.collection('repairs').doc(repairId);
+    const repairSnapshot = await transaction.get(repairRef);
+    if (!repairSnapshot.exists) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Repair linked to the cheque was not found.',
+      );
+    }
+    const repair = repairSnapshot.data();
+    if (repair.storeId !== command.storeId ||
+        repair.customerId !== cheque.partyId ||
+        repair.invoiceJournalEntryId == null) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Repair cheque linkage is inconsistent.',
+      );
+    }
+    const repairPaid = storedInt(repair.paidMinorUnits, 0);
+    if (repairPaid < amount) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Repair paid projection is lower than the bounced cheque.',
+      );
+    }
+    repairPaidAfterBounce = repairPaid - amount;
+  }
+
   if (command.action === 'bounce') {
     const partyLedgerId = command.chequeId + '-bounce';
     bouncedPartyLedgerRef = storeRef
@@ -5359,9 +9598,15 @@ async function settleChequeInTransaction(transaction, userId, command) {
     const bouncedBalanceSnapshot = await transaction.get(
       bouncedPartyBalanceRef,
     );
-    bouncedPartyBalance = bouncedBalanceSnapshot.exists
-      ? bouncedBalanceSnapshot.data()
-      : {};
+    bouncedPartyBalance = readPartyBalanceForPosting(
+      bouncedBalanceSnapshot,
+      {
+        storeId: command.storeId,
+        partyType: cheque.partyType,
+        partyId: cheque.partyId,
+        currency: cheque.currency,
+      },
+    );
   }
 
   const debitAccountId = isCustomerCheque
@@ -5413,6 +9658,15 @@ async function settleChequeInTransaction(transaction, userId, command) {
     settledAt: Timestamp.fromDate(command.postedAt),
     updatedAt: FieldValue.serverTimestamp(),
   });
+  if (repairRef != null) {
+    transaction.update(repairRef, {
+      paidMinorUnits: repairPaidAfterBounce,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
   transaction.set(journalRef, {
     storeId: command.storeId,
     idempotencyKey: journalIdempotencyKey,
@@ -5439,10 +9693,17 @@ async function settleChequeInTransaction(transaction, userId, command) {
   }
 
   if (command.action === 'bounce') {
-    const currentDebit = storedInt(bouncedPartyBalance.debitMinorUnits, 0);
-    const currentCredit = storedInt(bouncedPartyBalance.creditMinorUnits, 0);
     const partyDebit = isCustomerCheque ? amount : 0;
     const partyCredit = isCustomerCheque ? 0 : amount;
+    const nextPartyDebit = checkedMinorAdd(
+      bouncedPartyBalance.debit, partyDebit, 'Bounced cheque party debit',
+    );
+    const nextPartyCredit = checkedMinorAdd(
+      bouncedPartyBalance.credit, partyCredit, 'Bounced cheque party credit',
+    );
+    const nextPartyNet = checkedMinorAdd(
+      nextPartyDebit, -nextPartyCredit, 'Bounced cheque party net',
+    );
     transaction.set(bouncedPartyLedgerRef, {
       storeId: command.storeId,
       partyType: cheque.partyType,
@@ -5462,31 +9723,41 @@ async function settleChequeInTransaction(transaction, userId, command) {
       partyType: cheque.partyType,
       partyId: cheque.partyId,
       currency: cheque.currency,
-      debitMinorUnits: currentDebit + partyDebit,
-      creditMinorUnits: currentCredit + partyCredit,
-      balanceMinorUnits:
-        currentDebit + partyDebit - currentCredit - partyCredit,
+      debitMinorUnits: nextPartyDebit,
+      creditMinorUnits: nextPartyCredit,
+      balanceMinorUnits: nextPartyNet,
       updatedAt: FieldValue.serverTimestamp(),
     });
   }
 
   for (const accountId of accountIds) {
-    const balance = balanceSnapshots.get(accountId).exists
-      ? balanceSnapshots.get(accountId).data()
-      : {};
-    const currentDebit = storedInt(balance.debitMinorUnits, 0);
-    const currentCredit = storedInt(balance.creditMinorUnits, 0);
+    const previous = readBalanceForPosting(
+      balanceSnapshots.get(accountId),
+      {
+        storeId: command.storeId,
+        accountId,
+        currency: cheque.currency,
+      },
+    );
     const delta = deltas.get(accountId);
+    const nextDebit = checkedMinorAdd(
+      previous.debit, delta.debit, 'Cheque settlement GL debit',
+    );
+    const nextCredit = checkedMinorAdd(
+      previous.credit, delta.credit, 'Cheque settlement GL credit',
+    );
+    const nextNet = checkedMinorAdd(
+      nextDebit, -nextCredit, 'Cheque settlement GL net',
+    );
     transaction.set(
       storeRef.collection('account_balances').doc(accountId),
       {
         storeId: command.storeId,
         accountId,
         currency: cheque.currency,
-        debitMinorUnits: currentDebit + delta.debit,
-        creditMinorUnits: currentCredit + delta.credit,
-        balanceMinorUnits:
-          currentDebit + delta.debit - currentCredit - delta.credit,
+        debitMinorUnits: nextDebit,
+        creditMinorUnits: nextCredit,
+        balanceMinorUnits: nextNet,
         updatedAt: FieldValue.serverTimestamp(),
       },
     );
@@ -5498,6 +9769,7 @@ async function settleChequeInTransaction(transaction, userId, command) {
     action: command.action,
     journalEntryId,
     idempotencyKey: command.idempotencyKey,
+    requestFingerprint: fingerprint,
     createdAt: FieldValue.serverTimestamp(),
   });
   transaction.set(journalIdempotencyRef, {
@@ -5514,6 +9786,217 @@ async function settleChequeInTransaction(transaction, userId, command) {
   };
 }
 
+
+// Persistent, read-only source-enumeration checkpoints. This is deliberately
+// NOT an accounting reconciliation, certified audit or production migration.
+const HISTORY_SCAN_ROLES = new Set(['owner', 'admin', 'accountant']);
+
+exports.startAccountingHistoryScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return createHistoryScan({
+    db, FieldValue, storeId, userId: request.auth.uid,
+    assertAccess: (membership, tenantId) => assertMembership(
+      membership, tenantId, 'start accounting history inventory',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingHistoryScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advanceHistoryScan({
+    db, FieldValue, HttpsError, storeId, runId,
+    userId: request.auth.uid,
+    assertAccess: (membership, tenantId) => assertMembership(
+      membership, tenantId, 'continue accounting history inventory',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Per-account GL evidence is checkpointed independently of document counts.
+// Reconciliation remains non-atomic and cannot certify financial statements.
+exports.startAccountingLedgerReconciliation = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return startLedgerReconciliation({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start ledger reconciliation', HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingLedgerReconciliation = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advanceLedgerReconciliation({
+    db, FieldValue, HttpsError, storeId, runId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'continue ledger reconciliation', HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Compare every existing journal header with its direct line totals.
+// Account projection reconciliation is separate; neither result certifies
+// a consistent historical cutoff or detects every orphan descendant.
+exports.startAccountingJournalReconciliation = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return startJournalHeaderReconciliation({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start journal header reconciliation',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingJournalReconciliation = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advanceJournalHeaderReconciliation({
+    db, FieldValue, HttpsError, storeId, runId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'continue journal header reconciliation',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Cross-compare complete server-owned ledger and direct-journal evidence.
+// It is non-atomic and can NEVER certify a financial posting cutoff.
+// Read-only path-based scan for orphan journal descendants, even with
+// missing/wrong line.storeId. Bounded pages, tenant-path checks, no repairs.
+exports.startAccountingOrphanPathScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return startPathOrphanScan({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start orphan path scan', HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingOrphanPathScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advancePathOrphanScan({
+    db, FieldValue, HttpsError, storeId, runId,
+    uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'advance orphan path scan', HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Reverse census of every stored GL balance document (including unknown
+// chart accounts). It does not mutate balances or attest to one snapshot.
+exports.startAccountingBalanceProjectionScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  return startBalanceProjectionScan({
+    db, FieldValue, HttpsError, storeId, uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'start balance projection scan',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.advanceAccountingBalanceProjectionScan = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const runId = safeId(input.runId, 'runId');
+  return advanceBalanceProjectionScan({
+    db, FieldValue, HttpsError, storeId, runId,
+    uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'advance balance projection scan',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+// Consolidated read-only evidence from four independent audit runs; no
+// single accounting snapshot or immutable posting cutoff is guaranteed.
+// in-progress audits. It never certifies a historical accounting snapshot.
+exports.getUnifiedAccountingAuditReport = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const ledgerRunId = safeId(input.ledgerRunId, 'ledgerRunId');
+  const journalRunId = safeId(input.journalRunId, 'journalRunId');
+  const orphanRunId = safeId(input.orphanRunId, 'orphanRunId');
+  const balanceRunId = safeId(input.balanceRunId, 'balanceRunId');
+  return getUnifiedAuditReport({
+    db, HttpsError, storeId, ledgerRunId, journalRunId, orphanRunId,
+    balanceRunId,
+    uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'get unified accounting audit report',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
+
+exports.compareAccountingAuditCoverage = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Authentication is required.');
+  }
+  const input = asObject(request.data, 'command');
+  const storeId = safeId(input.storeId, 'storeId');
+  const ledgerRunId = safeId(input.ledgerRunId, 'ledgerRunId');
+  const journalRunId = safeId(input.journalRunId, 'journalRunId');
+  return compareAuditRunCoverage({
+    db, HttpsError, storeId, ledgerRunId, journalRunId,
+    uid: request.auth.uid,
+    assertAccess: (member, tenantId) => assertMembership(
+      member, tenantId, 'compare accounting audit evidence',
+      HISTORY_SCAN_ROLES,
+    ),
+  });
+});
 
 exports.auditAccountingIntegrity = onCall(async (request) => {
   if (!request.auth) {
@@ -5562,31 +10045,74 @@ async function runAccountingIntegrityAudit(userId, command) {
     new Set(['owner', 'admin', 'accountant']),
   );
 
-  const [
-    accountsSnapshot,
-    accountBalancesSnapshot,
-    journalEntriesSnapshot,
-    journalLinesSnapshot,
-    partiesSnapshot,
-    partyBalancesSnapshot,
-    partyLedgerSnapshot,
-    productsSnapshot,
-    inventoryMovementsSnapshot,
-  ] = await Promise.all([
-    storeRef.collection('accounts').get(),
-    storeRef.collection('account_balances').get(),
-    storeRef.collection('journal_entries').get(),
-    db.collectionGroup('lines')
-      .where('storeId', '==', command.storeId)
-      .get(),
-    storeRef.collection('parties').get(),
-    storeRef.collection('party_balances').get(),
-    storeRef.collection('party_ledger_entries').get(),
-    storeRef.collection('products').get(),
-    storeRef.collection('inventory_movements').get(),
-  ]);
+  // Read all pages from direct store-scoped collections. A read-only audit
+  // must not silently skip later documents or confuse invoice lines with GL.
+  const collectionNames = [
+    'accounts',
+    'account_balances',
+    'journal_entries',
+    'parties',
+    'party_balances',
+    'party_ledger_entries',
+    'products',
+    'inventory_movements',
+  ];
+  const scans = new Map();
+  let scannedDocuments = 0;
+  let scanIncomplete = false;
+  for (const name of collectionNames) {
+    if (scanIncomplete) {
+      scans.set(name, {docs: [], size: 0, truncated: true});
+      continue;
+    }
+    const remaining = MAX_AUDIT_TOTAL_DOCS - scannedDocuments;
+    const snapshot = await readAuditPages(
+      storeRef.collection(name), {
+        maxDocuments: Math.min(MAX_AUDIT_DOCS_PER_COLLECTION, remaining),
+      },
+    );
+    scans.set(name, snapshot);
+    scannedDocuments += snapshot.size;
+    scanIncomplete = snapshot.truncated;
+  }
+
+  const accountsSnapshot = scans.get('accounts');
+  const accountBalancesSnapshot = scans.get('account_balances');
+  const journalEntriesSnapshot = scans.get('journal_entries');
+  const partiesSnapshot = scans.get('parties');
+  const partyBalancesSnapshot = scans.get('party_balances');
+  const partyLedgerSnapshot = scans.get('party_ledger_entries');
+  const productsSnapshot = scans.get('products');
+  const inventoryMovementsSnapshot = scans.get('inventory_movements');
+  // Directly scan every journal's own lines. Unlike collectionGroup where
+  // storeId is indexed, this detects malformed/missing line.storeId as well.
+  const journalLinesSnapshot = scanIncomplete
+    ? {docs: [], size: 0, truncated: true}
+    : await readJournalAuditLines(journalEntriesSnapshot.docs, {
+      maxDocuments: Math.min(
+        MAX_AUDIT_DOCS_PER_COLLECTION,
+        MAX_AUDIT_TOTAL_DOCS - scannedDocuments,
+      ),
+    });
+  // Direct parent traversal cannot see subcollections whose parent journal
+  // document was deleted. Independently discover store-ID-indexed lines,
+  // including invoice lines, then restrict findings to actual journal paths.
+  // Count all queried documents (including invoices) toward the shared cap.
+  scannedDocuments += journalLinesSnapshot.size;
+  const indexedLinesSnapshot = scanIncomplete || journalLinesSnapshot.truncated
+    ? {docs: [], size: 0, truncated: true}
+    : await readAuditPages(
+      db.collectionGroup('lines').where('storeId', '==', command.storeId), {
+        maxDocuments: Math.min(
+          MAX_AUDIT_DOCS_PER_COLLECTION,
+          Math.max(0, MAX_AUDIT_TOTAL_DOCS - scannedDocuments),
+        ),
+      },
+    );
 
   const issues = [];
+  let totalIssueCount = 0;
+  let totalErrorCount = 0;
   const addIssue = ({
     code,
     scope,
@@ -5598,6 +10124,8 @@ async function runAccountingIntegrityAudit(userId, command) {
     expected,
     actual,
   }) => {
+    totalIssueCount += 1;
+    if (severity === 'error') totalErrorCount += 1;
     if (issues.length >= 200) {
       return;
     }
@@ -5613,6 +10141,58 @@ async function runAccountingIntegrityAudit(userId, command) {
       actual: Number.isSafeInteger(actual) ? actual : null,
     });
   };
+
+  const sources = {
+    accounts: accountsSnapshot,
+    balances: accountBalancesSnapshot,
+    journals: journalEntriesSnapshot,
+    ledgerLines: journalLinesSnapshot,
+    indexedLineDiscovery: indexedLinesSnapshot,
+    parties: partiesSnapshot,
+    partyBalances: partyBalancesSnapshot,
+    partyMovements: partyLedgerSnapshot,
+    products: productsSnapshot,
+    stockMovements: inventoryMovementsSnapshot,
+  };
+  const truncated = Object.entries(sources)
+    .filter(([, snapshot]) => snapshot.truncated)
+    .map(([name]) => name);
+  if (truncated.length > 0) {
+    return {
+      status: 'incomplete',
+      complete: false,
+      consistency: 'non_atomic',
+      orphanDiscoveryCoverage: 'matching_embedded_store_id_only',
+      storeId: command.storeId,
+      generatedAt: new Date().toISOString(),
+      checked: {
+        accounts: accountsSnapshot.size,
+        journalEntries: journalEntriesSnapshot.size,
+        journalLines: journalLinesSnapshot.size,
+        indexedLineDiscovery: indexedLinesSnapshot.size,
+        parties: partiesSnapshot.size,
+        partyLedgerEntries: partyLedgerSnapshot.size,
+        products: productsSnapshot.size,
+        inventoryMovements: inventoryMovementsSnapshot.size,
+      },
+      issueCount: 1,
+      issues: [{
+        code: 'AUDIT_INCOMPLETE_DATASET',
+        scope: 'audit',
+        referenceId: truncated.join(','),
+        message: 'Data exceeds audit safety limit: no conclusion can be drawn.',
+        severity: 'error',
+        valueKind: null,
+        currency: null,
+        expected: null,
+        actual: null,
+      }],
+    };
+  }
+  const readMinor = (value, scope, referenceId, allowNegative = false) =>
+    auditInteger(value, {scope, referenceId}, addIssue, {allowNegative});
+  const addMinor = (x, y, scope, referenceId, valueKind) =>
+    auditSum(x, y, {scope, referenceId, valueKind}, addIssue);
 
   const accountMap = new Map();
   for (const document of accountsSnapshot.docs) {
@@ -5655,6 +10235,10 @@ async function runAccountingIntegrityAudit(userId, command) {
 
   const linesByEntry = new Map();
   for (const document of journalLinesSnapshot.docs) {
+    if (!isJournalLinePath(document.ref, command.storeId)) {
+      // Collection-group also contains sale and purchase invoice lines.
+      continue;
+    }
     const data = document.data();
     if (data.storeId !== command.storeId) {
       addIssue({
@@ -5666,9 +10250,8 @@ async function runAccountingIntegrityAudit(userId, command) {
       continue;
     }
 
-    const parentEntryId = data.entryId ||
-      (document.ref.parent.parent && document.ref.parent.parent.id);
-    if (!parentEntryId) {
+    const parentEntryId = document.ref.parent.parent.id;
+    if (data.entryId !== parentEntryId) {
       addIssue({
         code: 'ORPHAN_JOURNAL_LINE',
         scope: 'journalLine',
@@ -5686,6 +10269,14 @@ async function runAccountingIntegrityAudit(userId, command) {
   for (const document of journalEntriesSnapshot.docs) {
     const entry = document.data();
     const entryId = document.id;
+    if (entry.storeId !== command.storeId) {
+      addIssue({
+        code: 'JOURNAL_STORE_MISMATCH',
+        scope: 'journal',
+        referenceId: entryId,
+        message: 'Journal header is assigned to a different store.',
+      });
+    }
     const currency = typeof entry.currency === 'string'
       ? entry.currency
       : 'ILS';
@@ -5704,10 +10295,10 @@ async function runAccountingIntegrityAudit(userId, command) {
 
     for (const line of lines) {
       const data = line.data;
-      const debit = storedInt(data.debitMinorUnits, 0);
-      const credit = storedInt(data.creditMinorUnits, 0);
-      totalDebit += debit;
-      totalCredit += credit;
+      const debit = readMinor(data.debitMinorUnits, 'journalLine', line.id);
+      const credit = readMinor(data.creditMinorUnits, 'journalLine', line.id);
+      totalDebit = addMinor(totalDebit, debit, 'journal', entryId);
+      totalCredit = addMinor(totalCredit, credit, 'journal', entryId);
 
       if ((debit === 0) === (credit === 0)) {
         addIssue({
@@ -5759,41 +10350,53 @@ async function runAccountingIntegrityAudit(userId, command) {
           referenceId: line.id,
           message: 'سطر القيد يشير إلى حساب غير موجود.',
         });
+      } else if (account.currency !== currency) {
+        addIssue({
+          code: 'JOURNAL_LINE_ACCOUNT_CURRENCY_MISMATCH',
+          scope: 'journalLine',
+          referenceId: line.id,
+          message: 'عملة حساب الأستاذ لا تطابق عملة القيد.',
+          currency,
+        });
       }
 
       const total = ensureAccountTotal(
         accountId,
         data.currency || currency,
       );
-      total.debit += debit;
-      total.credit += credit;
+      total.debit = addMinor(total.debit, debit, 'accountBalance', accountId);
+      total.credit = addMinor(total.credit, credit, 'accountBalance', accountId);
     }
 
-    const headerDebit = storedInt(entry.totalDebitMinorUnits, 0);
-    const headerCredit = storedInt(entry.totalCreditMinorUnits, 0);
-    if (totalDebit !== headerDebit || totalCredit !== headerCredit) {
+    const headerDebit = readMinor(
+      entry.totalDebitMinorUnits, 'journal', entryId,
+    );
+    const headerCredit = readMinor(
+      entry.totalCreditMinorUnits, 'journal', entryId,
+    );
+    if (totalDebit !== headerDebit) {
       addIssue({
         code: 'JOURNAL_HEADER_TOTAL_MISMATCH',
         scope: 'journal',
         referenceId: entryId,
-        message: 'إجمالي القيد لا يطابق مجموع سطوره.',
+        message: 'إجمالي المدين في القيد لا يطابق مجموع سطوره.',
         valueKind: 'minorUnits',
         currency,
         expected: totalDebit,
         actual: headerDebit,
       });
-      if (totalCredit !== headerCredit) {
-        addIssue({
-          code: 'JOURNAL_HEADER_CREDIT_MISMATCH',
-          scope: 'journal',
-          referenceId: entryId,
-          message: 'إجمالي الدائن في القيد لا يطابق مجموع سطوره.',
-          valueKind: 'minorUnits',
-          currency,
-          expected: totalCredit,
-          actual: headerCredit,
-        });
-      }
+    }
+    if (totalCredit !== headerCredit) {
+      addIssue({
+        code: 'JOURNAL_HEADER_CREDIT_MISMATCH',
+        scope: 'journal',
+        referenceId: entryId,
+        message: 'إجمالي الدائن في القيد لا يطابق مجموع سطوره.',
+        valueKind: 'minorUnits',
+        currency,
+        expected: totalCredit,
+        actual: headerCredit,
+      });
     }
 
     if (totalDebit <= 0 || totalDebit !== totalCredit) {
@@ -5813,6 +10416,20 @@ async function runAccountingIntegrityAudit(userId, command) {
   const journalEntryIds = new Set(
     journalEntriesSnapshot.docs.map((document) => document.id),
   );
+  // Orphans beneath deleted journal headers have no direct parent to scan.
+  // A matching embedded storeId is required by this indexed discovery, but
+  // actual ownership is verified from the document path before reporting.
+  const orphanJournalLines = findIndexedOrphanJournalLines(
+    indexedLinesSnapshot.docs, journalEntryIds, command.storeId,
+  );
+  for (const orphan of orphanJournalLines) {
+    addIssue({
+      code: 'ORPHAN_JOURNAL_LINE',
+      scope: 'journalLine',
+      referenceId: orphan.path,
+      message: 'A journal line exists below a missing journal header.',
+    });
+  }
   for (const [entryId] of linesByEntry) {
     if (!journalEntryIds.has(entryId)) {
       addIssue({
@@ -5827,7 +10444,15 @@ async function runAccountingIntegrityAudit(userId, command) {
   const storedAccountBalances = new Map();
   for (const document of accountBalancesSnapshot.docs) {
     const data = document.data();
-    const accountId = data.accountId || document.id;
+    const accountId = document.id;
+    if (data.storeId !== command.storeId || data.accountId !== accountId) {
+      addIssue({
+        code: 'ACCOUNT_BALANCE_IDENTITY_MISMATCH',
+        scope: 'accountBalance',
+        referenceId: document.id,
+        message: 'Balance projection has a wrong store or account identity.',
+      });
+    }
     storedAccountBalances.set(accountId, data);
   }
 
@@ -5863,11 +10488,14 @@ async function runAccountingIntegrityAudit(userId, command) {
     }
 
     const storedCurrency = stored.currency || expected.currency;
-    const storedDebit = storedInt(stored.debitMinorUnits, 0);
-    const storedCredit = storedInt(stored.creditMinorUnits, 0);
-    const storedBalance = storedInt(
-      stored.balanceMinorUnits,
-      storedDebit - storedCredit,
+    const storedDebit = readMinor(
+      stored.debitMinorUnits, 'accountBalance', accountId,
+    );
+    const storedCredit = readMinor(
+      stored.creditMinorUnits, 'accountBalance', accountId,
+    );
+    const storedBalance = readMinor(
+      stored.balanceMinorUnits, 'accountBalance', accountId, true,
     );
 
     if (storedCurrency !== expected.currency) {
@@ -5954,6 +10582,14 @@ async function runAccountingIntegrityAudit(userId, command) {
     const key = partyType + ':' + partyId;
     const existing = partyTotals.get(key);
     if (existing) {
+      if (existing.currency !== currency) {
+        addIssue({
+          code: 'PARTY_MULTI_CURRENCY',
+          scope: 'partyLedger',
+          referenceId: key,
+          message: 'Party movements have conflicting currency codes.',
+        });
+      }
       return existing;
     }
     const created = {
@@ -5972,6 +10608,14 @@ async function runAccountingIntegrityAudit(userId, command) {
     const partyType = data.partyType;
     const partyId = data.partyId;
     const currency = data.currency || 'ILS';
+    if (data.storeId !== command.storeId) {
+      addIssue({
+        code: 'PARTY_LEDGER_STORE_MISMATCH',
+        scope: 'partyLedger',
+        referenceId: document.id,
+        message: 'Party ledger entry belongs to another store.',
+      });
+    }
     if (!partyType || !partyId) {
       addIssue({
         code: 'PARTY_LEDGER_ID_MISSING',
@@ -5982,8 +10626,16 @@ async function runAccountingIntegrityAudit(userId, command) {
       continue;
     }
     const total = ensurePartyTotal(partyType, partyId, currency);
-    total.debit += storedInt(data.debitMinorUnits, 0);
-    total.credit += storedInt(data.creditMinorUnits, 0);
+    total.debit = addMinor(
+      total.debit,
+      readMinor(data.debitMinorUnits, 'partyLedger', document.id),
+      'partyBalance', partyType + ':' + partyId,
+    );
+    total.credit = addMinor(
+      total.credit,
+      readMinor(data.creditMinorUnits, 'partyLedger', document.id),
+      'partyBalance', partyType + ':' + partyId,
+    );
 
     if (!partyMap.has(partyType + ':' + partyId)) {
       addIssue({
@@ -6008,6 +10660,15 @@ async function runAccountingIntegrityAudit(userId, command) {
         message: 'إسقاط الطرف بلا نوع أو معرف طرف.',
       });
       continue;
+    }
+    if (data.storeId !== command.storeId ||
+        document.id !== partyType + '-' + partyId) {
+      addIssue({
+        code: 'PARTY_BALANCE_IDENTITY_MISMATCH',
+        scope: 'partyBalance',
+        referenceId: document.id,
+        message: 'Party projection store or document identity does not match.',
+      });
     }
     storedPartyBalances.set(partyType + ':' + partyId, data);
   }
@@ -6039,14 +10700,27 @@ async function runAccountingIntegrityAudit(userId, command) {
       continue;
     }
 
-    const storedDebit = storedInt(stored.debitMinorUnits, 0);
-    const storedCredit = storedInt(stored.creditMinorUnits, 0);
-    const storedBalance = storedInt(
-      stored.balanceMinorUnits,
-      storedDebit - storedCredit,
+    if (stored.currency !== expected.currency) {
+      addIssue({
+        code: 'PARTY_BALANCE_CURRENCY_MISMATCH',
+        scope: 'partyBalance',
+        referenceId: key,
+        message: 'Party projection currency does not match movement currency.',
+      });
+    }
+    const storedDebit = readMinor(
+      stored.debitMinorUnits, 'partyBalance', key,
+    );
+    const storedCredit = readMinor(
+      stored.creditMinorUnits, 'partyBalance', key,
+    );
+    const storedBalance = readMinor(
+      stored.balanceMinorUnits, 'partyBalance', key, true,
     );
     if (storedDebit !== expected.debit ||
-        storedCredit !== expected.credit) {
+        storedCredit !== expected.credit ||
+        storedBalance !== storedDebit - storedCredit ||
+        storedBalance !== expected.debit - expected.credit) {
       addIssue({
         code: 'PARTY_BALANCE_MISMATCH',
         scope: 'partyBalance',
@@ -6063,15 +10737,30 @@ async function runAccountingIntegrityAudit(userId, command) {
   const productMap = new Map();
   for (const document of productsSnapshot.docs) {
     const data = document.data();
-    if (data.storeId === command.storeId) {
-      productMap.set(document.id, data);
+    if (data.storeId !== command.storeId) {
+      addIssue({
+        code: 'PRODUCT_STORE_MISMATCH',
+        scope: 'inventory',
+        referenceId: document.id,
+        message: 'Product is attached to a different store.',
+      });
+      continue;
     }
+    productMap.set(document.id, data);
   }
 
   const inventoryTotals = new Map();
   for (const document of inventoryMovementsSnapshot.docs) {
     const data = document.data();
     const productId = data.productId;
+    if (data.storeId !== command.storeId) {
+      addIssue({
+        code: 'INVENTORY_MOVEMENT_STORE_MISMATCH',
+        scope: 'inventoryMovement',
+        referenceId: document.id,
+        message: 'Stock movement is attached to a different store.',
+      });
+    }
     if (!productId) {
       addIssue({
         code: 'INVENTORY_MOVEMENT_PRODUCT_MISSING',
@@ -6081,15 +10770,67 @@ async function runAccountingIntegrityAudit(userId, command) {
       });
       continue;
     }
-    const total = inventoryTotals.get(productId) || {
+    // A matching quantity/value total must never hide a currency conflict.
+    // Older movements may omit currency; in that case use the product's
+    // currency as a read-only comparison fallback, never an exchange rate.
+    const hasMovementCurrency = Object.prototype.hasOwnProperty.call(
+      data, 'currency',
+    );
+    const explicitCurrency = typeof data.currency === 'string' &&
+        data.currency.trim() !== '' ? data.currency : null;
+    if (hasMovementCurrency && !explicitCurrency) {
+      addIssue({
+        code: 'INVENTORY_MOVEMENT_CURRENCY_INVALID',
+        scope: 'inventoryMovement',
+        referenceId: document.id,
+        message: 'Stock movement currency is malformed or empty.',
+      });
+    }
+    const product = productMap.get(productId);
+    if (product && explicitCurrency && explicitCurrency !== product.currency) {
+      addIssue({
+        code: 'INVENTORY_MOVEMENT_PRODUCT_CURRENCY_MISMATCH',
+        scope: 'inventoryMovement',
+        referenceId: document.id,
+        message: 'Stock movement currency differs from product currency.',
+        currency: explicitCurrency,
+      });
+    }
+    const existingTotal = inventoryTotals.get(productId);
+    // Missing legacy currency is unknown, NOT evidence of another currency.
+    if (existingTotal && explicitCurrency &&
+        existingTotal.observedCurrency &&
+        existingTotal.observedCurrency !== explicitCurrency) {
+      addIssue({
+        code: 'INVENTORY_MOVEMENT_MULTI_CURRENCY',
+        scope: 'inventoryMovement',
+        referenceId: document.id,
+        message: 'Stock movements of one product use multiple currencies.',
+        currency: explicitCurrency,
+      });
+    }
+    const total = existingTotal || {
       quantity: 0,
       value: 0,
-      currency: data.currency || 'ILS',
+      currency: explicitCurrency || (product && product.currency) || 'ILS',
+      observedCurrency: null,
     };
-    const quantity = storedInt(data.quantityDeltaMilliUnits, 0);
-    const value = storedInt(data.totalCostMinorUnits, 0);
-    total.quantity += quantity;
-    total.value += quantity < 0 ? -value : value;
+    if (explicitCurrency && !total.observedCurrency) {
+      total.observedCurrency = explicitCurrency;
+    }
+    const quantity = readMinor(
+      data.quantityDeltaMilliUnits, 'inventoryMovement', document.id, true,
+    );
+    const value = readMinor(
+      data.totalCostMinorUnits, 'inventoryMovement', document.id,
+    );
+    total.quantity = addMinor(
+      total.quantity, quantity, 'inventory', productId, 'milliUnits',
+    );
+    total.value = addMinor(
+      total.value, quantity < 0 ? -value : value,
+      'inventory', productId,
+    );
     inventoryTotals.set(productId, total);
   }
 
@@ -6105,8 +10846,12 @@ async function runAccountingIntegrityAudit(userId, command) {
       continue;
     }
 
-    const actualQuantity = storedInt(product.quantityOnHandMilliUnits, 0);
-    const actualValue = storedInt(product.inventoryValueMinorUnits, 0);
+    const actualQuantity = readMinor(
+      product.quantityOnHandMilliUnits, 'inventory', productId,
+    );
+    const actualValue = readMinor(
+      product.inventoryValueMinorUnits, 'inventory', productId,
+    );
     if (actualQuantity !== expected.quantity) {
       addIssue({
         code: 'INVENTORY_QUANTITY_MISMATCH',
@@ -6132,22 +10877,108 @@ async function runAccountingIntegrityAudit(userId, command) {
     }
   }
 
+  // Detect stock that lacks documented movement/opening provenance, and
+  // independently compare the product valuation projection with inventory GL.
+  const productValues = new Map();
+  for (const [productId, product] of productMap) {
+    if (product.isService === true) continue;
+    const currency = product.currency;
+    if (typeof currency !== 'string' || !currency.trim()) {
+      addIssue({
+        code: 'PRODUCT_CURRENCY_INVALID',
+        scope: 'inventory',
+        referenceId: productId,
+        message: 'Stock product currency is missing or invalid.',
+      });
+      continue;
+    }
+    const value = readMinor(
+      product.inventoryValueMinorUnits, 'inventory', productId,
+    );
+    const quantity = readMinor(
+      product.quantityOnHandMilliUnits, 'inventory', productId,
+    );
+    if (!inventoryTotals.has(productId) && (value !== 0 || quantity !== 0)) {
+      addIssue({
+        code: 'INVENTORY_OPENING_SOURCE_UNVERIFIED',
+        scope: 'inventory',
+        referenceId: productId,
+        message: 'Stock has value or quantity without movement/opening evidence.',
+        currency,
+        valueKind: 'minorUnits',
+        actual: value,
+      });
+    }
+    productValues.set(currency, addMinor(
+      productValues.get(currency) || 0, value, 'inventory', productId,
+    ));
+  }
+  const glInventoryValues = new Map();
+  for (const [accountId, account] of accountMap) {
+    if (account.controlType !== 'inventory' || account.isHeader === true) {
+      continue;
+    }
+    const currency = account.currency;
+    if (typeof currency !== 'string' || !currency.trim()) {
+      addIssue({
+        code: 'INVENTORY_GL_CURRENCY_INVALID',
+        scope: 'accountBalance',
+        referenceId: accountId,
+        message: 'Inventory GL account currency is invalid.',
+      });
+      continue;
+    }
+    const projection = storedAccountBalances.get(accountId);
+    const debit = projection
+      ? readMinor(projection.debitMinorUnits, 'accountBalance', accountId) : 0;
+    const credit = projection
+      ? readMinor(projection.creditMinorUnits, 'accountBalance', accountId) : 0;
+    const net = addMinor(debit, -credit, 'accountBalance', accountId);
+    glInventoryValues.set(currency, addMinor(
+      glInventoryValues.get(currency) || 0, net,
+      'accountBalance', accountId,
+    ));
+  }
+  const inventoryCurrencies = new Set([
+    ...productValues.keys(), ...glInventoryValues.keys(),
+  ]);
+  for (const currency of inventoryCurrencies) {
+    const productValue = productValues.get(currency) || 0;
+    const ledgerValue = glInventoryValues.get(currency) || 0;
+    if (productValue !== ledgerValue) {
+      addIssue({
+        code: 'INVENTORY_GL_VALUATION_MISMATCH',
+        scope: 'inventory',
+        referenceId: currency,
+        message: 'Stock product valuations do not equal inventory GL net.',
+        currency,
+        valueKind: 'minorUnits',
+        expected: ledgerValue,
+        actual: productValue,
+      });
+    }
+  }
+
   return {
-    status: issues.some((issue) => issue.severity === 'error')
-      ? 'issues_found'
-      : 'healthy',
+    status: totalErrorCount > 0 ? 'issues_found' : 'healthy',
+    complete: true,
+    consistency: 'non_atomic',
+    orphanDiscoveryCoverage: 'matching_embedded_store_id_only',
     storeId: command.storeId,
     generatedAt: new Date().toISOString(),
     checked: {
       accounts: accountMap.size,
       journalEntries: journalEntriesSnapshot.size,
       journalLines: journalLinesSnapshot.size,
+      indexedLineDiscovery: indexedLinesSnapshot.size,
       parties: partyMap.size,
       partyLedgerEntries: partyLedgerSnapshot.size,
       products: productMap.size,
       inventoryMovements: inventoryMovementsSnapshot.size,
     },
-    issueCount: issues.length,
+    issueCount: totalIssueCount,
+    errorCount: totalErrorCount,
+    issuesTruncated: totalIssueCount > issues.length,
     issues,
   };
 }
@@ -6540,6 +11371,7 @@ function parseRepairPayload(rawRepair) {
 
 async function createRepairInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const repairRef = storeRef.collection('repairs').doc(command.repair.id);
   const idempotencyRef = storeRef
     .collection('repair_idempotency')
@@ -6604,6 +11436,7 @@ async function createRepairInTransaction(transaction, userId, command) {
 
 async function updateRepairInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(transaction, storeRef, HttpsError);
   const repairRef = storeRef.collection('repairs').doc(command.repairId);
   const memberSnapshot = await transaction.get(
     storeRef.collection('members').doc(userId),
@@ -6783,6 +11616,9 @@ function assertRepairTransition(currentStatus, nextStatus) {
 
 async function deliverRepairInTransaction(transaction, userId, command) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.postedAt,
+  );
   const repairRef = storeRef.collection('repairs').doc(command.repairId);
   const deliveryIdempotencyRef = storeRef
     .collection('repair_delivery_idempotency')
@@ -6816,8 +11652,58 @@ async function deliverRepairInTransaction(transaction, userId, command) {
     transaction.get(journalRef),
     transaction.get(journalIdempotencyRef),
   ]);
+  const deliveryFingerprint = fingerprintRepairDelivery(command);
   if (deliveryIdempotencySnapshot.exists) {
     const data = deliveryIdempotencySnapshot.data();
+    if (data.storeId !== command.storeId ||
+        data.repairId !== command.repairId ||
+        data.journalEntryId !== journalEntryId) {
+      conflict('Repair delivery idempotency marker is inconsistent.');
+    }
+    if (data.requestFingerprint != null) {
+      if (data.requestFingerprint !== deliveryFingerprint) {
+        conflict('Repair delivery retry changed its financial details.');
+      }
+    } else {
+      const historicalRepair = repairSnapshot.exists
+        ? repairSnapshot.data()
+        : null;
+      const historicalJournal = journalSnapshot.exists
+        ? journalSnapshot.data()
+        : null;
+      if (!historicalRepair ||
+          historicalRepair.storeId !== command.storeId ||
+          historicalRepair.status !== 'delivered' ||
+          historicalRepair.invoiceJournalEntryId !== journalEntryId ||
+          !historicalJournal ||
+          historicalJournal.storeId !== command.storeId ||
+          historicalJournal.sourceType !== 'repair' ||
+          historicalJournal.status !== 'posted') {
+        conflict('Historical repair delivery cannot be verified.');
+      }
+      const historicalLines = await transaction.get(
+        journalRef.collection('lines'),
+      );
+      const accountIds = new Set(
+        historicalLines.docs.map((doc) => doc.data().accountId),
+      );
+      const requiredAccounts = [
+        command.accounts.customerReceivableAccountId,
+        command.accounts.repairRevenueAccountId,
+      ];
+      if (storedInt(historicalRepair.costOfPartsMinorUnits, 0) > 0) {
+        requiredAccounts.push(
+          command.accounts.inventoryAccountId,
+          command.accounts.costOfSalesAccountId,
+        );
+      }
+      if (storedInt(historicalRepair.advancePaidMinorUnits, 0) > 0) {
+        requiredAccounts.push(command.accounts.customerAdvancesAccountId);
+      }
+      if (requiredAccounts.some((accountId) => !accountIds.has(accountId))) {
+        conflict('Historical repair delivery accounts differ from retry.');
+      }
+    }
     return {
       status: 'already_delivered',
       repairId: command.repairId,
@@ -6891,8 +11777,10 @@ async function deliverRepairInTransaction(transaction, userId, command) {
       storedInt(rawPart.unitPriceMinorUnits, 0),
       'repair part unit price',
     );
-    const unitCost = storedInt(product.purchasePriceMinorUnits, 0);
-    const cost = multiplyAndRound(unitCost, quantity);
+    const storedUnitCost = storedInt(
+      product.purchasePriceMinorUnits,
+      0,
+    );
     const revenue = multiplyAndRound(unitPrice, quantity);
     const currentQuantity = storedInt(product.quantityOnHandMilliUnits, 0);
     const nextQuantity = currentQuantity - quantity;
@@ -6907,14 +11795,32 @@ async function deliverRepairInTransaction(transaction, userId, command) {
     )
       ? product.inventoryValueMinorUnits
       : multiplyAndRound(
-        unitCost,
+        storedUnitCost,
         currentQuantity,
       );
-    const nextValue = currentValue - cost;
-    if (nextValue < 0) {
+    let cost;
+    try {
+      cost = allocateCumulative({
+        sourceTotal: currentValue,
+        sourceQuantity: currentQuantity,
+        alreadyReturnedQuantity: 0,
+        alreadyAllocated: 0,
+        returnQuantity: quantity,
+        label: 'repair inventory carrying value',
+      }).allocated;
+    } catch (error) {
       throw new HttpsError(
         'failed-precondition',
-        'Repair would create negative inventory value.',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    const unitCost = cost === 0 ? 0 : divideAndRound(cost, quantity);
+    const nextValue = currentValue - cost;
+    if (nextValue < 0 ||
+        (nextQuantity === 0 && nextValue !== 0)) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Repair inventory carrying value does not reconcile.',
       );
     }
     partsRevenue += revenue;
@@ -7154,6 +12060,9 @@ async function deliverRepairInTransaction(transaction, userId, command) {
 
   const totalDebit = total + partsCost + advance;
   const totalCredit = total + partsCost + advance;
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
   transaction.set(journalRef, {
     storeId: command.storeId,
     idempotencyKey: journalIdempotencyKey,
@@ -7198,9 +12107,7 @@ async function deliverRepairInTransaction(transaction, userId, command) {
       type: 'saleIssue',
       quantityDeltaMilliUnits: -part.quantityMilliUnits,
       unitCostMinorUnits: part.unitCostMinorUnits,
-      totalCostMinorUnits: part.unitCostMinorUnits == 0
-          ? 0
-          : change.cost,
+      totalCostMinorUnits: change.cost,
       currency: repair.currency,
       idempotencyKey: command.idempotencyKey +
           ':inventory:' + change.productId,
@@ -7308,6 +12215,7 @@ async function deliverRepairInTransaction(transaction, userId, command) {
     repairId: command.repairId,
     idempotencyKey: command.idempotencyKey,
     journalEntryId,
+    requestFingerprint: deliveryFingerprint,
     createdAt: FieldValue.serverTimestamp(),
   });
   transaction.set(journalIdempotencyRef, {
@@ -7334,6 +12242,9 @@ async function postRepairAdvanceInTransaction(
     invalid('Cheque advances need a posted repair invoice.');
   }
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.payment.postedAt,
+  );
   const memberSnapshot = await transaction.get(
     storeRef.collection('members').doc(userId),
   );
@@ -7372,16 +12283,52 @@ async function postRepairAdvanceInTransaction(
     transaction.get(journalRef),
     transaction.get(journalIdempotencyRef),
   ]);
+  const advanceFingerprint = fingerprintRepairPayment(
+    command,
+    'advance',
+  );
   if (paymentIdempotencySnapshot.exists) {
     const data = paymentIdempotencySnapshot.data();
-    if (data.paymentId === command.payment.id) {
-      return {
-        status: 'already_posted',
-        paymentId: command.payment.id,
-        journalEntryId,
-      };
+    if (data.storeId !== command.storeId ||
+        data.repairId !== command.repairId ||
+        data.paymentId !== command.payment.id ||
+        data.journalEntryId !== journalEntryId) {
+      conflict('The repair payment idempotency key is already assigned.');
     }
-    conflict('The repair payment idempotency key is already assigned.');
+    if (data.requestFingerprint != null) {
+      if (data.requestFingerprint !== advanceFingerprint) {
+        conflict('Repair advance retry changed its financial details.');
+      }
+    } else {
+      if (!paymentSnapshot.exists ||
+          !journalSnapshot.exists ||
+          !journalIdempotencySnapshot.exists ||
+          !sameLegacyRepairAdvance(
+            paymentSnapshot.data(),
+            data,
+            command,
+          )) {
+        conflict('Historical repair advance cannot be verified.');
+      }
+      const historicalJournal = journalSnapshot.data();
+      const historicalLines = await transaction.get(
+        journalRef.collection('lines'),
+      );
+      const accounts = new Set(
+        historicalLines.docs.map((doc) => doc.data().accountId),
+      );
+      if (historicalJournal.sourceType !== 'repairAdvance' ||
+          historicalJournal.status !== 'posted' ||
+          !accounts.has(command.accounts.settlementAccountId) ||
+          !accounts.has(command.accounts.customerAdvancesAccountId)) {
+        conflict('Historical repair advance accounts differ from retry.');
+      }
+    }
+    return {
+      status: 'already_posted',
+      paymentId: command.payment.id,
+      journalEntryId,
+    };
   }
   if (paymentSnapshot.exists ||
       journalSnapshot.exists ||
@@ -7475,6 +12422,9 @@ async function postRepairAdvanceInTransaction(
     createdAt: FieldValue.serverTimestamp(),
   };
   transaction.set(paymentRef, paymentData);
+  markJournalPosting(
+    transaction, storeRef, journalRef.id, FieldValue,
+  );
   transaction.set(journalRef, {
     storeId: command.storeId,
     idempotencyKey: journalIdempotencyKey,
@@ -7551,6 +12501,7 @@ async function postRepairAdvanceInTransaction(
     repairId: command.repairId,
     idempotencyKey: command.payment.idempotencyKey,
     journalEntryId,
+    requestFingerprint: advanceFingerprint,
     createdAt: FieldValue.serverTimestamp(),
   });
   transaction.set(journalIdempotencyRef, {
@@ -7573,6 +12524,9 @@ async function postRepairPaymentInTransaction(
   command,
 ) {
   const storeRef = db.collection('stores').doc(command.storeId);
+  await assertAccountingWritesOpen(
+    transaction, storeRef, HttpsError, command.payment.postedAt,
+  );
   const memberSnapshot = await transaction.get(
     storeRef.collection('members').doc(userId),
   );

@@ -94,6 +94,13 @@ abstract final class FirebasePaths {
     return store(firestore, storeId).collection('sale_idempotency');
   }
 
+  static CollectionReference<Map<String, dynamic>> salesReturns(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('sales_returns');
+  }
+
   static CollectionReference<Map<String, dynamic>> offers(
     FirebaseFirestore firestore,
     String storeId,
@@ -161,6 +168,13 @@ abstract final class FirebasePaths {
     String storeId,
   ) {
     return store(firestore, storeId).collection('purchase_idempotency');
+  }
+
+  static CollectionReference<Map<String, dynamic>> purchaseReturns(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('purchase_returns');
   }
 
   static CollectionReference<Map<String, dynamic>> commandOutbox(

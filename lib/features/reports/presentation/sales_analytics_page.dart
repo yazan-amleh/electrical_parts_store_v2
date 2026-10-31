@@ -1,21 +1,31 @@
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 
+import '../../../core/errors/failure.dart';
+import '../../../core/idempotency/idempotency_key.dart';
 import '../../../core/money/money.dart';
 import '../../../core/quantity/quantity.dart';
 import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
+import '../../sales/domain/entities/sale_return.dart';
+import '../../sales/domain/repositories/sale_repository.dart';
 import '../domain/entities/sales_analytics.dart';
+import '../domain/entities/sales_invoice_report.dart';
 import '../domain/repositories/reports_repository.dart';
 import '../domain/services/report_document_builder.dart';
+import 'sales_excel_export.dart';
+import 'sales_invoice_selection_export.dart';
 
 class SalesAnalyticsPage extends StatefulWidget {
   const SalesAnalyticsPage({
     required this.repository,
     required this.documentBuilder,
+    required this.saleRepository,
     required this.user,
     required this.membership,
     super.key,
@@ -23,6 +33,7 @@ class SalesAnalyticsPage extends StatefulWidget {
 
   final ReportsRepository? repository;
   final ReportDocumentBuilder? documentBuilder;
+  final SaleRepository? saleRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -34,8 +45,20 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
   late DateTime _from;
   late DateTime _to;
   SalesAnalytics? _analytics;
+  SalesInvoiceReport? _invoices;
+  String? _invoiceError;
+  final _searchController = TextEditingController();
+  final _selectedInvoiceIds = <String>{};
+  final _invoiceSelectionExport = const SalesInvoiceSelectionExport();
+  final _salesExcelExport = const SalesExcelExport();
+  bool _selectionMode = false;
+  int _selectedTab = 0;
+  int _reportEpoch = 0;
   bool _isLoading = true;
   bool _isExporting = false;
+  String? _returningInvoiceId;
+  final Map<String, SaleReturn> _pendingFullReturns = <String, SaleReturn>{};
+  final Map<String, SaleReturn> _pendingPartialReturns = <String, SaleReturn>{};
   String? _errorMessage;
 
   StoreContext get _context {
@@ -52,6 +75,29 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     _from = DateTime(now.year, now.month, 1);
     _to = DateTime(now.year, now.month, now.day, 23, 59, 59);
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant SalesAnalyticsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId) {
+      _analytics = null;
+      _invoices = null;
+      _searchController.clear();
+      _selectedInvoiceIds.clear();
+      _pendingFullReturns.clear();
+      _pendingPartialReturns.clear();
+      _selectionMode = false;
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    ++_reportEpoch;
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -85,28 +131,59 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
             const SizedBox(height: 12),
             _buildMetrics(context, analytics),
             const SizedBox(height: 12),
-            _buildPaymentMethods(context, analytics),
-            const SizedBox(height: 12),
-            _buildRanking(
-              context,
-              title: 'الأصناف الأكثر مبيعاً',
-              rows: analytics.productRows,
-              showQuantity: true,
+            DefaultTabController(
+              length: 3,
+              initialIndex: _selectedTab,
+              child: TabBar(
+                isScrollable: true,
+                onTap: (tab) => setState(() => _selectedTab = tab),
+                tabs: const [
+                  Tab(text: 'تفاصيل المبيعات', icon: Icon(Icons.receipt_long)),
+                  Tab(
+                      text: 'الأصناف الأكثر مبيعاً',
+                      icon: Icon(Icons.inventory_2)),
+                  Tab(text: 'ملخص العملاء', icon: Icon(Icons.groups_outlined)),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
-            _buildRanking(
-              context,
-              title: 'المبيعات حسب التصنيف',
-              rows: analytics.categoryRows,
-              showQuantity: true,
+            TextField(
+              controller: _searchController,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: 'بحث في التبويب الحالي',
+                hintText: 'رقم الفاتورة، العميل أو الصنف',
+                prefixIcon: Icon(Icons.search),
+              ),
             ),
             const SizedBox(height: 12),
-            _buildRanking(
-              context,
-              title: 'المبيعات حسب العميل',
-              rows: analytics.customerRows,
-              showQuantity: false,
-            ),
+            if (_selectedTab == 0) ...[
+              _buildInvoiceSelectionToolbar(context, analytics),
+              _buildInvoiceDetails(context, analytics),
+            ] else if (_selectedTab == 1) ...[
+              _buildRanking(
+                context,
+                title: 'الأصناف الأكثر مبيعاً',
+                rows: analytics.productRows,
+                showQuantity: true,
+              ),
+              const SizedBox(height: 12),
+              _buildRanking(
+                context,
+                title: 'المبيعات حسب التصنيف',
+                rows: analytics.categoryRows,
+                showQuantity: true,
+              ),
+            ] else ...[
+              _buildRanking(
+                context,
+                title: 'ملخص العملاء',
+                rows: analytics.customerRows,
+                showQuantity: false,
+              ),
+              const SizedBox(height: 12),
+              _buildPaymentMethods(context, analytics),
+            ],
           ],
         ),
       ),
@@ -139,8 +216,9 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'التجميع مبني على فواتير البيع المرحّلة. الربح الإجمالي '
-              'يستخدم تكلفة السطور المسجلة وقت البيع.',
+              'التجميع مبني على فواتير البيع والمردودات المرحّلة ضمن '
+              'الفترة. المردود يخفض صافي المبيعات والتكلفة في تاريخ '
+              'ترحيل الإرجاع دون تغيير فترة البيع الأصلية.',
             ),
             const SizedBox(height: 14),
             Wrap(
@@ -169,6 +247,12 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                   onPressed: _analytics == null ? null : _copyCsv,
                   icon: const Icon(Icons.content_copy_outlined),
                   label: const Text('نسخ CSV'),
+                ),
+                OutlinedButton.icon(
+                  onPressed:
+                      _analytics == null || _isExporting ? null : _exportXlsx,
+                  icon: const Icon(Icons.table_view_outlined),
+                  label: const Text('تصدير XLSX'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _analytics == null ||
@@ -242,23 +326,23 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       children: [
         _metricCard(
           context,
-          title: 'إجمالي المبيعات',
+          title: 'صافي المبيعات',
           value: analytics.salesRevenue,
-          subtitle: '${analytics.salesCount} فاتورة',
+          subtitle: '${analytics.salesCount} فاتورة بيع قبل احتساب المردودات',
           icon: Icons.point_of_sale_outlined,
         ),
         _metricCard(
           context,
-          title: 'التكلفة',
+          title: 'صافي تكلفة المبيعات',
           value: analytics.salesCost,
-          subtitle: 'من تكلفة السطور',
+          subtitle: 'بعد عكس تكلفة الأصناف المرتجعة',
           icon: Icons.inventory_2_outlined,
         ),
         _metricCard(
           context,
           title: 'مجمل الربح',
           value: analytics.grossProfit,
-          subtitle: 'المبيعات ناقص التكلفة',
+          subtitle: 'صافي المبيعات ناقص صافي التكلفة',
           icon: Icons.trending_up_outlined,
         ),
       ],
@@ -340,6 +424,392 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     );
   }
 
+  List<SalesInvoiceSummary> _matchingInvoices(
+    SalesInvoiceReport report,
+    SalesAnalytics analytics,
+  ) {
+    final names = {
+      for (final row in analytics.customerRows) row.key: row.label,
+    };
+    final query = _searchController.text.trim().toLowerCase();
+    return report.invoices.where((invoice) {
+      final customer =
+          names[invoice.customerId] ?? invoice.customerId ?? 'بدون عميل';
+      return query.isEmpty ||
+          invoice.id.toLowerCase().contains(query) ||
+          customer.toLowerCase().contains(query) ||
+          (invoice.description?.toLowerCase().contains(query) ?? false);
+    }).toList(growable: false);
+  }
+
+  void _toggleInvoice(String id, bool selected) {
+    setState(() {
+      if (selected) {
+        if (_selectedInvoiceIds.length >= 100) {
+          _showMessage('يمكن اختيار 100 فاتورة كحد أقصى لكل عملية طباعة.');
+          return;
+        }
+        _selectedInvoiceIds.add(id);
+      } else {
+        _selectedInvoiceIds.remove(id);
+      }
+    });
+  }
+
+  Widget _buildInvoiceSelectionToolbar(
+    BuildContext context,
+    SalesAnalytics analytics,
+  ) {
+    final report = _invoices;
+    if (report == null) return const SizedBox.shrink();
+    final matching = _matchingInvoices(report, analytics);
+    final chosenCount = _selectedInvoiceIds.length;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _isExporting
+                ? null
+                : () => setState(() {
+                      _selectionMode = !_selectionMode;
+                      if (!_selectionMode) _selectedInvoiceIds.clear();
+                    }),
+            icon: Icon(_selectionMode ? Icons.close : Icons.checklist_outlined),
+            label: Text(_selectionMode ? 'إنهاء التحديد' : 'اختيار عدة فواتير'),
+          ),
+          if (_selectionMode) ...[
+            Text('$chosenCount فاتورة مختارة'),
+            TextButton(
+              onPressed: _isExporting
+                  ? null
+                  : () => setState(() {
+                        _selectedInvoiceIds.addAll(
+                          matching.take(100).map((item) => item.id),
+                        );
+                      }),
+              child: const Text('تحديد أول 100 مطابقة'),
+            ),
+            TextButton(
+              onPressed: _isExporting || chosenCount == 0
+                  ? null
+                  : () => setState(_selectedInvoiceIds.clear),
+              child: const Text('إلغاء التحديد'),
+            ),
+            FilledButton.icon(
+              onPressed: _isExporting || chosenCount == 0
+                  ? null
+                  : () => _exportSelectedInvoices(print: true),
+              icon: const Icon(Icons.print_outlined),
+              label: const Text('طباعة المحدد'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _isExporting || chosenCount == 0
+                  ? null
+                  : () => _exportSelectedInvoices(print: false),
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+              label: const Text('مشاركة PDF للمحدد'),
+            ),
+            TextButton.icon(
+              onPressed: _isExporting || chosenCount == 0
+                  ? null
+                  : _copySelectedInvoices,
+              icon: const Icon(Icons.copy_all_outlined),
+              label: const Text('نسخ CSV للمحدد'),
+            ),
+          ],
+          if (report.mayBeTruncated)
+            const Text(
+              'التحديد لا يشمل الفواتير خارج سقف التحميل.',
+              style: TextStyle(color: Colors.deepOrange),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<SalesInvoiceSummary> _selectedInvoices() {
+    final report = _invoices;
+    if (report == null) return const [];
+    return report.invoices
+        .where((invoice) => _selectedInvoiceIds.contains(invoice.id))
+        .take(100)
+        .toList(growable: false);
+  }
+
+  Map<String, String> _customerNames() => {
+        for (final row in _analytics?.customerRows ?? <SalesAnalyticsRow>[])
+          row.key: row.label,
+      };
+
+  Future<void> _exportSelectedInvoices({required bool print}) async {
+    final invoices = _selectedInvoices();
+    await _exportInvoiceDocuments(invoices, print: print);
+  }
+
+  Future<void> _exportInvoiceDocument(
+    SalesInvoiceSummary invoice, {
+    required bool print,
+  }) async {
+    await _exportInvoiceDocuments([invoice], print: print);
+  }
+
+  Future<void> _exportInvoiceDocuments(
+    List<SalesInvoiceSummary> invoices, {
+    required bool print,
+  }) async {
+    final repository = widget.repository;
+    if (_isExporting || invoices.isEmpty || repository == null) return;
+    setState(() => _isExporting = true);
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
+    try {
+      final result = await repository.getSalesInvoiceDocuments(
+        context: _context,
+        invoiceIds: invoices.map((invoice) => invoice.id).toList(),
+        maxInvoices: 100,
+      );
+      if (!mounted ||
+          requestedStore != widget.membership.storeId ||
+          requestedUser != widget.user.id) {
+        return;
+      }
+      if (result is FailureResult<List<SalesInvoiceDocument>>) {
+        _showMessage(
+          'تعذر تحميل سطور الفاتورة: ${result.failure.message}',
+        );
+        return;
+      }
+
+      final documents = (result as Success<List<SalesInvoiceDocument>>).value;
+      final bytes = await _invoiceSelectionExport.invoicePdf(
+        documents: documents,
+        customerNames: _customerNames(),
+        storeLabel: requestedStore,
+      );
+      if (!mounted ||
+          requestedStore != widget.membership.storeId ||
+          requestedUser != widget.user.id) {
+        return;
+      }
+      if (print) {
+        await Printing.layoutPdf(onLayout: (_) async => bytes);
+      } else {
+        final filename = documents.length == 1
+            ? 'sale_invoice_${documents.first.invoice.id}.pdf'
+            : 'selected_sales_invoices.pdf';
+        await Printing.sharePdf(bytes: bytes, filename: filename);
+      }
+    } catch (_) {
+      if (mounted) _showMessage('تعذر تجهيز الفاتورة التفصيلية.');
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  Future<void> _copySelectedInvoices() async {
+    final invoices = _selectedInvoices();
+    if (invoices.isEmpty) return;
+    try {
+      await Clipboard.setData(
+        ClipboardData(
+          text: _invoiceSelectionExport.csv(
+            invoices: invoices,
+            customerNames: _customerNames(),
+          ),
+        ),
+      );
+      if (mounted) _showMessage('تم نسخ الفواتير المختارة بصيغة CSV.');
+    } catch (_) {
+      if (mounted) _showMessage('تعذر نسخ الفواتير المختارة.');
+    }
+  }
+
+  Widget _buildInvoiceDetails(
+    BuildContext context,
+    SalesAnalytics analytics,
+  ) {
+    if (_invoiceError != null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'تعذر تحميل تفاصيل الفواتير: $_invoiceError',
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
+      );
+    }
+    final report = _invoices;
+    if (report == null) {
+      return const Center(child: Text('لم تُحمّل تفاصيل الفواتير.'));
+    }
+    final customerNames = {
+      for (final row in analytics.customerRows) row.key: row.label,
+    };
+    final invoices = _matchingInvoices(report, analytics);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('تفاصيل المبيعات',
+                style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text(
+              'يعرض الفواتير المرحّلة المحمّلة فقط. الأرقام والضرائب '
+              'تُقرأ من المستندات المحاسبية، وليست إعادة احتساب للتسويات.',
+            ),
+            if (report.mayBeTruncated)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'تنبيه: تجاوز عدد الفواتير سقف التحميل؛ القائمة والبحث '
+                  'والتصدير لا تشمل بقية الفواتير. ضيّق الفترة.',
+                  style: TextStyle(color: Colors.deepOrange),
+                ),
+              ),
+            const SizedBox(height: 10),
+            Text('${invoices.length} فاتورة مطابقة من '
+                '${report.invoices.length} فاتورة محمّلة'),
+            if (invoices.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('لا توجد فواتير مطابقة في البيانات المحمّلة.'),
+              )
+            else
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  showCheckboxColumn: _selectionMode,
+                  columns: const [
+                    DataColumn(label: Text('رقم الفاتورة')),
+                    DataColumn(label: Text('التاريخ')),
+                    DataColumn(label: Text('العميل')),
+                    DataColumn(label: Text('الدفع')),
+                    DataColumn(label: Text('قبل الضريبة')),
+                    DataColumn(label: Text('الضريبة')),
+                    DataColumn(label: Text('الإجمالي')),
+                    DataColumn(label: Text('الحالة')),
+                    DataColumn(label: Text('مرجع القيد')),
+                    DataColumn(label: Text('إجراءات')),
+                  ],
+                  rows: [
+                    for (final item in invoices.take(100))
+                      DataRow(
+                          selected: _selectedInvoiceIds.contains(item.id),
+                          onSelectChanged: !_selectionMode
+                              ? null
+                              : (value) =>
+                                  _toggleInvoice(item.id, value == true),
+                          cells: [
+                            DataCell(SelectableText(item.id)),
+                            DataCell(Text(_formatDate(item.postedAt))),
+                            DataCell(Text(
+                              customerNames[item.customerId] ??
+                                  item.customerId ??
+                                  'بدون عميل',
+                            )),
+                            DataCell(Text(_paymentLabel(item.paymentMethod))),
+                            DataCell(Text(item.subtotal.formatted)),
+                            DataCell(Text(item.tax.formatted)),
+                            DataCell(Text(item.total.formatted)),
+                            DataCell(
+                              Chip(
+                                avatar: Icon(
+                                  item.isFullyReturned
+                                      ? Icons.undo
+                                      : item.isPartiallyReturned
+                                          ? Icons.history
+                                          : Icons.check_circle_outline,
+                                  size: 16,
+                                ),
+                                label: Text(
+                                  item.isFullyReturned
+                                      ? 'مُرجعة بالكامل'
+                                      : item.isPartiallyReturned
+                                          ? 'مُرجعة جزئيًا'
+                                          : 'مرحّلة',
+                                ),
+                              ),
+                            ),
+                            DataCell(SelectableText(item.journalEntryId)),
+                            DataCell(Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'طباعة الفاتورة ${item.id}',
+                                  onPressed: _isExporting
+                                      ? null
+                                      : () => _exportInvoiceDocument(
+                                            item,
+                                            print: true,
+                                          ),
+                                  icon: const Icon(Icons.print_outlined),
+                                ),
+                                IconButton(
+                                  tooltip: 'مشاركة PDF للفاتورة ${item.id}',
+                                  onPressed: _isExporting
+                                      ? null
+                                      : () => _exportInvoiceDocument(
+                                            item,
+                                            print: false,
+                                          ),
+                                  icon: const Icon(
+                                    Icons.picture_as_pdf_outlined,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: item.isFullyReturned
+                                      ? 'الفاتورة مُرجعة بالكامل'
+                                      : 'مردود جزئي',
+                                  onPressed: _canReturnPartialInvoice(item)
+                                      ? () => _returnPartialInvoice(item)
+                                      : null,
+                                  icon: const Icon(
+                                    Icons.playlist_add_check_circle_outlined,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: item.isFullyReturned
+                                      ? 'الفاتورة مُرجعة بالكامل'
+                                      : item.isPartiallyReturned
+                                          ? 'إرجاع الكمية المتبقية بالكامل'
+                                          : 'إرجاع الفاتورة بالكامل',
+                                  onPressed: _canReturnRemainingInvoice(item)
+                                      ? () => _returnFullInvoice(item)
+                                      : null,
+                                  icon: _returningInvoiceId == item.id
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.undo_outlined),
+                                ),
+                              ],
+                            )),
+                          ]),
+                  ],
+                ),
+              ),
+            if (invoices.length > 100)
+              const Text(
+                'تظهر أول 100 فاتورة مطابقة. نسخ CSV يشمل جميع '
+                'الفواتير المحمّلة والمطابقة للبحث، وليس المعروضة فقط.',
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildRanking(
     BuildContext context, {
     required String title,
@@ -368,7 +838,11 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
                     const DataColumn(label: Text('مجمل الربح')),
                   ],
                   rows: [
-                    for (final row in rows.take(25))
+                    for (final row in rows
+                        .where((row) => row.label.toLowerCase().contains(
+                              _searchController.text.trim().toLowerCase(),
+                            ))
+                        .take(25))
                       DataRow(
                         cells: [
                           DataCell(
@@ -436,17 +910,38 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       return;
     }
 
+    final epoch = ++_reportEpoch;
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _invoiceError = null;
+      _invoices = null;
+      _selectedInvoiceIds.clear();
+      _selectionMode = false;
     });
+    final invoiceFuture = repository.getSalesInvoices(
+      context: _context,
+      from: _from,
+      to: _to,
+    );
     final result = await repository.getSalesAnalytics(
       context: _context,
       from: _from,
       to: _to,
     );
-    if (!mounted) {
+    final invoicesResult = await invoiceFuture;
+    if (!mounted ||
+        epoch != _reportEpoch ||
+        requestedStore != widget.membership.storeId ||
+        requestedUser != widget.user.id) {
       return;
+    }
+    if (invoicesResult is Success<SalesInvoiceReport>) {
+      _invoices = invoicesResult.value;
+    } else if (invoicesResult is FailureResult<SalesInvoiceReport>) {
+      _invoiceError = invoicesResult.failure.message;
     }
     if (result is FailureResult<SalesAnalytics>) {
       setState(() {
@@ -491,6 +986,350 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
     }
   }
 
+  bool _canReturnInvoiceBase(SalesInvoiceSummary invoice) {
+    final role = widget.membership.role;
+    final authorized = role.canManageSales || role.canPostAccounting;
+    final supportedPayment = const {'cash', 'bank', 'card', 'credit'}
+        .contains(invoice.paymentMethod);
+    return widget.saleRepository != null &&
+        widget.repository != null &&
+        authorized &&
+        supportedPayment &&
+        !invoice.isFullyReturned &&
+        _returningInvoiceId == null &&
+        !_isExporting;
+  }
+
+  bool _canReturnPartialInvoice(SalesInvoiceSummary invoice) {
+    return _canReturnInvoiceBase(invoice) &&
+        !_pendingFullReturns.containsKey(invoice.id);
+  }
+
+  bool _canReturnRemainingInvoice(SalesInvoiceSummary invoice) {
+    return _canReturnInvoiceBase(invoice) &&
+        !_pendingPartialReturns.containsKey(invoice.id);
+  }
+
+  SaleReturnPostingAccounts _returnAccounts(SalesInvoiceSummary invoice) {
+    String? settlementAccountId;
+    switch (invoice.paymentMethod) {
+      case 'cash':
+        settlementAccountId = '1110';
+      case 'bank':
+        settlementAccountId = '1121';
+      case 'card':
+        settlementAccountId = '1160';
+      case 'credit':
+        settlementAccountId = null;
+    }
+    return SaleReturnPostingAccounts(
+      settlementAccountId: settlementAccountId,
+      customerReceivableAccountId:
+          invoice.paymentMethod == 'credit' ? '1140' : null,
+      salesReturnsAccountId: '4200',
+      inventoryAccountId: '1150',
+      costOfSalesAccountId: '5100',
+      taxAccountId: invoice.tax.isZero ? null : '2120',
+    );
+  }
+
+  Future<void> _returnPartialInvoice(SalesInvoiceSummary invoice) async {
+    final reportRepository = widget.repository;
+    final saleRepository = widget.saleRepository;
+    if (reportRepository == null ||
+        saleRepository == null ||
+        !_canReturnPartialInvoice(invoice)) {
+      return;
+    }
+
+    final pending = _pendingPartialReturns[invoice.id];
+    if (pending != null) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('إعادة محاولة المردود الجزئي'),
+          content: Text(
+            'يوجد مردود جزئي سابق لم نتمكن من تأكيد نتيجته. '
+            'ستُعاد نفس العملية حرفيًا (${pending.lines?.length ?? 0} سطر).',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('إعادة المحاولة'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true) {
+        return;
+      }
+      await _submitPartialReturn(invoice, pending);
+      return;
+    }
+
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
+    setState(() => _returningInvoiceId = invoice.id);
+    final Result<List<SalesInvoiceDocument>> result;
+    try {
+      result = await reportRepository.getSalesInvoiceDocuments(
+        context: _context,
+        invoiceIds: [invoice.id],
+        maxInvoices: 1,
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() => _returningInvoiceId = null);
+        _showMessage('تعذر تحميل الكميات المتبقية للفاتورة.');
+      }
+      return;
+    }
+    if (!mounted ||
+        requestedStore != widget.membership.storeId ||
+        requestedUser != widget.user.id) {
+      return;
+    }
+    setState(() => _returningInvoiceId = null);
+    if (result is FailureResult<List<SalesInvoiceDocument>>) {
+      _showMessage('تعذر تحميل الفاتورة: ${result.failure.message}');
+      return;
+    }
+
+    final documents = (result as Success<List<SalesInvoiceDocument>>).value;
+    if (documents.length != 1) {
+      _showMessage('تعذر تحديد الفاتورة المطلوبة بشكل موثوق.');
+      return;
+    }
+    final document = documents.single;
+    final returnableLines = document.lines
+        .where((line) => line.remainingQuantityMilliUnits > 0)
+        .toList(growable: false);
+    if (returnableLines.isEmpty) {
+      _showMessage('لا توجد كمية متبقية قابلة للإرجاع في هذه الفاتورة.');
+      await _load();
+      return;
+    }
+
+    final draft = await showDialog<_PartialReturnDraft>(
+      context: context,
+      builder: (dialogContext) => _PartialReturnDialog(
+        invoiceId: invoice.id,
+        lines: returnableLines,
+      ),
+    );
+    if (!mounted || draft == null) {
+      return;
+    }
+
+    final now = DateTime.now().toUtc();
+    final returnId =
+        'partial-return-${invoice.id}-${now.microsecondsSinceEpoch}';
+    final saleReturn = SaleReturn(
+      id: returnId,
+      storeId: requestedStore,
+      idempotencyKey: IdempotencyKey(returnId),
+      originalSaleId: invoice.id,
+      postedAt: now,
+      reason: draft.reason.isEmpty ? null : draft.reason,
+      lines: draft.lines,
+    );
+    _pendingPartialReturns[invoice.id] = saleReturn;
+    await _submitPartialReturn(invoice, saleReturn);
+  }
+
+  Future<void> _submitPartialReturn(
+    SalesInvoiceSummary invoice,
+    SaleReturn saleReturn,
+  ) async {
+    final repository = widget.saleRepository;
+    if (repository == null) {
+      return;
+    }
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
+    setState(() => _returningInvoiceId = invoice.id);
+    try {
+      final result = await repository.postFullSaleReturn(
+        context: _context,
+        saleReturn: saleReturn,
+        accounts: _returnAccounts(invoice),
+      );
+      if (!mounted ||
+          requestedStore != widget.membership.storeId ||
+          requestedUser != widget.user.id) {
+        return;
+      }
+      if (result is FailureResult<SaleReturnPostingResult>) {
+        if (result.failure is! InfrastructureFailure) {
+          _pendingPartialReturns.remove(invoice.id);
+        }
+        _showMessage('تعذر ترحيل المردود الجزئي: ${result.failure.message}');
+        return;
+      }
+      final posted = (result as Success<SaleReturnPostingResult>).value;
+      _pendingPartialReturns.remove(invoice.id);
+      _showMessage(
+        posted.alreadyReturned
+            ? 'تم تأكيد نفس المردود الجزئي السابق دون تكراره.'
+            : posted.returnStatus == 'full'
+                ? 'تم ترحيل المردود وأصبحت الفاتورة مُرجعة بالكامل.'
+                : 'تم ترحيل المردود الجزئي بنجاح.',
+      );
+      await _load();
+    } catch (_) {
+      if (mounted) {
+        _showMessage(
+          'تعذر التأكد من نتيجة المردود الجزئي. أعد المحاولة من نفس '
+          'الفاتورة ليُستخدم الطلب نفسه حرفيًا.',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _returningInvoiceId = null);
+      }
+    }
+  }
+
+  Future<void> _returnFullInvoice(SalesInvoiceSummary invoice) async {
+    final repository = widget.saleRepository;
+    if (repository == null || !_canReturnRemainingInvoice(invoice)) {
+      return;
+    }
+
+    final pending = _pendingFullReturns[invoice.id];
+    final reasonController = TextEditingController(
+      text: pending?.reason ??
+          (invoice.isPartiallyReturned
+              ? 'إرجاع المتبقي من الفاتورة ${invoice.id}'
+              : 'إرجاع كامل للفاتورة ${invoice.id}'),
+    );
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Text(
+            pending == null
+                ? invoice.isPartiallyReturned
+                    ? 'تأكيد إرجاع الكمية المتبقية'
+                    : 'تأكيد إرجاع الفاتورة بالكامل'
+                : 'إعادة محاولة الإرجاع الكامل',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                pending == null
+                    ? invoice.isPartiallyReturned
+                        ? 'سيتم إرجاع كل الكمية المتبقية من الفاتورة '
+                            '${invoice.id} مع عكس أثرها المحاسبي والمخزني.'
+                        : 'سيتم عكس كامل الفاتورة ${invoice.id} محاسبياً '
+                            'ومخزنياً. هذه العملية لا تحذف البيع الأصلي.'
+                    : 'ستُعاد محاولة نفس عملية الإرجاع السابقة بنفس '
+                        'المعرّف والتاريخ والسبب لمنع تكرار القيد.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reasonController,
+                enabled: pending == null,
+                maxLength: 250,
+                decoration: const InputDecoration(
+                  labelText: 'سبب الإرجاع',
+                  hintText: 'اكتب سبب الإرجاع',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                reasonController.text.trim(),
+              ),
+              icon: const Icon(Icons.undo),
+              label: Text(
+                pending == null
+                    ? invoice.isPartiallyReturned
+                        ? 'إرجاع المتبقي'
+                        : 'تأكيد الإرجاع الكامل'
+                    : 'إعادة المحاولة',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    reasonController.dispose();
+    if (!mounted || reason == null) {
+      return;
+    }
+
+    final returnId = 'full-return-${invoice.id}';
+    final saleReturn = pending ??
+        SaleReturn(
+          id: returnId,
+          storeId: widget.membership.storeId,
+          idempotencyKey: IdempotencyKey(returnId),
+          originalSaleId: invoice.id,
+          postedAt: DateTime.now().toUtc(),
+          reason: reason.isEmpty ? null : reason,
+        );
+    _pendingFullReturns[invoice.id] = saleReturn;
+
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
+    setState(() => _returningInvoiceId = invoice.id);
+    try {
+      final result = await repository.postFullSaleReturn(
+        context: _context,
+        saleReturn: saleReturn,
+        accounts: _returnAccounts(invoice),
+      );
+      if (!mounted ||
+          requestedStore != widget.membership.storeId ||
+          requestedUser != widget.user.id) {
+        return;
+      }
+      if (result is FailureResult<SaleReturnPostingResult>) {
+        if (result.failure is! InfrastructureFailure) {
+          _pendingFullReturns.remove(invoice.id);
+        }
+        _showMessage('تعذر إرجاع الفاتورة: ${result.failure.message}');
+        return;
+      }
+
+      final posted = (result as Success<SaleReturnPostingResult>).value;
+      _pendingFullReturns.remove(invoice.id);
+      _showMessage(
+        posted.alreadyReturned
+            ? 'الفاتورة كانت مُرجعة بالفعل؛ تم تأكيد نفس عملية الإرجاع.'
+            : posted.returnStatus == 'partial'
+                ? 'تم ترحيل المردود، وما زالت للفاتورة كمية متبقية.'
+                : 'تم إرجاع الفاتورة بالكامل وعكس القيد والمخزون.',
+      );
+      await _load();
+    } catch (error) {
+      if (mounted) {
+        _showMessage(
+          'تعذر التأكد من نتيجة الإرجاع. أعد المحاولة على نفس الفاتورة؛ '
+          'سيُعاد استخدام نفس الطلب المحاسبي حرفياً.',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _returningInvoiceId = null);
+      }
+    }
+  }
+
   void _showMessage(String message) {
     if (!mounted) {
       return;
@@ -500,28 +1339,155 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _exportXlsx() async {
+    final analytics = _analytics;
+    if (analytics == null || _isExporting) {
+      return;
+    }
+
+    setState(() => _isExporting = true);
+    try {
+      final query = _searchController.text.trim().toLowerCase();
+      late final Uint8List bytes;
+      late final String filename;
+      var truncated = false;
+
+      if (_selectedTab == 0) {
+        final report = _invoices;
+        if (report == null) {
+          _showMessage('تعذر تحميل تفاصيل الفواتير.');
+          return;
+        }
+        final customers = _customerNames();
+        final invoices = _matchingInvoices(report, analytics);
+        bytes = _salesExcelExport.invoices(
+          invoices: invoices,
+          customerNames: customers,
+        );
+        filename = 'sales_details_${_formatDate(_from)}_${_formatDate(_to)}';
+        truncated = report.mayBeTruncated;
+      } else if (_selectedTab == 1) {
+        final products = analytics.productRows
+            .where((row) => row.label.toLowerCase().contains(query))
+            .toList(growable: false);
+        final categories = analytics.categoryRows
+            .where((row) => row.label.toLowerCase().contains(query))
+            .toList(growable: false);
+        bytes = _salesExcelExport.topProducts(
+          products: products,
+          categories: categories,
+        );
+        filename =
+            'sales_top_products_${_formatDate(_from)}_${_formatDate(_to)}';
+        truncated = analytics.mayBeTruncated;
+      } else {
+        final customers = analytics.customerRows
+            .where((row) => row.label.toLowerCase().contains(query))
+            .toList(growable: false);
+        bytes = _salesExcelExport.customers(
+          customers: customers,
+          paymentMethodCounts: analytics.paymentMethodCounts,
+        );
+        filename = 'sales_customers_${_formatDate(_from)}_${_formatDate(_to)}';
+        truncated = analytics.mayBeTruncated;
+      }
+
+      await FileSaver.instance.saveFile(
+        name: filename,
+        bytes: bytes,
+        fileExtension: 'xlsx',
+        mimeType: MimeType.microsoftExcel,
+      );
+      if (mounted) {
+        _showMessage(
+          truncated
+              ? 'تم تصدير XLSX للبيانات المحمّلة فقط؛ ضيّق الفترة لاعتماد تقرير كامل.'
+              : 'تم تصدير ملف XLSX بنجاح.',
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        _showMessage('تعذر تصدير XLSX: $error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting = false);
+      }
+    }
+  }
+
   Future<void> _copyCsv() async {
     final analytics = _analytics;
     if (analytics == null) {
       return;
     }
 
+    final query = _searchController.text.trim().toLowerCase();
+    if (_selectedTab == 0) {
+      final report = _invoices;
+      if (report == null) {
+        _showMessage('تعذر تحميل تفاصيل الفواتير.');
+        return;
+      }
+      final customers = {
+        for (final row in analytics.customerRows) row.key: row.label,
+      };
+      final rows = <String>[
+        'invoice_id,posted_at_utc,customer,payment,subtotal_minor_units,'
+            'tax_minor_units,total_minor_units,cost_minor_units,currency,'
+            'journal_entry_id,return_status,return_id',
+        for (final item in report.invoices)
+          if (query.isEmpty ||
+              item.id.toLowerCase().contains(query) ||
+              (customers[item.customerId] ?? item.customerId ?? 'بدون عميل')
+                  .toLowerCase()
+                  .contains(query) ||
+              (item.description?.toLowerCase().contains(query) ?? false))
+            [
+              _csvValue(item.id),
+              _csvValue(item.postedAt.toUtc().toIso8601String()),
+              _csvValue(
+                  customers[item.customerId] ?? item.customerId ?? 'بدون عميل'),
+              _csvValue(item.paymentMethod),
+              item.subtotal.minorUnits.toString(),
+              item.tax.minorUnits.toString(),
+              item.total.minorUnits.toString(),
+              item.cost.minorUnits.toString(),
+              _csvValue(item.total.currency),
+              _csvValue(item.journalEntryId),
+              _csvValue(item.returnStatus ?? ''),
+              _csvValue(item.returnId ?? ''),
+            ].join(','),
+      ];
+      await Clipboard.setData(ClipboardData(text: rows.join('\r\n')));
+      if (mounted) {
+        _showMessage(report.mayBeTruncated
+            ? 'تم نسخ الفواتير المحمّلة فقط، وبعض الفواتير خارج سقف التحميل.'
+            : 'تم نسخ تفاصيل الفواتير المحمّلة بصيغة CSV.');
+      }
+      return;
+    }
+
     final rows = <String>[
       'group,name,quantity,sales,cost,gross_profit,currency',
       for (final row in [
-        ...analytics.productRows.map((value) => ('product', value)),
-        ...analytics.categoryRows.map((value) => ('category', value)),
-        ...analytics.customerRows.map((value) => ('customer', value)),
+        if (_selectedTab == 1)
+          ...analytics.productRows.map((value) => ('product', value)),
+        if (_selectedTab == 1)
+          ...analytics.categoryRows.map((value) => ('category', value)),
+        if (_selectedTab == 2)
+          ...analytics.customerRows.map((value) => ('customer', value)),
       ])
-        [
-          _csvValue(row.$1),
-          _csvValue(row.$2.label),
-          row.$2.quantityMilliUnits.toString(),
-          row.$2.revenue.minorUnits.toString(),
-          row.$2.cost.minorUnits.toString(),
-          row.$2.grossProfit.minorUnits.toString(),
-          _csvValue(row.$2.revenue.currency),
-        ].join(','),
+        if (row.$2.label.toLowerCase().contains(query))
+          [
+            _csvValue(row.$1),
+            _csvValue(row.$2.label),
+            row.$2.quantityMilliUnits.toString(),
+            row.$2.revenue.minorUnits.toString(),
+            row.$2.cost.minorUnits.toString(),
+            row.$2.grossProfit.minorUnits.toString(),
+            _csvValue(row.$2.revenue.currency),
+          ].join(','),
     ];
     await Clipboard.setData(ClipboardData(text: rows.join('\n')));
     if (mounted) {
@@ -534,7 +1500,11 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
   }
 
   String _csvValue(String value) {
-    return '"${value.replaceAll('"', '""')}"';
+    // Prevent spreadsheet formula execution after CSV is pasted into Excel.
+    final dangerous =
+        value.isNotEmpty && '=+-@\\t\\r'.contains(value.substring(0, 1));
+    final safe = dangerous ? "'$value" : value;
+    return '"${safe.replaceAll('"', '""')}"';
   }
 
   Future<void> _pickFrom() async {
@@ -594,5 +1564,211 @@ class _SalesAnalyticsPageState extends State<SalesAnalyticsPage> {
       default:
         return value;
     }
+  }
+}
+
+class _PartialReturnDraft {
+  const _PartialReturnDraft({
+    required this.lines,
+    required this.reason,
+  });
+
+  final List<SaleReturnLineRequest> lines;
+  final String reason;
+}
+
+class _PartialReturnDialog extends StatefulWidget {
+  const _PartialReturnDialog({
+    required this.invoiceId,
+    required this.lines,
+  });
+
+  final String invoiceId;
+  final List<SalesInvoiceLineSummary> lines;
+
+  @override
+  State<_PartialReturnDialog> createState() => _PartialReturnDialogState();
+}
+
+class _PartialReturnDialogState extends State<_PartialReturnDialog> {
+  late final Map<String, TextEditingController> _quantityControllers;
+  late final TextEditingController _reasonController;
+  String? _validationMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _quantityControllers = <String, TextEditingController>{
+      for (final line in widget.lines) line.id: TextEditingController(),
+    };
+    _reasonController = TextEditingController(
+      text: 'مردود جزئي للفاتورة ${widget.invoiceId}',
+    );
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _quantityControllers.values) {
+      controller.dispose();
+    }
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        title: const Text('مردود جزئي من الفاتورة'),
+        content: SizedBox(
+          width: 620,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'اختر الكمية المراد إرجاعها فقط. السعر والخصم '
+                  'والضريبة والتكلفة تُشتق من الفاتورة الأصلية على الخادم.',
+                ),
+                const SizedBox(height: 12),
+                for (final line in widget.lines) _buildLine(line),
+                TextField(
+                  key: const ValueKey('partial-return-reason'),
+                  controller: _reasonController,
+                  maxLength: 250,
+                  decoration: const InputDecoration(
+                    labelText: 'سبب المردود',
+                  ),
+                ),
+                if (_validationMessage != null)
+                  Text(
+                    _validationMessage!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton.icon(
+            onPressed: _submit,
+            icon: const Icon(Icons.undo),
+            label: const Text('ترحيل المردود الجزئي'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLine(SalesInvoiceLineSummary line) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              line.description,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'المباع: '
+              '${Quantity.fromMilliUnits(line.quantityMilliUnits).formatted} • '
+              'مرتجع سابقًا: '
+              '${Quantity.fromMilliUnits(line.returnedQuantityMilliUnits).formatted} • '
+              'المتبقي: '
+              '${Quantity.fromMilliUnits(line.remainingQuantityMilliUnits).formatted} '
+              '${line.unitName ?? ''}',
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: ValueKey('partial-return-qty-${line.id}'),
+                    controller: _quantityControllers[line.id],
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'كمية الإرجاع',
+                      suffixText: line.unitName,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () {
+                    _quantityControllers[line.id]!.text =
+                        Quantity.fromMilliUnits(
+                      line.remainingQuantityMilliUnits,
+                    ).formatted;
+                  },
+                  child: const Text('كل المتبقي'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _submit() {
+    final requestedLines = <SaleReturnLineRequest>[];
+    for (final line in widget.lines) {
+      final raw = _quantityControllers[line.id]!.text.trim();
+      if (raw.isEmpty) {
+        continue;
+      }
+      Quantity quantity;
+      try {
+        quantity = Quantity.fromString(raw);
+      } catch (_) {
+        setState(() {
+          _validationMessage =
+              'الكمية المدخلة للصنف ${line.description} غير صحيحة.';
+        });
+        return;
+      }
+      if (quantity.milliUnits <= 0) {
+        continue;
+      }
+      if (quantity.milliUnits > line.remainingQuantityMilliUnits) {
+        setState(() {
+          _validationMessage =
+              'كمية ${line.description} تتجاوز الكمية المتبقية.';
+        });
+        return;
+      }
+      requestedLines.add(
+        SaleReturnLineRequest(
+          lineId: line.id,
+          quantityMilliUnits: quantity.milliUnits,
+        ),
+      );
+    }
+    if (requestedLines.isEmpty) {
+      setState(() {
+        _validationMessage = 'أدخل كمية موجبة لصنف واحد على الأقل.';
+      });
+      return;
+    }
+    Navigator.of(context).pop(
+      _PartialReturnDraft(
+        lines: requestedLines,
+        reason: _reasonController.text.trim(),
+      ),
+    );
   }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/errors/failure.dart';
+import '../../../core/idempotency/idempotency_key.dart';
 import '../../../core/money/money.dart';
 import '../../../core/quantity/quantity.dart';
 import '../../../core/result/result.dart';
@@ -56,6 +58,10 @@ class _OffersPageState extends State<OffersPage> {
   bool _showOrders = false;
   bool _isLoading = true;
   String? _errorMessage;
+  int _loadEpoch = 0;
+  String? _confirmingOrderId;
+  final Map<String, OfferOrderConfirmationRequest> _pendingConfirmations =
+      <String, OfferOrderConfirmationRequest>{};
 
   StoreContext get _context =>
       StoreContext(storeId: widget.membership.storeId, userId: widget.user.id);
@@ -66,13 +72,32 @@ class _OffersPageState extends State<OffersPage> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(covariant OffersPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId) {
+      _offers = const <Offer>[];
+      _orders = const <OfferOrder>[];
+      _pendingConfirmations.clear();
+      _searchController.clear();
+      _showOrders = false;
+      _load();
+    }
+  }
+
   Future<void> _load() async {
     final repository = widget.repository;
+    final epoch = ++_loadEpoch;
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
     if (repository == null) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'مستودع العروض غير موصول بهذه البيئة.';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'مستودع العروض غير موصول بهذه البيئة.';
+        });
+      }
       return;
     }
 
@@ -82,22 +107,36 @@ class _OffersPageState extends State<OffersPage> {
     });
     final offersResult = await repository.getOffers(context: _context);
     final ordersResult = await repository.getOfferOrders(context: _context);
-    if (!mounted) {
+    if (!mounted ||
+        epoch != _loadEpoch ||
+        requestedStore != widget.membership.storeId ||
+        requestedUser != widget.user.id) {
       return;
     }
 
     String? error;
+    var nextOffers = _offers;
+    var nextOrders = _orders;
     if (offersResult is Success<List<Offer>>) {
-      _offers = offersResult.value;
+      nextOffers = offersResult.value;
     } else if (offersResult is FailureResult<List<Offer>>) {
       error = offersResult.failure.message;
     }
     if (ordersResult is Success<List<OfferOrder>>) {
-      _orders = ordersResult.value;
+      nextOrders = ordersResult.value;
     } else if (ordersResult is FailureResult<List<OfferOrder>>) {
       error ??= ordersResult.failure.message;
     }
+    final pendingOrderIds = nextOrders
+        .where((order) => order.status == OfferOrderStatus.pending)
+        .map((order) => order.id)
+        .toSet();
+    _pendingConfirmations.removeWhere(
+      (orderId, _) => !pendingOrderIds.contains(orderId),
+    );
     setState(() {
+      _offers = nextOffers;
+      _orders = nextOrders;
       _isLoading = false;
       _errorMessage = error;
     });
@@ -317,12 +356,18 @@ class _OffersPageState extends State<OffersPage> {
       OfferOrderStatus.confirmed => Colors.green,
       OfferOrderStatus.cancelled => Colors.red,
     };
+    final pending = _pendingConfirmations[order.id];
+    final confirming = _confirmingOrderId == order.id;
     return Card(
       child: ListTile(
         leading: Icon(Icons.receipt_long_outlined, color: color),
         title: Text('${order.orderNumber} • ${order.customerName}'),
         subtitle: Text(
-          '${order.offerNumber} • ${order.total.formatted} • ${order.status.arabicLabel}',
+          pending == null
+              ? '${order.offerNumber} • ${order.total.formatted} • '
+                  '${order.status.arabicLabel}'
+              : '${order.offerNumber} • ${order.total.formatted} • '
+                  'تأكيد غير محسوم — أعد نفس الطلب',
         ),
         isThreeLine: true,
         trailing: order.status == OfferOrderStatus.pending
@@ -330,13 +375,28 @@ class _OffersPageState extends State<OffersPage> {
                 spacing: 4,
                 children: [
                   IconButton(
-                    tooltip: 'تأكيد وترحيل',
-                    onPressed: () => _confirmOrder(order),
-                    icon: const Icon(Icons.check_circle_outline),
+                    tooltip:
+                        pending == null ? 'تأكيد وترحيل' : 'إعادة نفس التأكيد',
+                    onPressed: confirming ? null : () => _confirmOrder(order),
+                    icon: confirming
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            pending == null
+                                ? Icons.check_circle_outline
+                                : Icons.refresh,
+                          ),
                   ),
                   IconButton(
-                    tooltip: 'إلغاء',
-                    onPressed: () => _cancelOrder(order),
+                    tooltip: pending == null
+                        ? 'إلغاء'
+                        : 'لا يمكن الإلغاء قبل حسم التأكيد المعلق',
+                    onPressed: pending == null && !confirming
+                        ? () => _cancelOrder(order)
+                        : null,
                     icon: const Icon(Icons.cancel_outlined),
                   ),
                 ],
@@ -474,6 +534,12 @@ class _OffersPageState extends State<OffersPage> {
     if (repository == null) {
       return;
     }
+    if (_pendingConfirmations.containsKey(order.id)) {
+      _showMessage(
+        'لا يمكن إلغاء الطلب قبل حسم محاولة التأكيد السابقة.',
+      );
+      return;
+    }
     final result = await repository.cancelOfferOrder(
       context: _context,
       orderId: order.id,
@@ -489,9 +555,16 @@ class _OffersPageState extends State<OffersPage> {
 
   Future<void> _confirmOrder(OfferOrder order) async {
     final repository = widget.repository;
-    if (repository == null) {
+    if (repository == null || _confirmingOrderId != null) {
       return;
     }
+
+    final pending = _pendingConfirmations[order.id];
+    if (pending != null) {
+      await _submitConfirmation(order, pending);
+      return;
+    }
+
     final paymentMethod = await showDialog<SalePaymentMethod>(
       context: context,
       builder: (context) => SimpleDialog(
@@ -508,6 +581,7 @@ class _OffersPageState extends State<OffersPage> {
     if (paymentMethod == null || !mounted) {
       return;
     }
+
     final accounts = SalePostingAccounts(
       settlementAccountId: switch (paymentMethod) {
         SalePaymentMethod.cash => _cashAccountId,
@@ -520,18 +594,71 @@ class _OffersPageState extends State<OffersPage> {
       inventoryAccountId: _inventoryAccountId,
       costOfSalesAccountId: _costOfSalesAccountId,
     );
-    final result = await repository.confirmOfferOrder(
-      context: _context,
-      order: order,
+    final confirmation = OfferOrderConfirmationRequest(
+      orderId: order.id,
+      idempotencyKey: IdempotencyKey('confirm-${order.id}'),
+      postedAt: DateTime.now().toUtc(),
       paymentMethod: paymentMethod,
       accounts: accounts,
     );
-    if (!mounted) {
+    _pendingConfirmations[order.id] = confirmation;
+    await _submitConfirmation(order, confirmation);
+  }
+
+  Future<void> _submitConfirmation(
+    OfferOrder order,
+    OfferOrderConfirmationRequest confirmation,
+  ) async {
+    final repository = widget.repository;
+    if (repository == null || _confirmingOrderId != null) {
       return;
     }
-    _showResultMessage(result, 'تم تأكيد الطلب وترحيل البيع والقيد.');
-    if (result is Success<OfferOrderConfirmation>) {
+
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
+    setState(() => _confirmingOrderId = order.id);
+    try {
+      final result = await repository.confirmOfferOrder(
+        context: _context,
+        order: order,
+        confirmation: confirmation,
+      );
+      if (!mounted ||
+          requestedStore != widget.membership.storeId ||
+          requestedUser != widget.user.id) {
+        return;
+      }
+
+      if (result is FailureResult<OfferOrderConfirmation>) {
+        final unresolved = result.failure is InfrastructureFailure ||
+            result.failure is QueuedFailure;
+        if (!unresolved) {
+          _pendingConfirmations.remove(order.id);
+        }
+        _showMessage(
+          result.failure is QueuedFailure
+              ? 'تم حفظ نفس طلب التأكيد للطابور. '
+                  'لن يسمح النظام بتأكيد أو إلغاء جديد حتى تُحسم العملية.'
+              : unresolved
+                  ? 'تعذر التأكد من نتيجة التأكيد. '
+                      'أعد المحاولة من نفس الطلب لإرسال نفس العملية حرفيًا.'
+                  : result.failure.message,
+        );
+        return;
+      }
+
+      final confirmed = (result as Success<OfferOrderConfirmation>).value;
+      _pendingConfirmations.remove(order.id);
+      _showMessage(
+        confirmed.alreadyConfirmed
+            ? 'تم تأكيد نفس عملية العرض السابقة دون تكرار البيع أو القيد.'
+            : 'تم تأكيد الطلب وترحيل البيع والقيد.',
+      );
       await _load();
+    } finally {
+      if (mounted) {
+        setState(() => _confirmingOrderId = null);
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 import '../../../purchases/domain/entities/purchase_posting_plan.dart';
 import '../../../purchases/domain/enums/purchase_payment_method.dart';
 import '../../domain/entities/purchase_order.dart';
+import '../../domain/entities/purchase_order_receipt.dart';
 import '../../domain/entities/purchase_order_line.dart';
 
 abstract final class PurchaseOrderCommandMapper {
@@ -29,7 +30,7 @@ abstract final class PurchaseOrderCommandMapper {
 
   static Map<String, dynamic> receiveRequest({
     required PurchaseOrder order,
-    required String receiptId,
+    required PurchaseOrderReceiptRequest receipt,
     required PurchasePaymentMethod paymentMethod,
     required PurchasePostingAccounts accounts,
     required int taxMinorUnits,
@@ -37,12 +38,20 @@ abstract final class PurchaseOrderCommandMapper {
     return <String, dynamic>{
       'storeId': order.storeId,
       'orderId': order.id,
-      'receiptId': receiptId,
-      'idempotencyKey': '$receiptId-key',
-      'postedAt': DateTime.now().toUtc().toIso8601String(),
+      'receiptId': receipt.receiptId,
+      'idempotencyKey': receipt.idempotencyKey.value,
+      'postedAt': receipt.postedAt.toIso8601String(),
       'paymentMethod': paymentMethod.name,
       'taxMinorUnits': taxMinorUnits,
       'currency': order.currency,
+      if (receipt.lines != null)
+        'lines': [
+          for (final line in receipt.lines!)
+            <String, dynamic>{
+              'lineId': line.lineId,
+              'quantityMilliUnits': line.quantityMilliUnits,
+            },
+        ],
       'postingAccounts': <String, dynamic>{
         'settlementAccountId': accounts.settlementAccountId,
         'inventoryAccountId': accounts.inventoryAccountId,

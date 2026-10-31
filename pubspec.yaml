@@ -12,11 +12,14 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   cupertino_icons: ^1.0.8
+  shared_preferences: ^2.3.2
   firebase_core: ^3.15.0
   cloud_firestore: ^5.6.7
   firebase_auth: ^5.5.3
   firebase_storage: ^12.4.5
   file_picker: ^8.1.7
+  excel: ^4.0.6
+  file_saver: ^0.3.1
   firebase_messaging: ^15.2.7
   cloud_functions: ^5.6.0
   pdf: ^3.11.3

@@ -5,10 +5,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import '../core/config/app_runtime_config.dart';
+import '../core/config/firebase_project_guard.dart';
 import '../firebase_options.dart';
 import '../features/accounting/data/repositories/firestore_accounting_query_repository.dart';
+import '../features/accounting/data/repositories/firestore_chart_mutation_repository.dart';
 import '../features/accounting/data/repositories/firestore_accounting_repository.dart';
 import '../features/accounting_audit/data/repositories/firestore_accounting_audit_repository.dart';
+import '../features/accounting_audit/data/repositories/firestore_accounting_close_repository.dart';
 import '../features/activity_log/data/repositories/firestore_activity_log_repository.dart';
 import '../features/categories/data/repositories/firestore_category_repository.dart';
 import '../features/categories/data/exporters/pdf_category_inventory_document_builder.dart';
@@ -16,6 +19,7 @@ import '../features/cheques/data/repositories/firestore_cheque_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
 import '../features/auth/data/repositories/firebase_auth_repository.dart';
 import '../features/auth/data/repositories/firestore_store_membership_repository.dart';
+import '../features/auth/data/repositories/firebase_store_onboarding_repository.dart';
 import '../features/inventory/data/repositories/firestore_inventory_repository.dart';
 import '../features/inventory/data/repositories/firestore_product_repository.dart';
 import '../features/sales/data/repositories/firestore_sale_repository.dart';
@@ -33,6 +37,8 @@ import '../features/notifications/data/repositories/firebase_notification_reposi
 import '../features/notes/data/repositories/firestore_note_repository.dart';
 import '../features/expenses/data/repositories/firestore_expense_repository.dart';
 import '../features/payments/data/repositories/firestore_party_payment_repository.dart';
+import '../features/payments/data/repositories/firestore_voucher_query_repository.dart';
+import '../features/payments/data/repositories/firestore_voucher_draft_repository.dart';
 import '../features/parties/data/repositories/firestore_party_ledger_repository.dart';
 import '../features/parties/data/repositories/firestore_party_repository.dart';
 import '../features/transfers/data/repositories/firestore_account_transfer_repository.dart';
@@ -57,6 +63,11 @@ abstract final class AppBootstrap {
       );
     }
 
+    FirebaseProjectGuard.requireMatchingProject(
+      expectedProjectId: runtime.firebaseProjectId,
+      actualProjectId: Firebase.app().options.projectId,
+    );
+
     final firestore = FirebaseFirestore.instance;
     final functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
     final commandQueue = FirestoreCommandQueueRepository(firestore: firestore);
@@ -66,6 +77,10 @@ abstract final class AppBootstrap {
         firestore: firestore,
       ),
       storeId: runtime.storeId,
+      onboardingRepository: FirebaseStoreOnboardingRepository(
+        firestore: firestore,
+        functions: functions,
+      ),
     );
 
     session.start();
@@ -74,6 +89,9 @@ abstract final class AppBootstrap {
       runtime: runtime,
       authSession: session,
       accountingAuditRepository: FirestoreAccountingAuditRepository(
+        functions: functions,
+      ),
+      accountingCloseRepository: FirestoreAccountingCloseRepository(
         functions: functions,
       ),
       accountingRepository: FirestoreAccountingRepository(
@@ -86,6 +104,9 @@ abstract final class AppBootstrap {
         firestore: firestore,
         functions: functions,
         commandQueue: commandQueue,
+      ),
+      chartMutationRepository: FirestoreChartMutationRepository(
+        functions: functions,
       ),
       accountingQueryRepository: FirestoreAccountingQueryRepository(
         firestore: firestore,
@@ -101,6 +122,7 @@ abstract final class AppBootstrap {
         commandQueue: commandQueue,
       ),
       purchaseRepository: FirestorePurchaseRepository(
+        firestore: firestore,
         functions: functions,
         commandQueue: commandQueue,
       ),
@@ -121,6 +143,13 @@ abstract final class AppBootstrap {
       partyPaymentRepository: FirestorePartyPaymentRepository(
         functions: functions,
         commandQueue: commandQueue,
+      ),
+      voucherQueryRepository: FirestoreVoucherQueryRepository(
+        firestore: firestore,
+      ),
+      voucherDraftRepository: FirestoreVoucherDraftRepository(
+        firestore: firestore,
+        functions: functions,
       ),
       partyRepository: FirestorePartyRepository(firestore: firestore),
       partyLedgerRepository: FirestorePartyLedgerRepository(
@@ -146,7 +175,10 @@ abstract final class AppBootstrap {
       notificationRepository: FirebaseNotificationRepository(
         firestore: firestore,
       ),
-      settingsRepository: FirestoreSettingsRepository(firestore: firestore),
+      settingsRepository: FirestoreSettingsRepository(
+        firestore: firestore,
+        functions: functions,
+      ),
       noteRepository: FirestoreNoteRepository(firestore: firestore),
       activityLogRepository: FirestoreActivityLogRepository(
         firestore: firestore,

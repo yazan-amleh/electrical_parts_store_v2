@@ -1,0 +1,52 @@
+'use strict';
+
+// A pure function: caller must read and commit the counter INSIDE the same
+// Firestore transaction as posting the voucher and journal entry.
+function nextVoucherNumber({
+  storeId,
+  partyType,
+  postedAt,
+  sequence,
+}) {
+  if (!['customer', 'supplier'].includes(partyType)) {
+    throw Error('Unsupported voucher direction.');
+  }
+  if (!(postedAt instanceof Date) || Number.isNaN(postedAt.getTime())) {
+    throw Error('Invalid voucher posting date.');
+  }
+  // Preserve V1's business calendar, without depending on server locale.
+  // A configurable per-store time zone can replace this when store settings
+  // support one. Intl handles DST boundary changes deterministically.
+  const calendar = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Hebron',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(postedAt);
+  const year = Number(calendar.find((part) => part.type === 'year').value);
+  const month = calendar.find((part) => part.type === 'month').value;
+  const period = String(year) + month;
+  const kind = partyType === 'customer' ? 'receipt' : 'payment';
+  const previous = sequence || null;
+  if (previous &&
+      (previous.storeId !== storeId ||
+        previous.kind !== kind ||
+        previous.period !== period)) {
+    throw Error('Voucher sequence ownership or scope mismatch.');
+  }
+  const last = previous ? previous.lastNumber : 0;
+  if (!Number.isSafeInteger(last) || last < 0 || last >= 999999999) {
+    throw Error('Voucher sequence invalid or exhausted.');
+  }
+  const number = last + 1;
+  const prefix = kind === 'receipt' ? 'RV' : 'PV';
+  return {
+    kind,
+    year,
+    period,
+    serial: number,
+    voucherNumber: prefix + '-' + period + '-' +
+      String(number).padStart(4, '0'),
+  };
+}
+
+module.exports = {nextVoucherNumber};

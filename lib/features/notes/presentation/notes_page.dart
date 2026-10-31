@@ -24,12 +24,17 @@ class NotesPage extends StatefulWidget {
   State<NotesPage> createState() => _NotesPageState();
 }
 
+enum _NotesView { active, starred, archived }
+
 class _NotesPageState extends State<NotesPage> {
-  late final StoreContext _context;
+  late StoreContext _context;
   late Future<Result<List<Note>>> _notesFuture;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  bool _includeArchived = false;
+  _NotesView _view = _NotesView.active;
+  NoteType? _selectedType;
+  NotePriority? _selectedPriority;
+  bool _showCompletedTasks = true;
 
   @override
   void initState() {
@@ -39,19 +44,49 @@ class _NotesPageState extends State<NotesPage> {
       userId: widget.user.id,
     );
     _notesFuture = _loadNotes();
-    _searchController.addListener(() {
-      if (mounted) {
-        setState(() {
-          _searchQuery = _searchController.text.trim().toLowerCase();
-        });
-      }
-    });
+    _searchController.addListener(_handleSearchChanged);
+  }
+
+  void _handleSearchChanged() {
+    if (mounted) {
+      setState(() {
+        _searchQuery = _searchController.text.trim().toLowerCase();
+      });
+    }
+  }
+
+  bool _isCurrentContext(StoreContext actionContext) {
+    return actionContext.storeId == _context.storeId &&
+        actionContext.userId == _context.userId;
+  }
+
+  @override
+  void didUpdateWidget(covariant NotesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId ||
+        oldWidget.repository != widget.repository) {
+      _searchController.removeListener(_handleSearchChanged);
+      _searchController.clear();
+      _searchController.addListener(_handleSearchChanged);
+      _searchQuery = '';
+      _view = _NotesView.active;
+      _selectedType = null;
+      _selectedPriority = null;
+      _showCompletedTasks = true;
+      _context = StoreContext(
+        storeId: widget.membership.storeId,
+        userId: widget.user.id,
+      );
+      _notesFuture = _loadNotes();
+    }
   }
 
   Future<Result<List<Note>>> _loadNotes() {
     return widget.repository.getNotes(
       context: _context,
-      includeArchived: _includeArchived,
+      includeArchived: _view != _NotesView.active,
+      starredOnly: _view == _NotesView.starred,
     );
   }
 
@@ -62,11 +97,12 @@ class _NotesPageState extends State<NotesPage> {
   }
 
   Future<void> _editNote([Note? note]) async {
+    final actionContext = _context;
     final draft = await showDialog<_NoteDraft>(
       context: context,
       builder: (context) => _NoteDialog(note: note),
     );
-    if (draft == null || !mounted) {
+    if (draft == null || !mounted || !_isCurrentContext(actionContext)) {
       return;
     }
 
@@ -74,14 +110,16 @@ class _NotesPageState extends State<NotesPage> {
     final candidate = note == null
         ? Note(
             id: DateTime.now().microsecondsSinceEpoch.toString(),
-            storeId: _context.storeId,
-            userId: _context.userId,
+            storeId: actionContext.storeId,
+            userId: actionContext.userId,
             title: draft.title,
             content: draft.content,
             type: draft.type,
             priority: draft.priority,
             createdAt: now,
             tags: draft.tags,
+            reminderAt: draft.reminderAt,
+            reminderRepeat: draft.reminderRepeat,
           )
         : note.copyWith(
             title: draft.title,
@@ -90,13 +128,16 @@ class _NotesPageState extends State<NotesPage> {
             priority: draft.priority,
             tags: draft.tags,
             updatedAt: now,
+            reminderAt: draft.reminderAt,
+            reminderRepeat: draft.reminderRepeat,
+            clearReminder: draft.clearReminder,
           );
 
     final result = await widget.repository.saveNote(
-      context: _context,
+      context: actionContext,
       note: candidate,
     );
-    if (!mounted) {
+    if (!mounted || !_isCurrentContext(actionContext)) {
       return;
     }
     if (result is FailureResult<void>) {
@@ -108,16 +149,149 @@ class _NotesPageState extends State<NotesPage> {
   }
 
   Future<void> _updateNote(Note updated) async {
+    final actionContext = _context;
+    if (updated.storeId != actionContext.storeId ||
+        updated.userId != actionContext.userId) {
+      return;
+    }
     final result = await widget.repository.saveNote(
-      context: _context,
+      context: actionContext,
       note: updated,
     );
-    if (!mounted) {
+    if (!mounted || !_isCurrentContext(actionContext)) {
       return;
     }
     if (result is FailureResult<void>) {
       _showMessage(result.failure.message);
     } else {
+      _reload();
+    }
+  }
+
+  Future<void> _showNoteDetails(Note note) async {
+    final actionContext = _context;
+    final action = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final localized = MaterialLocalizations.of(dialogContext);
+        String formatDate(DateTime date) {
+          final local = date.toLocal();
+          return '${localized.formatMediumDate(local)} '
+              '${localized.formatTimeOfDay(TimeOfDay.fromDateTime(local))}';
+        }
+
+        return AlertDialog(
+          title: Text(note.title),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: 480,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SelectableText(
+                      note.content.isEmpty ? 'بدون محتوى' : note.content),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      Chip(label: Text(note.type.arabicLabel)),
+                      Chip(label: Text(note.priority.arabicLabel)),
+                      if (note.isStarred) const Chip(label: Text('مميزة')),
+                      if (note.isArchived) const Chip(label: Text('مؤرشفة')),
+                      if (note.isCompleted) const Chip(label: Text('مكتملة')),
+                    ],
+                  ),
+                  if (note.tags.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('الوسوم: ${note.tags.join(', ')}'),
+                  ],
+                  const SizedBox(height: 8),
+                  Text('تاريخ الإنشاء: ${formatDate(note.createdAt)}'),
+                  if (note.updatedAt != null)
+                    Text('آخر تعديل: ${formatDate(note.updatedAt!)}'),
+                  if (note.reminderAt != null) ...[
+                    const SizedBox(height: 8),
+                    Text('موعد المتابعة: ${formatDate(note.reminderAt!)}'),
+                    if (note.reminderRepeat != ReminderRepeatType.none)
+                      Text('التكرار: ${note.reminderRepeat.arabicLabel}'),
+                    if (note.reminderRepeat != ReminderRepeatType.none &&
+                        note.nextReminderAfter(DateTime.now()) != null)
+                      Text(
+                        'الموعد القادم: ${formatDate(note.nextReminderAfter(DateTime.now())!)}',
+                      ),
+                    const Text(
+                      'الموعد محفوظ، ولا يُرسل إشعار تلقائي من هذه الشاشة.',
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop('delete'),
+              child: const Text('حذف'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop('edit'),
+              child: const Text('تعديل'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('إغلاق'),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted || !_isCurrentContext(actionContext)) {
+      return;
+    }
+    if (action == 'edit') {
+      await _editNote(note);
+    } else if (action == 'delete') {
+      await _deleteNote(note);
+    }
+  }
+
+  Future<void> _deleteNote(Note note) async {
+    final actionContext = _context;
+    if (note.storeId != actionContext.storeId ||
+        note.userId != actionContext.userId) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تأكيد الحذف'),
+        content: Text('هل تريد حذف الملاحظة "${note.title}" نهائيًا؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true || !_isCurrentContext(actionContext)) {
+      return;
+    }
+    final result = await widget.repository.deleteNote(
+      context: actionContext,
+      note: note,
+    );
+    if (!mounted || !_isCurrentContext(actionContext)) {
+      return;
+    }
+    if (result is FailureResult<void>) {
+      _showMessage(result.failure.message);
+    } else {
+      _showMessage('تم حذف الملاحظة');
       _reload();
     }
   }
@@ -129,21 +303,55 @@ class _NotesPageState extends State<NotesPage> {
   }
 
   List<Note> _visibleNotes(List<Note> notes) {
-    if (_searchQuery.isEmpty) {
-      return notes;
-    }
-    return notes
-        .where(
-          (note) =>
-              note.title.toLowerCase().contains(_searchQuery) ||
-              note.content.toLowerCase().contains(_searchQuery) ||
-              note.tags.any((tag) => tag.toLowerCase().contains(_searchQuery)),
-        )
-        .toList();
+    return notes.where((note) {
+      if (_view == _NotesView.active && note.isArchived) {
+        return false;
+      }
+      if (_view == _NotesView.starred && !note.isStarred) {
+        return false;
+      }
+      if (_view == _NotesView.archived && !note.isArchived) {
+        return false;
+      }
+      if (_selectedType != null && note.type != _selectedType) {
+        return false;
+      }
+      if (_selectedPriority != null && note.priority != _selectedPriority) {
+        return false;
+      }
+      if (!_showCompletedTasks &&
+          _selectedType == NoteType.task &&
+          note.isCompleted) {
+        return false;
+      }
+      if (_searchQuery.isEmpty) {
+        return true;
+      }
+      return note.title.toLowerCase().contains(_searchQuery) ||
+          note.content.toLowerCase().contains(_searchQuery) ||
+          note.tags.any((tag) => tag.toLowerCase().contains(_searchQuery));
+    }).toList();
+  }
+
+  Widget _viewChip(_NotesView view, String label) {
+    return ChoiceChip(
+      selected: _view == view,
+      label: Text(label),
+      onSelected: (_) {
+        if (_view == view) {
+          return;
+        }
+        setState(() {
+          _view = view;
+          _notesFuture = _loadNotes();
+        });
+      },
+    );
   }
 
   @override
   void dispose() {
+    _searchController.removeListener(_handleSearchChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -156,6 +364,11 @@ class _NotesPageState extends State<NotesPage> {
         appBar: AppBar(
           title: const Text('ملاحظاتي'),
           actions: [
+            IconButton(
+              onPressed: _reload,
+              icon: const Icon(Icons.refresh),
+              tooltip: 'تحديث الملاحظات',
+            ),
             IconButton(
               onPressed: () => _editNote(),
               icon: const Icon(Icons.add),
@@ -175,42 +388,79 @@ class _NotesPageState extends State<NotesPage> {
                 ),
               ),
             ),
-            Padding(
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  FilterChip(
-                    selected: !_includeArchived,
-                    label: const Text('الحالية'),
-                    onSelected: (selected) {
-                      if (!selected) {
-                        return;
-                      }
-                      setState(() {
-                        _includeArchived = false;
-                        _notesFuture = _loadNotes();
-                      });
-                    },
-                  ),
+                  _viewChip(_NotesView.active, 'النشطة'),
                   const SizedBox(width: 8),
-                  FilterChip(
-                    selected: _includeArchived,
-                    label: const Text('مع المؤرشفة'),
-                    onSelected: (selected) {
-                      if (!selected) {
-                        return;
-                      }
-                      setState(() {
-                        _includeArchived = true;
-                        _notesFuture = _loadNotes();
-                      });
+                  _viewChip(_NotesView.starred, 'المميزة بنجمة'),
+                  const SizedBox(width: 8),
+                  _viewChip(_NotesView.archived, 'المؤرشفة'),
+                ],
+              ),
+            ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  DropdownButton<NoteType?>(
+                    value: _selectedType,
+                    hint: const Text('النوع'),
+                    items: [
+                      const DropdownMenuItem<NoteType?>(
+                        value: null,
+                        child: Text('كل الأنواع'),
+                      ),
+                      ...NoteType.values.map(
+                        (type) => DropdownMenuItem<NoteType?>(
+                          value: type,
+                          child: Text(type.arabicLabel),
+                        ),
+                      ),
+                    ],
+                    onChanged: (type) {
+                      setState(() => _selectedType = type);
                     },
                   ),
+                  const SizedBox(width: 16),
+                  DropdownButton<NotePriority?>(
+                    value: _selectedPriority,
+                    hint: const Text('الأولوية'),
+                    items: [
+                      const DropdownMenuItem<NotePriority?>(
+                        value: null,
+                        child: Text('كل الأولويات'),
+                      ),
+                      ...NotePriority.values.map(
+                        (priority) => DropdownMenuItem<NotePriority?>(
+                          value: priority,
+                          child: Text(priority.arabicLabel),
+                        ),
+                      ),
+                    ],
+                    onChanged: (priority) {
+                      setState(() => _selectedPriority = priority);
+                    },
+                  ),
+                  if (_selectedType == NoteType.task) ...[
+                    const SizedBox(width: 16),
+                    FilterChip(
+                      label: const Text('عرض المكتملة'),
+                      selected: _showCompletedTasks,
+                      onSelected: (value) {
+                        setState(() => _showCompletedTasks = value);
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
             Expanded(
               child: FutureBuilder<Result<List<Note>>>(
+                key: ValueKey('${_context.storeId}/${_context.userId}'),
                 future: _notesFuture,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting &&
@@ -237,7 +487,7 @@ class _NotesPageState extends State<NotesPage> {
                       final note = notes[index];
                       return Card(
                         child: ListTile(
-                          onTap: () => _editNote(note),
+                          onTap: () => _showNoteDetails(note),
                           leading: CircleAvatar(
                             child: Icon(note.isCompleted
                                 ? Icons.check
@@ -282,6 +532,8 @@ class _NotesPageState extends State<NotesPage> {
                                         );
                               if (value == 'edit') {
                                 _editNote(note);
+                              } else if (value == 'delete') {
+                                _deleteNote(note);
                               } else {
                                 _updateNote(updated);
                               }
@@ -311,6 +563,10 @@ class _NotesPageState extends State<NotesPage> {
                                   note.isArchived ? 'إلغاء الأرشفة' : 'أرشفة',
                                 ),
                               ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Text('حذف الملاحظة'),
+                              ),
                             ],
                           ),
                         ),
@@ -334,6 +590,9 @@ class _NoteDraft {
     required this.type,
     required this.priority,
     required this.tags,
+    required this.reminderAt,
+    required this.reminderRepeat,
+    required this.clearReminder,
   });
 
   final String title;
@@ -341,6 +600,9 @@ class _NoteDraft {
   final NoteType type;
   final NotePriority priority;
   final List<String> tags;
+  final DateTime? reminderAt;
+  final ReminderRepeatType reminderRepeat;
+  final bool clearReminder;
 }
 
 class _NoteDialog extends StatefulWidget {
@@ -358,6 +620,8 @@ class _NoteDialogState extends State<_NoteDialog> {
   late final TextEditingController _tagsController;
   late NoteType _type;
   late NotePriority _priority;
+  DateTime? _reminderAt;
+  ReminderRepeatType _repeat = ReminderRepeatType.none;
 
   @override
   void initState() {
@@ -368,6 +632,38 @@ class _NoteDialogState extends State<_NoteDialog> {
     _tagsController = TextEditingController(text: note?.tags.join(', ') ?? '');
     _type = note?.type ?? NoteType.general;
     _priority = note?.priority ?? NotePriority.medium;
+    _reminderAt = note?.reminderAt?.toLocal();
+    _repeat = note?.reminderRepeat ?? ReminderRepeatType.none;
+  }
+
+  Future<void> _pickReminder() async {
+    final now = DateTime.now();
+    final initial = _reminderAt ?? now.add(const Duration(days: 1));
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 10),
+    );
+    if (!mounted || date == null) {
+      return;
+    }
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (!mounted || time == null) {
+      return;
+    }
+    setState(() {
+      _reminderAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
   }
 
   @override
@@ -395,6 +691,9 @@ class _NoteDialogState extends State<_NoteDialog> {
         type: _type,
         priority: _priority,
         tags: tags,
+        reminderAt: _reminderAt?.toUtc(),
+        reminderRepeat: _reminderAt == null ? ReminderRepeatType.none : _repeat,
+        clearReminder: _reminderAt == null,
       ),
     );
   }
@@ -457,6 +756,47 @@ class _NoteDialogState extends State<_NoteDialog> {
                 labelText: 'وسوم مفصولة بفاصلة',
               ),
             ),
+            const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.event_note_outlined),
+              title: const Text('موعد المتابعة (اختياري)'),
+              subtitle: Text(
+                _reminderAt == null
+                    ? 'لا يوجد موعد. لا يتم إرسال إشعار تلقائي.'
+                    : '${MaterialLocalizations.of(context).formatMediumDate(_reminderAt!)} '
+                        '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(_reminderAt!))}',
+              ),
+              onTap: _pickReminder,
+              trailing: _reminderAt == null
+                  ? const Icon(Icons.edit_calendar_outlined)
+                  : IconButton(
+                      tooltip: 'إزالة الموعد',
+                      onPressed: () => setState(() {
+                        _reminderAt = null;
+                        _repeat = ReminderRepeatType.none;
+                      }),
+                      icon: const Icon(Icons.clear),
+                    ),
+            ),
+            if (_reminderAt != null)
+              DropdownButtonFormField<ReminderRepeatType>(
+                value: _repeat,
+                decoration: const InputDecoration(labelText: 'تكرار التذكير'),
+                items: ReminderRepeatType.values
+                    .map(
+                      (repeat) => DropdownMenuItem(
+                        value: repeat,
+                        child: Text(repeat.arabicLabel),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _repeat = value);
+                  }
+                },
+              ),
           ],
         ),
       ),

@@ -14,9 +14,12 @@ This document is the migration checklist for the separate V2 rebuild.
 ## Inventory snapshot
 
 - Source repository: `yazan-amleh/electrical_parts_store`
-- Source branch reviewed: `main`
-- V2 target branch: `v2/foundation`
-- Source tree entries at snapshot: 575
+- **Authoritative V1 source branch (user-approved, 2026-10-26):** `انشاء-الشجرة-الجديدة`.
+- **Source commit inspected:** `26617bc449e6be0956411dad7cadb56c98d0a27e`. Re-check the branch head before each parity pass.
+- **Active V2 implementation branch:** `audit/systematic-v1-parity-20261023`, tracked in draft PR #1 toward `v2/port-v1-complete`.
+- Historical original inventory was taken from V1 `main` (575 tree entries). **That snapshot does not certify parity with the approved branch**; re-inventory all screens from `انشاء-الشجرة-الجديدة`.
+- For authentication, use V1 `lib/views/screens/auth/{login_screen,register_screen,reset_password_screen}.dart` from the approved branch as the visual/UX reference. Keep V2's own Firebase Auth, store membership and authorization; do not copy V1's controllers, data, privileged registration defaults or password storage.
+- Do not port salon/booking features or V1 customer data.
 - Migration status: accounting foundation is green; offers, party ledgers, financial statements, and customer/supplier cheque lifecycle are implemented and tested; remaining V1 screen parity is still in progress.
 
 ## Current V2 vertical slices

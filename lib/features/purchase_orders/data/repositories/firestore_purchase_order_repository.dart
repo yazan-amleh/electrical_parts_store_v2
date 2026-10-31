@@ -134,14 +134,14 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
   Future<Result<PurchaseOrderReceipt>> receivePurchaseOrder({
     required StoreContext context,
     required PurchaseOrder order,
+    required PurchaseOrderReceiptRequest receipt,
     required PurchasePaymentMethod paymentMethod,
     required PurchasePostingAccounts accounts,
     required int taxMinorUnits,
   }) async {
-    final receiptId = 'purchase-${order.id}-receipt';
     final payload = PurchaseOrderCommandMapper.receiveRequest(
       order: order,
-      receiptId: receiptId,
+      receipt: receipt,
       paymentMethod: paymentMethod,
       accounts: accounts,
       taxMinorUnits: taxMinorUnits,
@@ -151,11 +151,26 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
           .httpsCallable('receivePurchaseOrder')
           .call<Map<String, dynamic>>(payload);
       final data = response.data;
+      final orderStatus = data['orderStatus'];
+      final completed = data['completed'];
+      if (data['purchaseId'] is! String ||
+          data['journalEntryId'] is! String ||
+          orderStatus is! String ||
+          completed is! bool ||
+          (orderStatus != 'pending' && orderStatus != 'completed')) {
+        return const FailureResult<PurchaseOrderReceipt>(
+          InfrastructureFailure(
+            'The receipt service returned inconsistent data.',
+          ),
+        );
+      }
       return Success<PurchaseOrderReceipt>(
         PurchaseOrderReceipt(
           orderId: order.id,
-          purchaseId: data['purchaseId'] as String? ?? receiptId,
-          journalEntryId: data['journalEntryId'] as String? ?? '',
+          purchaseId: data['purchaseId'] as String,
+          journalEntryId: data['journalEntryId'] as String,
+          completed: completed,
+          orderStatus: orderStatus,
         ),
       );
     } on firebase_functions.FirebaseFunctionsException catch (error) {
@@ -164,7 +179,7 @@ class FirestorePurchaseOrderRepository implements PurchaseOrderRepository {
         context: context,
         commandId: 'receive-purchase-order-${order.id}',
         operation: 'receivePurchaseOrder',
-        idempotencyKey: '$receiptId-key',
+        idempotencyKey: receipt.idempotencyKey.value,
         payload: payload,
       );
       if (queued != null) {

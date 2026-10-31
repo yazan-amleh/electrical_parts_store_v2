@@ -18,6 +18,7 @@ import '../domain/entities/purchase_line.dart';
 import '../domain/entities/purchase_posting_plan.dart';
 import '../domain/enums/purchase_payment_method.dart';
 import '../domain/repositories/purchase_repository.dart';
+import 'purchase_returns_panel.dart';
 
 class PurchasesPage extends StatefulWidget {
   const PurchasesPage({
@@ -58,6 +59,7 @@ class _PurchasesPageState extends State<PurchasesPage> {
   bool _isLoading = true;
   bool _isLoadingSuppliers = false;
   bool _isPosting = false;
+  bool _returnsMode = false;
   String? _errorMessage;
   String? _supplierError;
 
@@ -124,28 +126,64 @@ class _PurchasesPageState extends State<PurchasesPage> {
 
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final products = _buildProductsPanel(filteredProducts);
-          final cart = _buildCartPanel();
-
-          if (constraints.maxWidth < 900) {
-            return Column(
-              children: [
-                Expanded(child: products),
-                SizedBox(height: 380, child: cart),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            child: SegmentedButton<bool>(
+              key: const ValueKey('purchases-mode-switch'),
+              segments: const [
+                ButtonSegment<bool>(
+                  value: false,
+                  icon: Icon(Icons.shopping_cart_outlined),
+                  label: Text('شراء جديد'),
+                ),
+                ButtonSegment<bool>(
+                  value: true,
+                  icon: Icon(Icons.assignment_return_outlined),
+                  label: Text('مردود مشتريات'),
+                ),
               ],
-            );
-          }
+              selected: <bool>{_returnsMode},
+              onSelectionChanged: _isPosting
+                  ? null
+                  : (selection) {
+                      setState(() => _returnsMode = selection.first);
+                    },
+            ),
+          ),
+          Expanded(
+            child: _returnsMode
+                ? PurchaseReturnsPanel(
+                    repository: widget.repository,
+                    user: widget.user,
+                    membership: widget.membership,
+                  )
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      final products = _buildProductsPanel(filteredProducts);
+                      final cart = _buildCartPanel();
 
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: products),
-              SizedBox(width: 390, child: cart),
-            ],
-          );
-        },
+                      if (constraints.maxWidth < 900) {
+                        return Column(
+                          children: [
+                            Expanded(child: products),
+                            SizedBox(height: 380, child: cart),
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: products),
+                          SizedBox(width: 390, child: cart),
+                        ],
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -404,19 +442,32 @@ class _PurchasesPageState extends State<PurchasesPage> {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Text('الإجمالي قبل الضريبة'),
-              const Spacer(),
-              Text(_cartTotal.formatted),
+              const Expanded(
+                child: Text(
+                  'الإجمالي قبل الضريبة',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  _cartTotal.formatted,
+                  textAlign: TextAlign.end,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
           Row(
             children: [
-              const Text('الإجمالي'),
-              const Spacer(),
-              Text(
-                (_cartTotal + _taxAmount).formatted,
-                style: const TextStyle(fontWeight: FontWeight.bold),
+              const Expanded(child: Text('الإجمالي')),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  (_cartTotal + _taxAmount).formatted,
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),

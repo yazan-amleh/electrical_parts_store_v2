@@ -28,6 +28,71 @@ void main() {
     expect(report.inventoryMovementsChecked, 11);
   });
 
+  test('exposes orphan discovery coverage and indexed scan count', () {
+    final report = AccountingAuditReport.fromMap({
+      'storeId': 'shop-1',
+      'status': 'issues_found',
+      'complete': true,
+      'consistency': 'non_atomic',
+      'orphanDiscoveryCoverage': 'matching_embedded_store_id_only',
+      'checked': <String, dynamic>{
+        'indexedLineDiscovery': 22,
+        'journalLines': 8,
+      },
+      'errorCount': 1,
+      'issueCount': 1,
+      'issues': <Map<String, dynamic>>[
+        {
+          'code': 'ORPHAN_JOURNAL_LINE',
+          'scope': 'journalLine',
+          'referenceId': 'stores/shop-1/journal_entries/deleted/lines/a',
+          'message': 'Missing journal header',
+          'severity': 'error',
+        },
+      ],
+    });
+
+    expect(report.isHealthy, isFalse);
+    expect(report.indexedLineDiscoveryChecked, 22);
+    expect(report.journalLinesChecked, 8);
+    expect(report.orphanDiscoveryCoverage, 'matching_embedded_store_id_only');
+  });
+
+  test('incomplete scan must never be marked healthy', () {
+    final report = AccountingAuditReport.fromMap({
+      'status': 'incomplete',
+      'complete': false,
+      'consistency': 'non_atomic',
+      'storeId': 'shop-1',
+      'checked': const <String, dynamic>{},
+      'issues': const <Map<String, dynamic>>[],
+    });
+
+    expect(report.isComplete, isFalse);
+    expect(report.isHealthy, isFalse);
+    expect(report.isPointInTimeConsistent, isFalse);
+  });
+
+  test('server-wide issue count blocks false healthy when details are capped',
+      () {
+    final report = AccountingAuditReport.fromMap({
+      'status': 'issues_found',
+      'complete': true,
+      'consistency': 'non_atomic',
+      'storeId': 'shop-1',
+      'checked': const <String, dynamic>{},
+      'issueCount': 340,
+      'errorCount': 10,
+      'issuesTruncated': true,
+      'issues': const <Map<String, dynamic>>[],
+    });
+
+    expect(report.isHealthy, isFalse);
+    expect(report.errorCount, 10);
+    expect(report.warningCount, 330);
+    expect(report.issuesTruncated, isTrue);
+  });
+
   test('keeps warnings visible without hiding accounting errors', () {
     final report = AccountingAuditReport.fromMap({
       'storeId': 'store-1',

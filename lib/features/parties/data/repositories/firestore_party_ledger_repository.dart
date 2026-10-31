@@ -41,7 +41,7 @@ class FirestorePartyLedgerRepository implements PartyLedgerRepository {
           FirebasePaths.partyLedgerEntries(_firestore, context.storeId)
               .where('partyType', isEqualTo: partyType.name)
               .where('partyId', isEqualTo: partyId)
-              .orderBy('postedAt')
+              .orderBy('postedAt', descending: true)
               .limit(limit);
 
       if (from != null) {
@@ -58,17 +58,20 @@ class FirestorePartyLedgerRepository implements PartyLedgerRepository {
       }
 
       final snapshot = await query.get();
-      return Success<List<PartyLedgerEntry>>(
-        snapshot.docs
-            .map(PartyLedgerEntryFirestoreMapper.fromSnapshot)
-            .where(
-              (entry) =>
-                  entry.storeId == context.storeId &&
-                  entry.partyId == partyId &&
-                  entry.partyType == partyType,
-            )
-            .toList(growable: false),
-      );
+      final entries = snapshot.docs
+          .map(PartyLedgerEntryFirestoreMapper.fromSnapshot)
+          .toList(growable: false);
+      for (final entry in entries) {
+        if (entry.storeId != context.storeId ||
+            entry.partyId != partyId ||
+            entry.partyType != partyType) {
+          throw const FormatException(
+            'Party ledger entry belongs to another tenant or party.',
+          );
+        }
+      }
+      entries.sort((left, right) => left.postedAt.compareTo(right.postedAt));
+      return Success<List<PartyLedgerEntry>>(entries);
     } on FirebaseException catch (error) {
       return FailureResult<List<PartyLedgerEntry>>(
         InfrastructureFailure(error.message ?? error.code),
@@ -102,17 +105,29 @@ class FirestorePartyLedgerRepository implements PartyLedgerRepository {
         return Success<Money>(Money.zero(currency: currency));
       }
 
-      final data = snapshot.data() ?? const <String, dynamic>{};
-      final storedCurrency =
-          data['currency'] is String ? data['currency'] as String : currency;
-      final rawBalance = data['balanceMinorUnits'];
-      final balance = rawBalance is int
-          ? rawBalance
-          : rawBalance is num
-              ? rawBalance.toInt()
-              : 0;
+      final data = snapshot.data();
+      if (data == null ||
+          data['storeId'] != context.storeId ||
+          data['partyId'] != partyId ||
+          data['partyType'] != partyType.name ||
+          data['currency'] != currency ||
+          data['debitMinorUnits'] is! int ||
+          data['creditMinorUnits'] is! int ||
+          data['balanceMinorUnits'] is! int) {
+        throw const FormatException(
+          'Party balance projection identity or amounts are invalid.',
+        );
+      }
+      final debit = data['debitMinorUnits'] as int;
+      final credit = data['creditMinorUnits'] as int;
+      final balance = data['balanceMinorUnits'] as int;
+      if (debit < 0 || credit < 0 || balance != debit - credit) {
+        throw const FormatException(
+          'Party balance projection does not reconcile.',
+        );
+      }
       return Success<Money>(
-        Money(minorUnits: balance, currency: storedCurrency),
+        Money(minorUnits: balance, currency: currency),
       );
     } on FirebaseException catch (error) {
       return FailureResult<Money>(

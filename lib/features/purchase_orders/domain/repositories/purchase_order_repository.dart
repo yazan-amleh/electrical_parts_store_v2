@@ -23,6 +23,7 @@ abstract interface class PurchaseOrderRepository {
   Future<Result<PurchaseOrderReceipt>> receivePurchaseOrder({
     required StoreContext context,
     required PurchaseOrder order,
+    required PurchaseOrderReceiptRequest receipt,
     required PurchasePaymentMethod paymentMethod,
     required PurchasePostingAccounts accounts,
     required int taxMinorUnits,
