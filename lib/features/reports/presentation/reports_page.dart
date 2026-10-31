@@ -1,3 +1,4 @@
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
@@ -12,6 +13,7 @@ import '../../inventory/domain/repositories/product_repository.dart';
 import '../domain/entities/operational_report.dart';
 import '../domain/repositories/reports_repository.dart';
 import '../domain/services/report_document_builder.dart';
+import 'operational_report_export.dart';
 
 class ReportsPage extends StatefulWidget {
   const ReportsPage({
@@ -42,6 +44,11 @@ class _ReportsPageState extends State<ReportsPage> {
   bool _isLoading = true;
   bool _isExporting = false;
   String? _errorMessage;
+  final _transactionSearch = TextEditingController();
+  final _exporter = const OperationalReportExport();
+  String? _sourceFilter;
+  String? _paymentFilter;
+  int _requestRevision = 0;
 
   StoreContext get _context {
     return StoreContext(
@@ -58,6 +65,49 @@ class _ReportsPageState extends State<ReportsPage> {
     _to = DateTime(now.year, now.month, now.day, 23, 59, 59);
     _load();
   }
+
+  @override
+  void didUpdateWidget(covariant ReportsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId ||
+        oldWidget.repository != widget.repository ||
+        oldWidget.productRepository != widget.productRepository) {
+      _requestRevision++;
+      final now = DateTime.now();
+      _from = DateTime(now.year, now.month, 1);
+      _to = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      _sourceFilter = null;
+      _paymentFilter = null;
+      _transactionSearch.clear();
+      _report = null;
+      _products = const <Product>[];
+      _periodChanged = false;
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _requestRevision++;
+    _transactionSearch.dispose();
+    super.dispose();
+  }
+
+  OperationalTransactionFilter get _detailsFilter => OperationalTransactionFilter(
+        source: _sourceFilter,
+        paymentMethod: _paymentFilter,
+        search: _transactionSearch.text,
+      );
+
+  List<ReportTransaction> _shownTransactions(OperationalReport report) {
+    return _detailsFilter.apply(report.transactions);
+  }
+
+  bool get _detailsFiltered =>
+      _sourceFilter != null ||
+      _paymentFilter != null ||
+      _transactionSearch.text.trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -148,10 +198,37 @@ class _ReportsPageState extends State<ReportsPage> {
                   date: _to,
                   onPressed: _pickTo,
                 ),
+                OutlinedButton.icon(
+                  onPressed: () => _setPeriod('day'),
+                  icon: const Icon(Icons.today_outlined),
+                  label: const Text('اليوم'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _setPeriod('week'),
+                  icon: const Icon(Icons.date_range_outlined),
+                  label: const Text('هذا الأسبوع'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _setPeriod('month'),
+                  icon: const Icon(Icons.calendar_month_outlined),
+                  label: const Text('هذا الشهر'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _setPeriod('year'),
+                  icon: const Icon(Icons.event_outlined),
+                  label: const Text('هذه السنة'),
+                ),
                 FilledButton.icon(
                   onPressed: _isLoading ? null : _load,
                   icon: const Icon(Icons.filter_alt_outlined),
                   label: const Text('تطبيق الفترة'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _report == null || _periodChanged || _isExporting
+                      ? null
+                      : _exportXlsx,
+                  icon: const Icon(Icons.table_view_outlined),
+                  label: const Text('تنزيل Excel'),
                 ),
                 OutlinedButton.icon(
                   onPressed:
@@ -187,6 +264,27 @@ class _ReportsPageState extends State<ReportsPage> {
         ),
       ),
     );
+  }
+
+  void _setPeriod(String period) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    late DateTime first;
+    switch (period) {
+      case 'day':
+        first = today;
+      case 'week':
+        first = today.subtract(Duration(days: today.weekday - 1));
+      case 'year':
+        first = DateTime(now.year, 1, 1);
+      default:
+        first = DateTime(now.year, now.month, 1);
+    }
+    setState(() {
+      _from = first;
+      _to = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      _periodChanged = true;
+    });
   }
 
   Widget _dateButton(
@@ -435,12 +533,93 @@ class _ReportsPageState extends State<ReportsPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'آخر الحركات ضمن الفترة',
+              'تفاصيل الحركات ضمن الفترة',
               style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'الفلاتر التالية تؤثر على الحركات المعروضة وملف Excel وCSV فقط؛ '
+              'الإجماليات وملف PDF تشمل كامل الفترة المحمّلة.',
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                SizedBox(
+                  width: 240,
+                  child: TextField(
+                    controller: _transactionSearch,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      labelText: 'بحث في المستندات',
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                SizedBox(
+                  width: 190,
+                  child: DropdownButtonFormField<String>(
+                    value: _sourceFilter ?? 'all',
+                    decoration: const InputDecoration(labelText: 'نوع الحركة'),
+                    items: [
+                      const DropdownMenuItem(value: 'all', child: Text('كل الأنواع')),
+                      for (final source in (report.transactions
+                          .map((item) => item.source).toSet().toList()..sort()))
+                        DropdownMenuItem(
+                          value: source,
+                          child: Text(_sourceLabel(source)),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      setState(() => _sourceFilter =
+                          value == 'all' ? null : value);
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 190,
+                  child: DropdownButtonFormField<String>(
+                    value: _paymentFilter ?? 'all',
+                    decoration: const InputDecoration(labelText: 'طريقة الدفع'),
+                    items: [
+                      const DropdownMenuItem(value: 'all', child: Text('كل الطرق')),
+                      for (final method in (report.transactions
+                          .map((item) => item.paymentMethod ?? 'unknown')
+                          .toSet().toList()..sort()))
+                        DropdownMenuItem(
+                          value: method,
+                          child: Text(_paymentLabel(method)),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      setState(() => _paymentFilter =
+                          value == 'all' ? null : value);
+                    },
+                  ),
+                ),
+                if (_detailsFiltered)
+                  TextButton.icon(
+                    onPressed: () => setState(() {
+                      _sourceFilter = null;
+                      _paymentFilter = null;
+                      _transactionSearch.clear();
+                    }),
+                    icon: const Icon(Icons.filter_alt_off_outlined),
+                    label: const Text('مسح فلاتر الحركات'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'المعروض: ${_shownTransactions(report).length} '
+              'من ${report.transactions.length} حركة محمّلة',
             ),
             const SizedBox(height: 8),
             if (report.transactions.isEmpty)
               const Text('لا توجد حركات مرحّلة ضمن الفترة.')
+            else if (_shownTransactions(report).isEmpty)
+              const Text('لا توجد حركات مطابقة للفلاتر.')
             else
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -453,7 +632,7 @@ class _ReportsPageState extends State<ReportsPage> {
                     DataColumn(label: Text('المبلغ')),
                   ],
                   rows: [
-                    for (final transaction in report.transactions.take(100))
+                    for (final transaction in _shownTransactions(report).take(100))
                       DataRow(
                         cells: [
                           DataCell(Text(_formatDate(transaction.postedAt))),
