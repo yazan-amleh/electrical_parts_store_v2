@@ -14,6 +14,8 @@ import '../domain/entities/chat_room.dart';
 import '../domain/enums/chat_enums.dart';
 import '../domain/repositories/chat_attachment_repository.dart';
 import '../domain/repositories/chat_repository.dart';
+import 'chat_message_search_page.dart';
+import 'chat_room_details_sheet.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({
@@ -315,6 +317,7 @@ class _ChatPageState extends State<ChatPage> {
                                 room: room,
                                 user: widget.user,
                                 membership: widget.membership,
+                                availableMembers: _members,
                               ),
                             ),
                           );
@@ -344,6 +347,7 @@ class ChatRoomPage extends StatefulWidget {
     required this.room,
     required this.user,
     required this.membership,
+    this.availableMembers = const <StoreMember>[],
     super.key,
   });
 
@@ -352,6 +356,7 @@ class ChatRoomPage extends StatefulWidget {
   final ChatRoom room;
   final AuthenticatedUser user;
   final StoreMembership membership;
+  final List<StoreMember> availableMembers;
 
   @override
   State<ChatRoomPage> createState() => _ChatRoomPageState();
@@ -534,54 +539,39 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
     Navigator.of(context).pop();
   }
 
-  void _showRoomInfo() {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              shrinkWrap: true,
-              children: [
-                Text(
-                  widget.room.name,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                if (widget.room.groupDescription?.trim().isNotEmpty == true)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(widget.room.groupDescription!),
-                  ),
-                const SizedBox(height: 16),
-                Text(
-                  'المشاركون',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                for (final participant in widget.room.participants)
-                  ListTile(
-                    dense: true,
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.person_outline),
-                    ),
-                    title: Text(
-                      participant.displayName?.trim().isNotEmpty == true
-                          ? participant.displayName!
-                          : participant.userId,
-                    ),
-                    trailing: participant.isAdmin
-                        ? const Chip(label: Text('مشرف'))
-                        : null,
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
+  void _searchMessages() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ChatMessageSearchPage(
+          repository: widget.repository,
+          storeContext: _context,
+          roomId: widget.room.id,
+        ),
+      ),
     );
+  }
+
+  Future<void> _showRoomInfo() async {
+    final result = await showModalBottomSheet<ChatRoom>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => ChatRoomDetailsSheet(
+        room: widget.room,
+        contextForStore: _context,
+        currentRole: widget.membership.role,
+        repository: widget.repository,
+        availableMembers: widget.availableMembers,
+      ),
+    );
+    if (!mounted || result == null) {
+      return;
+    }
+    // The room stream in the parent is authoritative; this page only needs
+    // to display the latest name while it remains open.
+    if (result.name != widget.room.name) {
+      _showMessage('تم تحديث اسم المجموعة.');
+    }
   }
 
   void _showMessage(String message) {
@@ -598,6 +588,11 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
         appBar: AppBar(
           title: Text(widget.room.name),
           actions: [
+            IconButton(
+              tooltip: 'البحث في المحادثة',
+              onPressed: _searchMessages,
+              icon: const Icon(Icons.search),
+            ),
             PopupMenuButton<String>(
               onSelected: (value) {
                 if (value == 'info') {
