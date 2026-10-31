@@ -88,7 +88,8 @@ class SalesInvoiceSelectionExport {
           invoice.cost.currency != invoice.total.currency ||
           invoice.subtotal.minorUnits + invoice.tax.minorUnits !=
               invoice.total.minorUnits) {
-        throw StateError('Invoice is inconsistent or belongs to another store.');
+        throw StateError(
+            'Invoice is inconsistent or belongs to another store.');
       }
       var sum = 0;
       var cost = 0;
@@ -142,7 +143,8 @@ class SalesInvoiceSelectionExport {
           '${date.month.toString().padLeft(2, '0')}/'
           '${date.day.toString().padLeft(2, '0')}';
 
-      pw.Widget summaryRow(String label, String value, {bool emphasized = false}) {
+      pw.Widget summaryRow(String label, String value,
+          {bool emphasized = false}) {
         return pw.Container(
           padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: pw.BoxDecoration(
@@ -154,16 +156,18 @@ class SalesInvoiceSelectionExport {
           child: pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text(value, style: pw.TextStyle(
-                font: emphasized ? bold : font,
-                fontSize: emphasized ? 12 : 10,
-                color: emphasized ? navy : PdfColors.blueGrey900,
-              )),
-              pw.Text(label, style: pw.TextStyle(
-                font: emphasized ? bold : font,
-                fontSize: emphasized ? 11 : 10,
-                color: emphasized ? navy : PdfColors.blueGrey900,
-              )),
+              pw.Text(value,
+                  style: pw.TextStyle(
+                    font: emphasized ? bold : font,
+                    fontSize: emphasized ? 12 : 10,
+                    color: emphasized ? navy : PdfColors.blueGrey900,
+                  )),
+              pw.Text(label,
+                  style: pw.TextStyle(
+                    font: emphasized ? bold : font,
+                    fontSize: emphasized ? 11 : 10,
+                    color: emphasized ? navy : PdfColors.blueGrey900,
+                  )),
             ],
           ),
         );
@@ -195,13 +199,7 @@ class SalesInvoiceSelectionExport {
                     color: navy,
                     borderRadius: pw.BorderRadius.circular(7),
                   ),
-                  child: pw.Center(
-                    child: pw.Text('V2', style: pw.TextStyle(
-                      font: bold,
-                      fontSize: 14,
-                      color: PdfColors.white,
-                    )),
-                  ),
+                  child: pw.SizedBox(),
                 ),
                 pw.SizedBox(width: 10),
                 pw.Expanded(
@@ -216,7 +214,8 @@ class SalesInvoiceSelectionExport {
                   crossAxisAlignment: pw.CrossAxisAlignment.end,
                   children: [
                     pw.Text('فاتورة مبيعات',
-                        style: pw.TextStyle(font: bold, fontSize: 16, color: navy)),
+                        style: pw.TextStyle(
+                            font: bold, fontSize: 16, color: navy)),
                     pw.SizedBox(height: 4),
                     pw.Text('رقم الفاتورة: ${invoice.id}',
                         style: pw.TextStyle(font: font, fontSize: 9)),
@@ -232,7 +231,8 @@ class SalesInvoiceSelectionExport {
               pw.Container(height: 0.7, color: border),
               pw.SizedBox(height: 6),
               pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: pw.BoxDecoration(
                   color: navy,
                   borderRadius: pw.BorderRadius.circular(4),
@@ -241,14 +241,14 @@ class SalesInvoiceSelectionExport {
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Text('${ctx.pageNumber} / ${ctx.pagesCount}',
-                        style: pw.TextStyle(font: font, fontSize: 8,
-                            color: PdfColors.white)),
+                        style: pw.TextStyle(
+                            font: font, fontSize: 8, color: PdfColors.white)),
                     pw.Text('شكراً لتعاملكم معنا',
-                        style: pw.TextStyle(font: bold, fontSize: 10,
-                            color: PdfColors.white)),
+                        style: pw.TextStyle(
+                            font: bold, fontSize: 10, color: PdfColors.white)),
                     pw.Text(storePhone.trim(),
-                        style: pw.TextStyle(font: font, fontSize: 9,
-                            color: PdfColors.white)),
+                        style: pw.TextStyle(
+                            font: font, fontSize: 9, color: PdfColors.white)),
                   ],
                 ),
               ),
@@ -273,8 +273,8 @@ class SalesInvoiceSelectionExport {
                       borderRadius: pw.BorderRadius.circular(4),
                     ),
                     child: pw.Text('بيانات العميل',
-                        style: pw.TextStyle(font: bold, fontSize: 11,
-                            color: PdfColors.white)),
+                        style: pw.TextStyle(
+                            font: bold, fontSize: 11, color: PdfColors.white)),
                   ),
                   pw.SizedBox(height: 8),
                   pw.Text('الاسم: $customerName',
@@ -304,8 +304,14 @@ class SalesInvoiceSelectionExport {
             pw.SizedBox(height: 14),
             pw.Table.fromTextArray(
               headers: const [
-                '#', 'الصنف', 'الوحدة', 'الكمية', 'مرتجع',
-                'سعر الوحدة', 'الخصم', 'الإجمالي',
+                '#',
+                'الصنف',
+                'الوحدة',
+                'الكمية',
+                'مرتجع',
+                'سعر الوحدة',
+                'الخصم',
+                'الإجمالي',
               ],
               data: [
                 for (final entry in document.lines.asMap().entries)
@@ -320,8 +326,8 @@ class SalesInvoiceSelectionExport {
                     entry.value.total.formatted,
                   ],
               ],
-              headerStyle: pw.TextStyle(font: bold, fontSize: 9,
-                  color: PdfColors.white),
+              headerStyle:
+                  pw.TextStyle(font: bold, fontSize: 9, color: PdfColors.white),
               cellStyle: pw.TextStyle(font: font, fontSize: 8),
               headerDecoration: pw.BoxDecoration(color: navy),
               oddRowDecoration: pw.BoxDecoration(color: pale),
@@ -330,7 +336,8 @@ class SalesInvoiceSelectionExport {
             ),
             pw.SizedBox(height: 12),
             pw.Container(
-              padding: const pw.EdgeInsets.symmetric(vertical: 7, horizontal: 12),
+              padding:
+                  const pw.EdgeInsets.symmetric(vertical: 7, horizontal: 12),
               decoration: pw.BoxDecoration(
                 color: pale,
                 border: pw.Border.all(color: border, width: 0.5),
@@ -339,9 +346,11 @@ class SalesInvoiceSelectionExport {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(invoice.total.formatted,
-                      style: pw.TextStyle(font: bold, fontSize: 13, color: navy)),
+                      style:
+                          pw.TextStyle(font: bold, fontSize: 13, color: navy)),
                   pw.Text('إجمالي الفاتورة',
-                      style: pw.TextStyle(font: bold, fontSize: 11, color: navy)),
+                      style:
+                          pw.TextStyle(font: bold, fontSize: 11, color: navy)),
                 ],
               ),
             ),
@@ -361,7 +370,8 @@ class SalesInvoiceSelectionExport {
                         summaryRow('إجمالي الأصناف قبل الخصم', money(original)),
                         if (discount > 0)
                           summaryRow('خصم الأصناف', money(discount)),
-                        summaryRow('الصافي قبل الضريبة', invoice.subtotal.formatted),
+                        summaryRow(
+                            'الصافي قبل الضريبة', invoice.subtotal.formatted),
                         summaryRow('الضريبة', invoice.tax.formatted),
                         summaryRow('الإجمالي المستحق', invoice.total.formatted,
                             emphasized: true),
@@ -394,11 +404,11 @@ class SalesInvoiceSelectionExport {
             ],
             pw.SizedBox(height: 8),
             pw.Text('المدفوع والمتبقي لا يظهران دون بيانات تحصيل مؤكدة.',
-                style: pw.TextStyle(font: font, fontSize: 8,
-                    color: PdfColors.blueGrey700)),
+                style: pw.TextStyle(
+                    font: font, fontSize: 8, color: PdfColors.blueGrey700)),
             pw.Text('مرجع القيد: ${invoice.journalEntryId}',
-                style: pw.TextStyle(font: font, fontSize: 8,
-                    color: PdfColors.blueGrey700)),
+                style: pw.TextStyle(
+                    font: font, fontSize: 8, color: PdfColors.blueGrey700)),
           ],
         ),
       );
