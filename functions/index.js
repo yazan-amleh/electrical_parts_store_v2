@@ -7,6 +7,7 @@ const {
   HttpsError,
   onCall,
 } = require('firebase-functions/v2/https');
+const {onSchedule} = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
 
 admin.initializeApp();
@@ -19,6 +20,7 @@ const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
 const {writeActivity} = require('./activity_log_triggers');
+const {runNoteReminderCycle} = require('./note_reminder_delivery');
 const { createStoreHandler, selectStoreHandler } = require('./store_onboarding');
 const {
   updateStoreProfileHandler,
@@ -318,6 +320,15 @@ const INVENTORY_OPENING_POSTING_ROLES = new Set([
   'admin',
   'accountant',
 ]);
+
+// V2-only reminder worker. Requires Cloud Scheduler to be enabled in the
+// independent V2 Firebase project before this function can be deployed.
+exports.dispatchNoteReminders = onSchedule(
+  {schedule: 'every 5 minutes', timeZone: 'UTC', retryCount: 0},
+  async () => runNoteReminderCycle({
+    db, Timestamp, messaging: admin.messaging(),
+  }),
+);
 
 exports.sendChatMessageNotification = onDocumentCreated(
   'stores/{storeId}/chatRooms/{roomId}/messages/{messageId}',
