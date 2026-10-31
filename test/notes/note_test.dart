@@ -96,6 +96,4 @@ void main() {
     final cleared = note.copyWith(clearReminder: true);
     expect(cleared.reminderAt, isNull);
     expect(cleared.reminderRepeat, ReminderRepeatType.none);
-  });
-
-}
+  });}
