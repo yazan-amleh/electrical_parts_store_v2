@@ -94,7 +94,8 @@ class _ReportsPageState extends State<ReportsPage> {
     super.dispose();
   }
 
-  OperationalTransactionFilter get _detailsFilter => OperationalTransactionFilter(
+  OperationalTransactionFilter get _detailsFilter =>
+      OperationalTransactionFilter(
         source: _sourceFilter,
         paymentMethod: _paymentFilter,
         search: _transactionSearch.text,
@@ -563,17 +564,22 @@ class _ReportsPageState extends State<ReportsPage> {
                     value: _sourceFilter ?? 'all',
                     decoration: const InputDecoration(labelText: 'نوع الحركة'),
                     items: [
-                      const DropdownMenuItem(value: 'all', child: Text('كل الأنواع')),
-                      for (final source in (report.transactions
-                          .map((item) => item.source).toSet().toList()..sort()))
+                      const DropdownMenuItem(
+                          value: 'all', child: Text('كل الأنواع')),
+                      for (final source
+                          in (report.transactions
+                              .map((item) => item.source)
+                              .toSet()
+                              .toList()
+                            ..sort()))
                         DropdownMenuItem(
                           value: source,
                           child: Text(_sourceLabel(source)),
                         ),
                     ],
                     onChanged: (value) {
-                      setState(() => _sourceFilter =
-                          value == 'all' ? null : value);
+                      setState(
+                          () => _sourceFilter = value == 'all' ? null : value);
                     },
                   ),
                 ),
@@ -583,18 +589,22 @@ class _ReportsPageState extends State<ReportsPage> {
                     value: _paymentFilter ?? 'all',
                     decoration: const InputDecoration(labelText: 'طريقة الدفع'),
                     items: [
-                      const DropdownMenuItem(value: 'all', child: Text('كل الطرق')),
-                      for (final method in (report.transactions
-                          .map((item) => item.paymentMethod ?? 'unknown')
-                          .toSet().toList()..sort()))
+                      const DropdownMenuItem(
+                          value: 'all', child: Text('كل الطرق')),
+                      for (final method
+                          in (report.transactions
+                              .map((item) => item.paymentMethod ?? 'unknown')
+                              .toSet()
+                              .toList()
+                            ..sort()))
                         DropdownMenuItem(
                           value: method,
                           child: Text(_paymentLabel(method)),
                         ),
                     ],
                     onChanged: (value) {
-                      setState(() => _paymentFilter =
-                          value == 'all' ? null : value);
+                      setState(
+                          () => _paymentFilter = value == 'all' ? null : value);
                     },
                   ),
                 ),
@@ -632,7 +642,8 @@ class _ReportsPageState extends State<ReportsPage> {
                     DataColumn(label: Text('المبلغ')),
                   ],
                   rows: [
-                    for (final transaction in _shownTransactions(report).take(100))
+                    for (final transaction
+                        in _shownTransactions(report).take(100))
                       DataRow(
                         cells: [
                           DataCell(Text(_formatDate(transaction.postedAt))),
