@@ -118,13 +118,12 @@ void main() {
 
     await tester.tap(find.text('هذا الأسبوع'));
     await tester.pumpAndSettle();
-    final exportButton =
-        tester.widget<OutlinedButton>(
-          find.ancestor(
-            of: find.text('تنزيل Excel'),
-            matching: find.byType(OutlinedButton),
-          ),
-        );
+    final exportButton = tester.widget<OutlinedButton>(
+      find.ancestor(
+        of: find.text('تنزيل Excel'),
+        matching: find.byType(OutlinedButton),
+      ),
+    );
     expect(exportButton.onPressed, isNull);
     await tester.tap(find.text('تطبيق الفترة'));
     await tester.pumpAndSettle();
