@@ -692,8 +692,7 @@ class _NoteDialogState extends State<_NoteDialog> {
         priority: _priority,
         tags: tags,
         reminderAt: _reminderAt?.toUtc(),
-        reminderRepeat:
-            _reminderAt == null ? ReminderRepeatType.none : _repeat,
+        reminderRepeat: _reminderAt == null ? ReminderRepeatType.none : _repeat,
         clearReminder: _reminderAt == null,
       ),
     );
