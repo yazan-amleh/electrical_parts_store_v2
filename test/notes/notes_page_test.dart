@@ -202,7 +202,7 @@ void main() {
     await tester.tap(find.text('تفاصيل المهمة'));
     await tester.pumpAndSettle();
     expect(find.textContaining('تاريخ الإنشاء'), findsOneWidget);
-    expect(find.text('نص الملاحظة'), findsOneWidget);
+    expect(find.byType(SelectableText), findsOneWidget);
     await tester.tap(find.widgetWithText(TextButton, 'تعديل'));
     await tester.pumpAndSettle();
     expect(find.text('تعديل الملاحظة'), findsOneWidget);
