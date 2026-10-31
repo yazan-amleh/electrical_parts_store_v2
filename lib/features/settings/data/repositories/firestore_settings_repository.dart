@@ -229,5 +229,4 @@ class FirestoreSettingsRepository implements SettingsRepository {
         return InfrastructureFailure(error.message ?? error.code);
     }
   }
-
 }
