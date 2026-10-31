@@ -4,6 +4,8 @@ import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../notifications/domain/repositories/notification_repository.dart';
+import '../../notifications/presentation/reminder_inbox_page.dart';
 import '../domain/entities/note.dart';
 import '../domain/enums/note_enums.dart';
 import '../domain/repositories/note_repository.dart';
@@ -13,10 +15,12 @@ class NotesPage extends StatefulWidget {
     required this.repository,
     required this.user,
     required this.membership,
+    this.notificationRepository,
     super.key,
   });
 
   final NoteRepository repository;
+  final NotificationRepository? notificationRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -364,6 +368,21 @@ class _NotesPageState extends State<NotesPage> {
         appBar: AppBar(
           title: const Text('ملاحظاتي'),
           actions: [
+            if (widget.notificationRepository != null)
+              IconButton(
+                tooltip: 'سجل تذكيرات الملاحظات',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => ReminderInboxPage(
+                        repository: widget.notificationRepository!,
+                        storeContext: _context,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.notifications_outlined),
+              ),
             IconButton(
               onPressed: _reload,
               icon: const Icon(Icons.refresh),
