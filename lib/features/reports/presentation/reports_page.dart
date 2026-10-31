@@ -686,11 +686,21 @@ class _ReportsPageState extends State<ReportsPage> {
 
   Future<void> _load() async {
     final repository = widget.repository;
-    if (repository == null) {
-      return;
-    }
+    final productsRepository = widget.productRepository;
+    final contextAtStart = _context;
+    final revision = ++_requestRevision;
+    final from = _from;
+    final to = _to;
+    bool current() =>
+        mounted &&
+        revision == _requestRevision &&
+        contextAtStart.storeId == _context.storeId &&
+        contextAtStart.userId == _context.userId &&
+        repository == widget.repository &&
+        productsRepository == widget.productRepository;
+    if (repository == null) return;
 
-    if (_from.isAfter(_to)) {
+    if (from.isAfter(to)) {
       setState(() {
         _errorMessage = 'بداية الفترة يجب أن تسبق نهايتها.';
       });
@@ -701,17 +711,19 @@ class _ReportsPageState extends State<ReportsPage> {
       _isLoading = true;
       _periodChanged = false;
       _report = null;
+      _products = const <Product>[];
       _errorMessage = null;
+      _sourceFilter = null;
+      _paymentFilter = null;
+      _transactionSearch.clear();
     });
 
     final reportResult = await repository.getOperationalReport(
-      context: _context,
-      from: _from,
-      to: _to,
+      context: contextAtStart,
+      from: from,
+      to: to,
     );
-    if (!mounted) {
-      return;
-    }
+    if (!current()) return;
     if (reportResult is FailureResult<OperationalReport>) {
       setState(() {
         _isLoading = false;
@@ -720,19 +732,15 @@ class _ReportsPageState extends State<ReportsPage> {
       return;
     }
 
-    final productsResult = widget.productRepository == null
+    final productsResult = productsRepository == null
         ? null
-        : await widget.productRepository!.getProducts(context: _context);
-    if (!mounted) {
-      return;
-    }
+        : await productsRepository.getProducts(context: contextAtStart);
+    if (!current()) return;
 
     setState(() {
       _report = (reportResult as Success<OperationalReport>).value;
       if (productsResult is Success<List<Product>>) {
         _products = productsResult.value;
-      } else if (widget.productRepository == null) {
-        _products = const <Product>[];
       }
       _isLoading = false;
     });
@@ -741,17 +749,21 @@ class _ReportsPageState extends State<ReportsPage> {
   Future<void> _runPdfExport({required bool share}) async {
     final report = _report;
     final builder = widget.documentBuilder;
-    if (report == null || builder == null) {
-      _showMessage('تصدير PDF غير موصول بهذه البيئة.');
+    if (report == null || builder == null || _periodChanged || _isExporting) {
       return;
     }
-
+    final exportContext = _context;
     setState(() => _isExporting = true);
     try {
       final bytes = await builder.buildOperationalReport(
         report: report,
-        storeName: widget.membership.storeId,
+        storeName: exportContext.storeId,
       );
+      if (!mounted ||
+          exportContext.storeId != _context.storeId ||
+          exportContext.userId != _context.userId) {
+        return;
+      }
       final filename =
           'operational_report_${_formatDate(_from)}_${_formatDate(_to)}';
       if (share) {
@@ -762,42 +774,52 @@ class _ReportsPageState extends State<ReportsPage> {
     } catch (error) {
       _showMessage('تعذر تجهيز PDF: $error');
     } finally {
-      if (mounted) {
-        setState(() => _isExporting = false);
-      }
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  Future<void> _exportXlsx() async {
+    final report = _report;
+    if (report == null || _periodChanged || _isExporting) return;
+    final exportContext = _context;
+    setState(() => _isExporting = true);
+    try {
+      final bytes = _exporter.xlsx(
+        report: report,
+        storeLabel: exportContext.storeId,
+        displayedTransactions: _shownTransactions(report),
+        detailsFiltered: _detailsFiltered,
+      );
+      if (!mounted ||
+          exportContext.storeId != _context.storeId ||
+          exportContext.userId != _context.userId) return;
+      await FileSaver.instance.saveFile(
+        name: 'operational_${_formatDate(_from)}_${_formatDate(_to)}',
+        bytes: bytes,
+        fileExtension: 'xlsx',
+        mimeType: MimeType.microsoftExcel,
+      );
+      _showMessage(report.mayBeTruncated
+          ? 'تم تنزيل Excel للبيانات المحمّلة فقط؛ التقرير غير مكتمل.'
+          : 'تم تنزيل Excel: الإجماليات لكامل الفترة والفلاتر للحركات فقط.');
+    } catch (error) {
+      _showMessage('تعذر تنزيل Excel: $error');
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
     }
   }
 
   Future<void> _copyCsv() async {
     final report = _report;
-    if (report == null) {
-      return;
-    }
-
-    final rows = <String>[
-      'date,type,description,payment_method,amount,currency',
-      for (final transaction in report.transactions)
-        [
-          _csvValue(_formatDate(transaction.postedAt)),
-          _csvValue(_sourceLabel(transaction.source)),
-          _csvValue(transaction.description ?? transaction.id),
-          _csvValue(
-            transaction.paymentMethod == null
-                ? ''
-                : _paymentLabel(transaction.paymentMethod!),
-          ),
-          transaction.amount.minorUnits.toString(),
-          _csvValue(transaction.amount.currency),
-        ].join(','),
-    ];
-    await Clipboard.setData(ClipboardData(text: rows.join('\n')));
+    if (report == null || _periodChanged || _isExporting) return;
+    await Clipboard.setData(
+      ClipboardData(text: _exporter.csv(_shownTransactions(report))),
+    );
     if (mounted) {
-      _showMessage('تم نسخ التقرير بصيغة CSV إلى الحافظة.');
+      _showMessage(report.mayBeTruncated
+          ? 'تم نسخ الحركات المحمّلة فقط؛ التقرير غير مكتمل.'
+          : 'تم نسخ تفاصيل الحركات المعروضة بصيغة CSV.');
     }
-  }
-
-  String _csvValue(String value) {
-    return '"${value.replaceAll('"', '""')}"';
   }
 
   void _showMessage(String message) {
