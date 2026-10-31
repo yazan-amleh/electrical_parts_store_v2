@@ -18,6 +18,7 @@ class _NotesRepository implements NoteRepository {
   final Map<String, List<Note>> notesByStore;
   final Completer<Result<List<Note>>>? pendingStoreB;
   final List<StoreContext> reads = <StoreContext>[];
+  final List<StoreContext> deletes = <StoreContext>[];
 
   @override
   Future<Result<List<Note>>> getNotes({
@@ -39,6 +40,16 @@ class _NotesRepository implements NoteRepository {
     required StoreContext context,
     required Note note,
   }) async {
+    return const Success<void>(null);
+  }
+
+  @override
+  Future<Result<void>> deleteNote({
+    required StoreContext context,
+    required Note note,
+  }) async {
+    deletes.add(context);
+    notesByStore[context.storeId]?.removeWhere((item) => item.id == note.id);
     return const Success<void>(null);
   }
 }
@@ -147,5 +158,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('ملاحظة مؤرشفة'), findsOneWidget);
     expect(find.text('ملاحظة نشطة'), findsNothing);
+  });
+
+  testWidgets('V1 delete note requires confirmation and stays in the store', (
+    tester,
+  ) async {
+    final repository = _NotesRepository({
+      'store-a': [_note('store-a', 'ملاحظة قابلة للحذف')],
+    });
+    await tester.pumpWidget(_page(repository, 'store-a'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('حذف الملاحظة'));
+    await tester.pumpAndSettle();
+    expect(find.text('تأكيد الحذف'), findsOneWidget);
+
+    await tester.tap(find.text('إلغاء'));
+    await tester.pumpAndSettle();
+    expect(repository.deletes, isEmpty);
+    expect(find.text('ملاحظة قابلة للحذف'), findsOneWidget);
+
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('حذف الملاحظة'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'حذف'));
+    await tester.pumpAndSettle();
+
+    expect(repository.deletes, hasLength(1));
+    expect(repository.deletes.single.storeId, 'store-a');
+    expect(find.text('ملاحظة قابلة للحذف'), findsNothing);
   });
 }
