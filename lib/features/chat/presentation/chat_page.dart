@@ -35,9 +35,14 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
+enum _ChatRoomView { all, direct, group }
+
 class _ChatPageState extends State<ChatPage> {
-  late final StoreContext _context;
-  late final Stream<Result<List<ChatRoom>>> _rooms;
+  late StoreContext _context;
+  late Stream<Result<List<ChatRoom>>> _rooms;
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  _ChatRoomView _roomView = _ChatRoomView.all;
   List<StoreMember> _members = const [];
   bool _loadingMembers = true;
   String? _membersError;
@@ -53,11 +58,42 @@ class _ChatPageState extends State<ChatPage> {
     _loadMembers();
   }
 
+  bool _isActiveStore(StoreContext context) {
+    return context.storeId == _context.storeId &&
+        context.userId == _context.userId;
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId ||
+        oldWidget.repository != widget.repository ||
+        oldWidget.settingsRepository != widget.settingsRepository) {
+      _context = StoreContext(
+        storeId: widget.membership.storeId,
+        userId: widget.user.id,
+      );
+      _rooms = widget.repository.watchRooms(context: _context);
+      _searchController.clear();
+      _searchQuery = '';
+      _roomView = _ChatRoomView.all;
+      _members = const [];
+      _membersError = null;
+      _loadingMembers = true;
+      _loadMembers();
+    }
+  }
+
   Future<void> _loadMembers() async {
-    final result = await widget.settingsRepository.getMembers(
-      context: _context,
+    final contextAtStart = _context;
+    final repositoryAtStart = widget.settingsRepository;
+    final result = await repositoryAtStart.getMembers(
+      context: contextAtStart,
     );
-    if (!mounted) {
+    if (!mounted ||
+        !_isActiveStore(contextAtStart) ||
+        repositoryAtStart != widget.settingsRepository) {
       return;
     }
     setState(() {
@@ -75,6 +111,8 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _createRoom() async {
+    final actionContext = _context;
+    final repositoryAtStart = widget.repository;
     if (_loadingMembers) {
       return;
     }
@@ -87,7 +125,10 @@ class _ChatPageState extends State<ChatPage> {
       context: context,
       builder: (context) => _CreateChatRoomDialog(members: _members),
     );
-    if (draft == null || !mounted) {
+    if (draft == null ||
+        !mounted ||
+        !_isActiveStore(actionContext) ||
+        repositoryAtStart != widget.repository) {
       return;
     }
 
@@ -108,19 +149,61 @@ class _ChatPageState extends State<ChatPage> {
           ),
     ];
 
-    final result = await widget.repository.createRoom(
-      context: _context,
+    final result = await repositoryAtStart.createRoom(
+      context: actionContext,
       name: draft.name,
       participants: participants,
       type: draft.type,
       groupDescription: draft.description,
     );
-    if (!mounted) {
+    if (!mounted ||
+        !_isActiveStore(actionContext) ||
+        repositoryAtStart != widget.repository) {
       return;
     }
     if (result is FailureResult<ChatRoom>) {
       _showMessage(result.failure.message);
     }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<ChatRoom> _filteredRooms(List<ChatRoom> rooms) {
+    return rooms.where((room) {
+      if (room.storeId != _context.storeId) {
+        return false;
+      }
+      final group = room.isGroup || room.type == ChatRoomType.group;
+      if (_roomView == _ChatRoomView.group && !group) {
+        return false;
+      }
+      if (_roomView == _ChatRoomView.direct && group) {
+        return false;
+      }
+      if (_searchQuery.isEmpty) {
+        return true;
+      }
+      return room.name.toLowerCase().contains(_searchQuery) ||
+          room.participants.any(
+            (participant) =>
+                participant.displayName?.toLowerCase().contains(_searchQuery) ==
+                true,
+          );
+    }).toList();
+  }
+
+  Widget _roomViewChip(_ChatRoomView view, String text) {
+    return ChoiceChip(
+      selected: _roomView == view,
+      label: Text(text),
+      onSelected: (_) {
+        setState(() => _roomView = view);
+      },
+    );
   }
 
   String _memberName(StoreMember member) {
@@ -146,8 +229,48 @@ class _ChatPageState extends State<ChatPage> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        body: StreamBuilder<Result<List<ChatRoom>>>(
-          stream: _rooms,
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'البحث في المحادثات...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchQuery.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'مسح البحث',
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        ),
+                ),
+                onChanged: (value) {
+                  setState(() => _searchQuery = value.trim().toLowerCase());
+                },
+              ),
+            ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  _roomViewChip(_ChatRoomView.all, 'الكل'),
+                  const SizedBox(width: 8),
+                  _roomViewChip(_ChatRoomView.direct, 'فردية'),
+                  const SizedBox(width: 8),
+                  _roomViewChip(_ChatRoomView.group, 'مجموعات'),
+                ],
+              ),
+            ),
+            Expanded(
+              child: StreamBuilder<Result<List<ChatRoom>>>(
+                key: ValueKey('${_context.storeId}/${_context.userId}'),
+                stream: _rooms,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting &&
                 !snapshot.hasData) {
@@ -166,12 +289,18 @@ class _ChatPageState extends State<ChatPage> {
             if (rooms.isEmpty) {
               return _EmptyChatState(onCreate: _createRoom);
             }
+            final visible = _filteredRooms(rooms);
+            if (visible.isEmpty) {
+              return const Center(
+                child: Text('لا توجد محادثات مطابقة للبحث أو الفلتر.'),
+              );
+            }
             return ListView.separated(
               padding: const EdgeInsets.all(16),
-              itemCount: rooms.length,
+              itemCount: visible.length,
               separatorBuilder: (context, index) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
-                final room = rooms[index];
+                final room = visible[index];
                 return _ChatRoomTile(
                   room: room,
                   userId: widget.user.id,
@@ -192,6 +321,9 @@ class _ChatPageState extends State<ChatPage> {
               },
             );
           },
+              ),
+            ),
+          ],
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _createRoom,
