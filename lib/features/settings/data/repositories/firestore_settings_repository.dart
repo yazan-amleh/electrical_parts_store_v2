@@ -230,16 +230,4 @@ class FirestoreSettingsRepository implements SettingsRepository {
     }
   }
 
-  Failure _mapFirebaseFailure(FirebaseException error, String fallback) {
-    switch (error.code) {
-      case 'permission-denied':
-      case 'unauthenticated':
-        return AuthorizationFailure(error.message ?? fallback);
-      case 'not-found':
-      case 'failed-precondition':
-        return ValidationFailure(error.message ?? fallback);
-      default:
-        return InfrastructureFailure(error.message ?? fallback);
-    }
-  }
 }
