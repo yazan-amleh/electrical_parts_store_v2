@@ -118,6 +118,7 @@ class _NotesPageState extends State<NotesPage> {
             priority: draft.priority,
             createdAt: now,
             tags: draft.tags,
+            reminderAt: draft.reminderAt,
           )
         : note.copyWith(
             title: draft.title,
@@ -126,6 +127,8 @@ class _NotesPageState extends State<NotesPage> {
             priority: draft.priority,
             tags: draft.tags,
             updatedAt: now,
+            reminderAt: draft.reminderAt,
+            clearReminder: draft.clearReminder,
           );
 
     final result = await widget.repository.saveNote(
@@ -500,6 +503,8 @@ class _NoteDraft {
     required this.type,
     required this.priority,
     required this.tags,
+    required this.reminderAt,
+    required this.clearReminder,
   });
 
   final String title;
@@ -507,6 +512,8 @@ class _NoteDraft {
   final NoteType type;
   final NotePriority priority;
   final List<String> tags;
+  final DateTime? reminderAt;
+  final bool clearReminder;
 }
 
 class _NoteDialog extends StatefulWidget {
@@ -524,6 +531,7 @@ class _NoteDialogState extends State<_NoteDialog> {
   late final TextEditingController _tagsController;
   late NoteType _type;
   late NotePriority _priority;
+  DateTime? _reminderAt;
 
   @override
   void initState() {
@@ -534,6 +542,37 @@ class _NoteDialogState extends State<_NoteDialog> {
     _tagsController = TextEditingController(text: note?.tags.join(', ') ?? '');
     _type = note?.type ?? NoteType.general;
     _priority = note?.priority ?? NotePriority.medium;
+    _reminderAt = note?.reminderAt?.toLocal();
+  }
+
+  Future<void> _pickReminder() async {
+    final now = DateTime.now();
+    final initial = _reminderAt ?? now.add(const Duration(days: 1));
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 10),
+    );
+    if (!mounted || date == null) {
+      return;
+    }
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (!mounted || time == null) {
+      return;
+    }
+    setState(() {
+      _reminderAt = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
   }
 
   @override
@@ -561,6 +600,8 @@ class _NoteDialogState extends State<_NoteDialog> {
         type: _type,
         priority: _priority,
         tags: tags,
+        reminderAt: _reminderAt?.toUtc(),
+        clearReminder: _reminderAt == null,
       ),
     );
   }
@@ -622,6 +663,26 @@ class _NoteDialogState extends State<_NoteDialog> {
               decoration: const InputDecoration(
                 labelText: 'وسوم مفصولة بفاصلة',
               ),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.event_note_outlined),
+              title: const Text('موعد المتابعة (اختياري)'),
+              subtitle: Text(
+                _reminderAt == null
+                    ? 'لا يوجد موعد. لا يتم إرسال إشعار تلقائي.'
+                    : '${MaterialLocalizations.of(context).formatMediumDate(_reminderAt!)} '
+                      '${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(_reminderAt!))}',
+              ),
+              onTap: _pickReminder,
+              trailing: _reminderAt == null
+                  ? const Icon(Icons.edit_calendar_outlined)
+                  : IconButton(
+                      tooltip: 'إزالة الموعد',
+                      onPressed: () => setState(() => _reminderAt = null),
+                      icon: const Icon(Icons.clear),
+                    ),
             ),
           ],
         ),
