@@ -1218,6 +1218,7 @@ class _ModuleLandingPage extends StatelessWidget {
       return ProductsPage(
         repository: productRepository,
         categoryRepository: categoryRepository,
+        inventoryRepository: inventoryRepository,
         user: user,
         membership: membership,
       );
