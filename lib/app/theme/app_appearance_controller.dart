@@ -138,7 +138,7 @@ class AppAppearanceScope extends InheritedNotifier<AppAppearanceController> {
     super.key,
   }) : super(notifier: controller);
 
-  static AppAppearanceController? maybeOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<AppAppearanceScope>()
-          ?.notifier;
+  static AppAppearanceController? maybeOf(BuildContext context) => context
+      .dependOnInheritedWidgetOfExactType<AppAppearanceScope>()
+      ?.notifier;
 }
