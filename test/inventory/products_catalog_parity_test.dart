@@ -116,7 +116,8 @@ void main() {
         _part('c', 'محول', 4000, currency: 'USD'),
         _part('s', 'تصليح', 0, isService: true),
       ];
-    await tester.pumpWidget(_screen(repo, 'store-a', categories: _CategorySource()));
+    await tester
+        .pumpWidget(_screen(repo, 'store-a', categories: _CategorySource()));
     await tester.pumpAndSettle();
     expect(find.text('أصناف نشطة: 4'), findsOneWidget);
     expect(find.text('خدمات: 1'), findsOneWidget);
