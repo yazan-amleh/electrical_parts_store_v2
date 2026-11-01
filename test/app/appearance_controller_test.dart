@@ -67,12 +67,12 @@ void main() {
           ),
         );
     await tester.pumpWidget(app());
-    expect(Theme.of(tester.element(find.text('V2'))).brightness,
-        Brightness.light);
+    expect(
+        Theme.of(tester.element(find.text('V2'))).brightness, Brightness.light);
     await controller.setThemeMode(ThemeMode.dark);
     await tester.pumpAndSettle();
-    expect(Theme.of(tester.element(find.text('V2'))).brightness,
-        Brightness.dark);
+    expect(
+        Theme.of(tester.element(find.text('V2'))).brightness, Brightness.dark);
     await controller.setAccent(AppearanceAccent.teal);
     await tester.pumpAndSettle();
     expect(
