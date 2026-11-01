@@ -158,7 +158,8 @@ class FirestoreInventoryCountRepository implements InventoryCountRepository {
       );
     }
     try {
-      final response = await _functions.httpsCallable(action).call<Map<String, dynamic>>({
+      final response =
+          await _functions.httpsCallable(action).call<Map<String, dynamic>>({
         'storeId': context.storeId,
         'countId': countId,
         ...details,
