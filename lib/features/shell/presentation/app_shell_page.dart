@@ -799,7 +799,8 @@ class _AppShellPageState extends State<AppShellPage> {
           categoryInventoryDocumentBuilder:
               widget.dependencies.categoryInventoryDocumentBuilder,
           inventoryRepository: widget.dependencies.inventoryRepository,
-          inventoryCountRepository: widget.dependencies.inventoryCountRepository,
+          inventoryCountRepository:
+              widget.dependencies.inventoryCountRepository,
           saleRepository: widget.dependencies.saleRepository,
           purchaseRepository: widget.dependencies.purchaseRepository,
           purchaseOrderRepository: widget.dependencies.purchaseOrderRepository,
