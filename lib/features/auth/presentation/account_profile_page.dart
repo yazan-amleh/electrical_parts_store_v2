@@ -1,8 +1,12 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/result/result.dart';
 import '../domain/entities/authenticated_user.dart';
 import '../domain/repositories/account_profile_repository.dart';
+import '../domain/repositories/account_avatar_repository.dart';
 
 /// V1 personal-profile entry screen, deliberately separate from store settings.
 /// Identity updates always act on the signed-in Firebase user, never on a UID
@@ -11,10 +15,12 @@ class AccountProfilePage extends StatefulWidget {
   const AccountProfilePage({
     required this.repository,
     required this.user,
+    this.avatarRepository,
     super.key,
   });
 
   final AccountProfileRepository repository;
+  final AccountAvatarRepository? avatarRepository;
   final AuthenticatedUser user;
 
   @override
@@ -29,22 +35,32 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
   bool _saving = false;
   String? _error;
   int _epoch = 0;
+  int _avatarEpoch = 0;
+  Uint8List? _avatar;
+  bool _avatarBusy = false;
+  String? _avatarError;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadAvatar();
   }
 
   @override
   void didUpdateWidget(covariant AccountProfilePage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.user.id != widget.user.id ||
-        oldWidget.repository != widget.repository) {
+        oldWidget.repository != widget.repository ||
+        oldWidget.avatarRepository != widget.avatarRepository) {
       ++_epoch;
       _profile = null;
       _name.clear();
+      _avatar = null;
+      _avatarError = null;
+      ++_avatarEpoch;
       _load();
+      _loadAvatar();
     }
   }
 
@@ -98,6 +114,80 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
     }
   }
 
+  Future<void> _loadAvatar() async {
+    final repository = widget.avatarRepository;
+    if (repository == null) return;
+    final expectedId = widget.user.id;
+    final epoch = ++_avatarEpoch;
+    setState(() {
+      _avatarBusy = true;
+      _avatarError = null;
+    });
+    final result = await repository.load(expectedUserId: expectedId);
+    if (!mounted || epoch != _avatarEpoch || expectedId != widget.user.id) {
+      return;
+    }
+    setState(() {
+      _avatarBusy = false;
+      if (result is Success<Uint8List?>) {
+        _avatar = result.value;
+      } else if (result is FailureResult<Uint8List?>) {
+        _avatarError = result.failure.message;
+      }
+    });
+  }
+
+  Future<void> _uploadAvatar() async {
+    final repository = widget.avatarRepository;
+    if (repository == null || _avatarBusy) return;
+    final expectedId = widget.user.id;
+    final epoch = ++_avatarEpoch;
+    setState(() {
+      _avatarBusy = true;
+      _avatarError = null;
+    });
+    try {
+      final selected = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+        withData: true,
+      );
+      if (!mounted || epoch != _avatarEpoch || expectedId != widget.user.id) {
+        return;
+      }
+      if (selected == null) return;
+      final file = selected.files.single;
+      if (file.size > AccountAvatarValidation.maxBytes ||
+          file.bytes == null ||
+          AccountAvatarValidation.mimeType(file.bytes!) == null) {
+        setState(() => _avatarError =
+            'اختر صورة JPEG أو PNG سليمة بحجم لا يتجاوز 2MB.');
+        return;
+      }
+      final result = await repository.upload(
+        expectedUserId: expectedId,
+        bytes: file.bytes!,
+      );
+      if (!mounted || epoch != _avatarEpoch || expectedId != widget.user.id) {
+        return;
+      }
+      if (result is Success<Uint8List>) {
+        setState(() => _avatar = result.value);
+        _show('تم تحديث الصورة الشخصية.');
+      } else if (result is FailureResult<Uint8List>) {
+        setState(() => _avatarError = result.failure.message);
+      }
+    } catch (_) {
+      if (mounted && epoch == _avatarEpoch) {
+        setState(() => _avatarError = 'تعذر اختيار الصورة الشخصية.');
+      }
+    } finally {
+      if (mounted && epoch == _avatarEpoch) {
+        setState(() => _avatarBusy = false);
+      }
+    }
+  }
+
   void _show(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -108,6 +198,7 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
   @override
   void dispose() {
     ++_epoch;
+    ++_avatarEpoch;
     _name.dispose();
     super.dispose();
   }
@@ -148,7 +239,12 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                                 Center(
                                   child: CircleAvatar(
                                     radius: 44,
-                                    child: Text(
+                                    backgroundImage: _avatar == null
+                                        ? null
+                                        : MemoryImage(_avatar!),
+                                    child: _avatar != null
+                                        ? null
+                                        : Text(
                                       (_profile?.displayName?.isNotEmpty == true
                                               ? _profile!.displayName!
                                               : _profile?.email ?? '?')
@@ -158,6 +254,40 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                                     ),
                                   ),
                                 ),
+                                if (widget.avatarRepository != null) ...[
+                                  const SizedBox(height: 8),
+                                  Center(
+                                    child: OutlinedButton.icon(
+                                      onPressed:
+                                          _avatarBusy ? null : _uploadAvatar,
+                                      icon: _avatarBusy
+                                          ? const SizedBox(
+                                              height: 16,
+                                              width: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.add_a_photo_outlined),
+                                      label: const Text('تغيير الصورة الشخصية'),
+                                    ),
+                                  ),
+                                  const Text(
+                                    'صور PNG أو JPEG حتى 2MB. '
+                                    'الصورة خاصة بحسابك ولا تُنشر برابط عام.',
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  if (_avatarError != null)
+                                    Text(
+                                      _avatarError!,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme.error,
+                                      ),
+                                    ),
+                                ],
                                 const SizedBox(height: 16),
                                 TextFormField(
                                   controller: _name,
