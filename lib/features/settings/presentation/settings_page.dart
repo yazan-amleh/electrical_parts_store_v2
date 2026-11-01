@@ -5,6 +5,7 @@ import '../../../app/theme/app_appearance_controller.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/repositories/account_profile_repository.dart';
+import '../../auth/domain/repositories/account_avatar_repository.dart';
 import '../../auth/presentation/account_profile_page.dart';
 import '../domain/entities/store_member.dart';
 import '../../auth/domain/entities/store_membership.dart';
@@ -18,11 +19,13 @@ class SettingsPage extends StatefulWidget {
     required this.user,
     required this.membership,
     this.accountProfileRepository,
+    this.accountAvatarRepository,
     super.key,
   });
 
   final SettingsRepository? repository;
   final AccountProfileRepository? accountProfileRepository;
+  final AccountAvatarRepository? accountAvatarRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -177,6 +180,7 @@ class _SettingsPageState extends State<SettingsPage> {
             MaterialPageRoute<void>(
               builder: (_) => AccountProfilePage(
                 repository: repository,
+                avatarRepository: widget.accountAvatarRepository,
                 user: widget.user,
               ),
             ),
