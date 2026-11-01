@@ -104,7 +104,8 @@ class FirebaseAccountProfileRepository implements AccountProfileRepository {
     required String currentPassword,
     required String newPassword,
   }) async {
-    if (currentPassword.isEmpty || newPassword.length < 8 ||
+    if (currentPassword.isEmpty ||
+        newPassword.length < 8 ||
         newPassword == currentPassword) {
       return const FailureResult<void>(
         ValidationFailure(
@@ -119,9 +120,11 @@ class FirebaseAccountProfileRepository implements AccountProfileRepository {
         AuthorizationFailure('الحساب الحالي لا يدعم تغيير كلمة المرور هنا.'),
       );
     }
-    if (!user.providerData.any((provider) => provider.providerId == 'password')) {
+    if (!user.providerData
+        .any((provider) => provider.providerId == 'password')) {
       return const FailureResult<void>(
-        AuthorizationFailure('الحساب غير مرتبط بتسجيل دخول البريد وكلمة المرور.'),
+        AuthorizationFailure(
+            'الحساب غير مرتبط بتسجيل دخول البريد وكلمة المرور.'),
       );
     }
     try {
