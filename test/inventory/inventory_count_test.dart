@@ -53,7 +53,7 @@ void main() {
       count.estimatedDifferenceByCurrency,
       {
         'ILS': const Money(minorUnits: -250),
-        'USD': const Money(minorUnits: 300)
+        'USD': const Money(minorUnits: 300, currency: 'USD')
       },
     );
     expect(count.status, InventoryCountStatus.draft);
