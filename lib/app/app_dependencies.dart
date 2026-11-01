@@ -14,6 +14,7 @@ import '../features/auth/application/auth_session_controller.dart';
 import '../features/auth/domain/repositories/account_avatar_repository.dart';
 import '../features/auth/domain/repositories/account_profile_repository.dart';
 import '../features/inventory/domain/repositories/inventory_repository.dart';
+import '../features/inventory/domain/repositories/inventory_count_repository.dart';
 import '../features/inventory/domain/repositories/product_repository.dart';
 import '../features/sales/domain/repositories/sale_repository.dart';
 import '../features/purchases/domain/repositories/purchase_repository.dart';
@@ -49,6 +50,7 @@ class AppDependencies {
     this.accountingQueryRepository,
     this.chartMutationRepository,
     this.inventoryRepository,
+    this.inventoryCountRepository,
     this.productRepository,
     this.saleRepository,
     this.purchaseRepository,
@@ -86,6 +88,7 @@ class AppDependencies {
   final AccountingQueryRepository? accountingQueryRepository;
   final FirestoreChartMutationRepository? chartMutationRepository;
   final InventoryRepository? inventoryRepository;
+  final InventoryCountRepository? inventoryCountRepository;
   final ProductRepository? productRepository;
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
