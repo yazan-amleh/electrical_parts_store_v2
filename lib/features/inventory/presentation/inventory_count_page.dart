@@ -102,8 +102,9 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
     List<Category> categories = const [];
     if (categoriesRepo != null) {
       final result = await categoriesRepo.getCategories(context: scope);
-      if (!_still(epoch, scope) || widget.categoryRepository != categoriesRepo)
+      if (!_still(epoch, scope) || widget.categoryRepository != categoriesRepo) {
         return;
+      }
       if (result is Success<List<Category>>) {
         categories = result.value
             .where((value) => value.storeId == scope.storeId)
@@ -242,7 +243,9 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
         selected.status != InventoryCountStatus.draft ||
         repository == null ||
         _busy ||
-        !_canCount) return;
+        !_canCount) {
+      return;
+    }
 
     final actual = TextEditingController(
       text: item.actualQuantity?.formatted ?? '',
@@ -353,7 +356,9 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
         repository == null ||
         _busy ||
         !_canCount ||
-        !count.canComplete) return;
+        !count.canComplete) {
+      return;
+    }
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -401,7 +406,9 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
         _busy ||
         !_canCount ||
         (count.status != InventoryCountStatus.draft &&
-            count.status != InventoryCountStatus.completed)) return;
+            count.status != InventoryCountStatus.completed)) {
+      return;
+    }
     final reason = TextEditingController();
     final accepted = await showDialog<bool>(
       context: context,
