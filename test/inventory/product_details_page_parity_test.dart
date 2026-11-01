@@ -16,8 +16,7 @@ import 'package:electrical_parts_store_v2/features/inventory/presentation/produc
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Product _product({String storeId = 'store-a', String id = 'part-1'}) =>
-    Product(
+Product _product({String storeId = 'store-a', String id = 'part-1'}) => Product(
       id: id,
       storeId: storeId,
       name: 'مفتاح كهربائي',
@@ -40,7 +39,8 @@ InventoryMovement _movement({
   int milli = 1000,
   InventoryMovementType type = InventoryMovementType.purchaseReceipt,
   String sourceId = 'PO-33',
-}) => InventoryMovement(
+}) =>
+    InventoryMovement(
       id: id,
       productId: productId,
       storeId: storeId,
@@ -91,10 +91,14 @@ class _History implements InventoryRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _page(_Products products, _History? history, String storeId, {
+Widget _page(
+  _Products products,
+  _History? history,
+  String storeId, {
   String productId = 'part-1',
   VoidCallback? onEdit,
-}) => MaterialApp(
+}) =>
+    MaterialApp(
       home: ProductDetailsPage(
         key: const ValueKey('product-details'),
         productId: productId,
@@ -126,7 +130,8 @@ void main() {
     expect(find.text('تفاصيل الصنف'), findsOneWidget);
     expect(find.text('مفتاح كهربائي'), findsWidgets);
     expect(find.text('SW-1'), findsOneWidget);
-    expect(find.textContaining('تنبيه: الصنف عند حد إعادة الطلب'), findsOneWidget);
+    expect(
+        find.textContaining('تنبيه: الصنف عند حد إعادة الطلب'), findsOneWidget);
     expect(find.text('سجل حركات الصنف'), findsOneWidget);
     expect(find.text('الحركات المطابقة: 2'), findsOneWidget);
     expect(find.text('وارد في المعروض: 1.000'), findsOneWidget);
@@ -157,8 +162,7 @@ void main() {
   testWidgets('rejects cross-product or cross-store movement data',
       (tester) async {
     final products = _Products();
-    final history = _History()
-      ..data = [_movement(storeId: 'store-b')];
+    final history = _History()..data = [_movement(storeId: 'store-b')];
     await tester.pumpWidget(_page(products, history, 'store-a'));
     await tester.pumpAndSettle();
     expect(find.textContaining('تم رفض حركات تخص صنفًا'), findsOneWidget);
