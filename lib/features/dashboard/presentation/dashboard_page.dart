@@ -75,7 +75,8 @@ class _DashboardPageState extends State<DashboardPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.user.id != widget.user.id ||
         oldWidget.membership.storeId != widget.membership.storeId ||
-        oldWidget.accountingQueryRepository != widget.accountingQueryRepository ||
+        oldWidget.accountingQueryRepository !=
+            widget.accountingQueryRepository ||
         oldWidget.productRepository != widget.productRepository ||
         oldWidget.reportsRepository != widget.reportsRepository) {
       _loadViewPreference();
@@ -704,7 +705,6 @@ class _DashboardPageState extends State<DashboardPage> {
     ++_reportEpoch;
     super.dispose();
   }
-
 }
 
 class _DashboardMetric {
