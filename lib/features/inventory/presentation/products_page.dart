@@ -489,7 +489,9 @@ class _ProductsPageState extends State<ProductsPage> {
       if (!mounted ||
           editEpoch != _loadEpoch ||
           editContext.storeId != widget.membership.storeId ||
-          editContext.userId != widget.user.id) return;
+          editContext.userId != widget.user.id) {
+        return;
+      }
 
       if (result is FailureResult<void>) {
         _showMessage(result.failure.message);
@@ -524,7 +526,9 @@ class _ProductsPageState extends State<ProductsPage> {
         epoch != _categoryEpoch ||
         repository != widget.categoryRepository ||
         requestedContext.storeId != widget.membership.storeId ||
-        requestedContext.userId != widget.user.id) return;
+        requestedContext.userId != widget.user.id) {
+      return;
+    }
 
     if (result is Success<List<Category>>) {
       if (result.value
