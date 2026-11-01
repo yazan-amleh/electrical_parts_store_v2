@@ -18,6 +18,7 @@ import '../features/categories/data/exporters/pdf_category_inventory_document_bu
 import '../features/cheques/data/repositories/firestore_cheque_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
 import '../features/auth/data/repositories/firebase_auth_repository.dart';
+import '../features/auth/data/repositories/firebase_account_profile_repository.dart';
 import '../features/auth/data/repositories/firestore_store_membership_repository.dart';
 import '../features/auth/data/repositories/firebase_store_onboarding_repository.dart';
 import '../features/inventory/data/repositories/firestore_inventory_repository.dart';
@@ -88,6 +89,9 @@ abstract final class AppBootstrap {
     return AppDependencies(
       runtime: runtime,
       authSession: session,
+      accountProfileRepository: FirebaseAccountProfileRepository(
+        auth: FirebaseAuth.instance,
+      ),
       accountingAuditRepository: FirestoreAccountingAuditRepository(
         functions: functions,
       ),
