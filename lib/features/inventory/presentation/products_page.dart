@@ -104,8 +104,7 @@ class _ProductsPageState extends State<ProductsPage> {
     }).toList();
     filtered.sort((left, right) {
       int compare = 0;
-      if (_sortOrder == 'stock-ascending' ||
-          _sortOrder == 'stock-descending') {
+      if (_sortOrder == 'stock-ascending' || _sortOrder == 'stock-descending') {
         if (left.isService != right.isService) {
           return left.isService ? 1 : -1;
         }
@@ -113,8 +112,8 @@ class _ProductsPageState extends State<ProductsPage> {
             .compareTo(right.quantityOnHand.milliUnits);
         if (_sortOrder == 'stock-descending') compare = -compare;
       } else if (_sortOrder == 'price') {
-        compare = left.sellingPrice.currency
-            .compareTo(right.sellingPrice.currency);
+        compare =
+            left.sellingPrice.currency.compareTo(right.sellingPrice.currency);
         if (compare == 0) {
           compare = left.sellingPrice.minorUnits
               .compareTo(right.sellingPrice.minorUnits);
@@ -216,7 +215,8 @@ class _ProductsPageState extends State<ProductsPage> {
                   key: const ValueKey('products-sort'),
                   value: _sortOrder,
                   items: const [
-                    DropdownMenuItem(value: 'name', child: Text('ترتيب: الاسم')),
+                    DropdownMenuItem(
+                        value: 'name', child: Text('ترتيب: الاسم')),
                     DropdownMenuItem(value: 'sku', child: Text('ترتيب: SKU')),
                     DropdownMenuItem(
                       value: 'stock-ascending',
@@ -470,7 +470,8 @@ class _ProductsPageState extends State<ProductsPage> {
         categories: _categories,
       ),
     );
-    if (!mounted || product == null ||
+    if (!mounted ||
+        product == null ||
         editEpoch != _loadEpoch ||
         editContext.storeId != widget.membership.storeId ||
         editContext.userId != widget.user.id ||
@@ -526,8 +527,8 @@ class _ProductsPageState extends State<ProductsPage> {
         requestedContext.userId != widget.user.id) return;
 
     if (result is Success<List<Category>>) {
-      if (result.value.any((category) =>
-          category.storeId != requestedContext.storeId)) {
+      if (result.value
+          .any((category) => category.storeId != requestedContext.storeId)) {
         setState(() {
           _categories = const <Category>[];
           _selectedCategoryId = null;
