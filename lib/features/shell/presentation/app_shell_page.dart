@@ -817,7 +817,8 @@ class _AppShellPageState extends State<AppShellPage> {
           chatAttachmentRepository:
               widget.dependencies.chatAttachmentRepository,
           settingsRepository: widget.dependencies.settingsRepository,
-          accountProfileRepository: widget.dependencies.accountProfileRepository,
+          accountProfileRepository:
+              widget.dependencies.accountProfileRepository,
           noteRepository: widget.dependencies.noteRepository,
           notificationRepository: widget.dependencies.notificationRepository,
           activityLogRepository: widget.dependencies.activityLogRepository,
