@@ -95,7 +95,7 @@ class InventoryCount {
     required this.status,
     required this.revision,
     required this.createdBy,
-    required this.items,
+    required List<InventoryCountItem> items,
     this.categoryId,
     this.notes = '',
   }) : items = List.unmodifiable(items);
