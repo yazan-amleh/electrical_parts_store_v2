@@ -11,6 +11,7 @@ import '../features/notes/domain/repositories/note_repository.dart';
 import '../features/categories/domain/services/category_inventory_document_builder.dart';
 import '../features/cheques/domain/repositories/cheque_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
+import '../features/auth/domain/repositories/account_avatar_repository.dart';
 import '../features/auth/domain/repositories/account_profile_repository.dart';
 import '../features/inventory/domain/repositories/inventory_repository.dart';
 import '../features/inventory/domain/repositories/product_repository.dart';
@@ -38,6 +39,7 @@ class AppDependencies {
     required this.runtime,
     this.authSession,
     this.accountProfileRepository,
+    this.accountAvatarRepository,
     this.accountingRepository,
     this.accountingAuditRepository,
     this.accountingCloseRepository,
@@ -74,6 +76,7 @@ class AppDependencies {
   final AppRuntimeConfig runtime;
   final AuthSessionController? authSession;
   final AccountProfileRepository? accountProfileRepository;
+  final AccountAvatarRepository? accountAvatarRepository;
   final AccountingRepository? accountingRepository;
   final AccountingAuditRepository? accountingAuditRepository;
   final FirestoreAccountingCloseRepository? accountingCloseRepository;
