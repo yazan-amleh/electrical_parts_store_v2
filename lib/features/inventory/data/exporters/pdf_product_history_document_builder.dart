@@ -28,7 +28,8 @@ class PdfProductHistoryDocumentBuilder {
         movements.any((entry) =>
             entry.storeId != expectedStoreId ||
             entry.productId != product.id)) {
-      throw StateError('Product history belongs to a different store or product.');
+      throw StateError(
+          'Product history belongs to a different store or product.');
     }
     final font = pw.Font.ttf(
       await _bundle.load('assets/fonts/Rubik-Regular.ttf'),
@@ -43,8 +44,7 @@ class PdfProductHistoryDocumentBuilder {
     final outgoing = movements
         .where((m) => m.quantityDelta.milliUnits < 0)
         .fold<int>(0, (sum, m) => sum - m.quantityDelta.milliUnits);
-    String quantity(int milli) =>
-        (milli / 1000).toStringAsFixed(3);
+    String quantity(int milli) => (milli / 1000).toStringAsFixed(3);
     String stamp(DateTime value) {
       final v = value.toLocal();
       return '${v.year}/${v.month.toString().padLeft(2, '0')}/'
@@ -52,7 +52,9 @@ class PdfProductHistoryDocumentBuilder {
           '${v.hour.toString().padLeft(2, '0')}:'
           '${v.minute.toString().padLeft(2, '0')}';
     }
-    final title = pw.TextStyle(font: bold, color: PdfColors.blue800, fontSize: 17);
+
+    final title =
+        pw.TextStyle(font: bold, color: PdfColors.blue800, fontSize: 17);
     final label = pw.TextStyle(font: font, fontSize: 9);
 
     document.addPage(
@@ -76,7 +78,8 @@ class PdfProductHistoryDocumentBuilder {
           pw.SizedBox(height: 8),
           pw.Text('المتجر: $expectedStoreId    الصنف: ${product.name}',
               style: pw.TextStyle(font: bold, fontSize: 12)),
-          pw.Text('SKU: ${product.sku ?? '-'}    الباركود: ${product.barcode ?? '-'}',
+          pw.Text(
+              'SKU: ${product.sku ?? '-'}    الباركود: ${product.barcode ?? '-'}',
               style: label),
           pw.Text(
             'الرصيد الحالي المسجل: ${product.quantityOnHand.formatted}'
@@ -133,13 +136,12 @@ class PdfProductHistoryDocumentBuilder {
                     movement.description,
                   ],
               ],
-              headerStyle: pw.TextStyle(
-                  font: bold, fontSize: 9, color: PdfColors.white),
+              headerStyle:
+                  pw.TextStyle(font: bold, fontSize: 9, color: PdfColors.white),
               cellStyle: pw.TextStyle(font: font, fontSize: 8),
               headerDecoration:
                   const pw.BoxDecoration(color: PdfColors.blue800),
-              oddRowDecoration:
-                  const pw.BoxDecoration(color: PdfColors.blue50),
+              oddRowDecoration: const pw.BoxDecoration(color: PdfColors.blue50),
               cellAlignment: pw.Alignment.centerRight,
               border: pw.TableBorder.all(
                 color: PdfColors.blue100,
