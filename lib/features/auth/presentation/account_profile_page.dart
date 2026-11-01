@@ -376,6 +376,7 @@ class _ChangeAccountPasswordPageState extends State<ChangeAccountPasswordPage> {
                   ),
                   const SizedBox(height: 24),
                   FilledButton.icon(
+                    key: const Key('change-account-password-submit'),
                     onPressed: _saving || _success ? null : _change,
                     icon: _saving
                         ? const SizedBox(
