@@ -21,6 +21,7 @@ const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
 const {writeActivity} = require('./activity_log_triggers');
 const {runNoteReminderCycle} = require('./note_reminder_delivery');
+const {createInventoryCountHandlers} = require('./inventory_counts');
 const { createStoreHandler, selectStoreHandler } = require('./store_onboarding');
 const {
   updateStoreProfileHandler,
@@ -636,6 +637,14 @@ exports.logPurchaseReturnActivity = onDocumentCreated(
   }),
 );
 
+
+const inventoryCountHandlers = createInventoryCountHandlers({
+  db, FieldValue, HttpsError,
+});
+exports.createInventoryCount = onCall(inventoryCountHandlers.create);
+exports.updateInventoryCountItem = onCall(inventoryCountHandlers.edit);
+exports.completeInventoryCount = onCall(inventoryCountHandlers.complete);
+exports.cancelInventoryCount = onCall(inventoryCountHandlers.cancel);
 
 exports.postInventoryMovement = onCall(async (request) => {
   if (!request.auth) {
