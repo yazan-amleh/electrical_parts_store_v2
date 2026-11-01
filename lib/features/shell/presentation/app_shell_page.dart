@@ -65,6 +65,7 @@ import '../../chat/presentation/chat_page.dart';
 import '../../chatbot/presentation/chatbot_page.dart';
 import '../../settings/domain/repositories/settings_repository.dart';
 import '../../auth/domain/repositories/account_profile_repository.dart';
+import '../../auth/domain/repositories/account_avatar_repository.dart';
 import '../../settings/domain/entities/store_profile.dart';
 import '../../notes/domain/repositories/note_repository.dart';
 import '../../notifications/domain/repositories/notification_repository.dart';
@@ -819,6 +820,7 @@ class _AppShellPageState extends State<AppShellPage> {
           settingsRepository: widget.dependencies.settingsRepository,
           accountProfileRepository:
               widget.dependencies.accountProfileRepository,
+          accountAvatarRepository: widget.dependencies.accountAvatarRepository,
           noteRepository: widget.dependencies.noteRepository,
           notificationRepository: widget.dependencies.notificationRepository,
           activityLogRepository: widget.dependencies.activityLogRepository,
@@ -1042,6 +1044,7 @@ class _ModuleLandingPage extends StatelessWidget {
     this.chatAttachmentRepository,
     required this.settingsRepository,
     this.accountProfileRepository,
+    this.accountAvatarRepository,
     this.noteRepository,
     this.notificationRepository,
     this.activityLogRepository,
@@ -1080,6 +1083,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final ChatAttachmentRepository? chatAttachmentRepository;
   final SettingsRepository? settingsRepository;
   final AccountProfileRepository? accountProfileRepository;
+  final AccountAvatarRepository? accountAvatarRepository;
   final NoteRepository? noteRepository;
   final NotificationRepository? notificationRepository;
   final ActivityLogRepository? activityLogRepository;
@@ -1336,6 +1340,7 @@ class _ModuleLandingPage extends StatelessWidget {
       return SettingsPage(
         repository: settingsRepository,
         accountProfileRepository: accountProfileRepository,
+        accountAvatarRepository: accountAvatarRepository,
         user: user,
         membership: membership,
       );
