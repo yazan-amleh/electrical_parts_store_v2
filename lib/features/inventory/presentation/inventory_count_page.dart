@@ -102,7 +102,8 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
     List<Category> categories = const [];
     if (categoriesRepo != null) {
       final result = await categoriesRepo.getCategories(context: scope);
-      if (!_still(epoch, scope) || widget.categoryRepository != categoriesRepo) {
+      if (!_still(epoch, scope) ||
+          widget.categoryRepository != categoriesRepo) {
         return;
       }
       if (result is Success<List<Category>>) {
