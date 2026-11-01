@@ -159,8 +159,10 @@ void main() {
       ),
     ));
     await tester.enterText(find.byType(TextFormField).at(0), 'wrong-current');
-    await tester.enterText(find.byType(TextFormField).at(1), 'new-password-safe');
-    await tester.enterText(find.byType(TextFormField).at(2), 'new-password-safe');
+    await tester.enterText(
+        find.byType(TextFormField).at(1), 'new-password-safe');
+    await tester.enterText(
+        find.byType(TextFormField).at(2), 'new-password-safe');
     await tester.tap(find.text('تغيير كلمة المرور').last);
     await tester.pumpAndSettle();
     expect(repository.passwords.single.$1, 'b');
