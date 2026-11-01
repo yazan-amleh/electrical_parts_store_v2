@@ -287,6 +287,7 @@ class _PartyDirectoryPageState extends State<PartyDirectoryPage> {
           width: 680,
           child: PartyPaymentsPage(
             repository: widget.paymentRepository,
+            partyRepository: widget.repository,
             user: widget.user,
             membership: widget.membership,
             initialPartyType: party.type,

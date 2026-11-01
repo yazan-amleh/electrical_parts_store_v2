@@ -1,21 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/money/money.dart';
 import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
 import '../../accounting/domain/entities/account.dart';
 import '../../accounting/domain/entities/trial_balance.dart';
 import '../../accounting/domain/enums/accounting_enums.dart';
 import '../../accounting/domain/repositories/accounting_query_repository.dart';
 import '../../inventory/domain/entities/product.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
+import '../../reports/domain/repositories/reports_repository.dart';
+import '../../reports/domain/entities/operational_report.dart';
+import 'dashboard_quick_access.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({
     required this.accountingQueryRepository,
     required this.productRepository,
+    this.reportsRepository,
+    this.onOpenModule,
     required this.user,
     required this.membership,
     super.key,
@@ -23,6 +30,8 @@ class DashboardPage extends StatefulWidget {
 
   final AccountingQueryRepository? accountingQueryRepository;
   final ProductRepository? productRepository;
+  final ReportsRepository? reportsRepository;
+  final ValueChanged<String>? onOpenModule;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -31,11 +40,17 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  static const _currency = 'ILS';
+  String _selectedCurrency = 'ILS';
+  String get _currency => _selectedCurrency;
 
   TrialBalance? _trialBalance;
   List<Product> _products = const <Product>[];
+  OperationalReport? _operationalReport;
+  String? _operationalError;
   bool _isLoading = true;
+  bool _shortcutsOnly = false;
+  int _preferenceEpoch = 0;
+  int _reportEpoch = 0;
   String? _errorMessage;
 
   StoreContext get _storeContext {
@@ -45,35 +60,89 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  String get _viewPreferenceKey =>
+      'v2:dashboard-cards-only:${widget.membership.storeId}:${widget.user.id}';
+
   @override
   void initState() {
     super.initState();
+    _loadViewPreference();
     _load();
   }
 
   @override
+  void didUpdateWidget(covariant DashboardPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId ||
+        oldWidget.accountingQueryRepository !=
+            widget.accountingQueryRepository ||
+        oldWidget.productRepository != widget.productRepository ||
+        oldWidget.reportsRepository != widget.reportsRepository) {
+      _loadViewPreference();
+      _load();
+    }
+  }
+
+  Future<void> _loadViewPreference() async {
+    final epoch = ++_preferenceEpoch;
+    bool onlyCards = false;
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      onlyCards = preferences.getBool(_viewPreferenceKey) ?? false;
+    } catch (_) {
+      // Local storage is optional; default to the full dashboard.
+    }
+    if (!mounted || epoch != _preferenceEpoch) return;
+    setState(() => _shortcutsOnly = onlyCards);
+  }
+
+  Future<void> _setShortcutsOnly(bool selected) async {
+    ++_preferenceEpoch;
+    setState(() => _shortcutsOnly = selected);
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      if (!await preferences.setBool(_viewPreferenceKey, selected)) {
+        throw StateError('Dashboard preference could not be saved');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر حفظ تفضيل عرض لوحة التحكم.')),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_shortcutsOnly) return _buildNavigationHome();
     if (widget.accountingQueryRepository == null ||
         widget.productRepository == null) {
-      return const Center(
-        child: Text('مستودعات لوحة التحكم غير موصولة بهذه البيئة.'),
+      return _buildNavigationHome(
+        const Text('مستودعات لوحة التحكم غير موصولة بهذه البيئة.'),
       );
     }
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return _buildNavigationHome(
+        const CircularProgressIndicator(),
+      );
     }
     if (_errorMessage != null || _trialBalance == null) {
-      return _buildErrorState();
+      return _buildNavigationHome(_buildErrorState());
     }
 
     final metrics = _buildMetrics();
-    final lowStockProducts =
-        _products.where((product) => product.isLowStock).toList()
-          ..sort(
-            (left, right) => left.quantityOnHand.milliUnits.compareTo(
-              right.quantityOnHand.milliUnits,
-            ),
-          );
+    final lowStockProducts = _products
+        .where(
+          (product) =>
+              product.isActive && !product.isService && product.isLowStock,
+        )
+        .toList()
+      ..sort(
+        (left, right) => left.quantityOnHand.milliUnits.compareTo(
+          right.quantityOnHand.milliUnits,
+        ),
+      );
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -84,14 +153,28 @@ class _DashboardPageState extends State<DashboardPage> {
           padding: const EdgeInsets.all(24),
           children: [
             _buildHeader(context),
+            _buildViewModeSwitch(),
+            if (widget.onOpenModule != null) ...[
+              const SizedBox(height: 18),
+              DashboardQuickAccess(
+                storeId: widget.membership.storeId,
+                userId: widget.user.id,
+                role: widget.membership.role,
+                onOpenModule: widget.onOpenModule!,
+              ),
+            ],
+            const SizedBox(height: 12),
+            _buildCurrencySelector(),
+            const SizedBox(height: 12),
+            _buildOperationalSummary(context),
             const SizedBox(height: 20),
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: metrics.length,
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 250,
-                mainAxisExtent: 132,
+                maxCrossAxisExtent: 300,
+                mainAxisExtent: 184,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
               ),
@@ -106,6 +189,44 @@ class _DashboardPageState extends State<DashboardPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildNavigationHome([Widget? status]) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          _buildHeader(context),
+          _buildViewModeSwitch(),
+          if (widget.onOpenModule != null) ...[
+            const SizedBox(height: 18),
+            DashboardQuickAccess(
+              storeId: widget.membership.storeId,
+              userId: widget.user.id,
+              role: widget.membership.role,
+              onOpenModule: widget.onOpenModule!,
+            ),
+          ],
+          if (status != null) ...[
+            const SizedBox(height: 24),
+            Center(child: status),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildViewModeSwitch() {
+    return SwitchListTile.adaptive(
+      key: const ValueKey('dashboard-shortcuts-only'),
+      contentPadding: EdgeInsets.zero,
+      title: const Text('عرض الاختصارات فقط'),
+      subtitle: const Text('إخفاء المؤشرات المالية والتركيز على بطاقات العمل'),
+      secondary: const Icon(Icons.grid_view_rounded),
+      value: _shortcutsOnly,
+      onChanged: _setShortcutsOnly,
     );
   }
 
@@ -131,7 +252,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'المتجر: ${widget.membership.storeId} • الأرقام الحالية من الإسقاطات المحاسبية',
+                    'المتجر: ${widget.membership.storeId} • المبالغ حسب العملة المختارة من الإسقاطات المحاسبية',
                   ),
                 ],
               ),
@@ -141,6 +262,77 @@ class _DashboardPageState extends State<DashboardPage> {
               onPressed: _isLoading ? null : _load,
               icon: const Icon(Icons.refresh),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCurrencySelector() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final currency in const ['ILS', 'USD', 'JOD'])
+          ChoiceChip(
+            label: Text(currency),
+            selected: _selectedCurrency == currency,
+            onSelected: (_) => setState(() => _selectedCurrency = currency),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildOperationalSummary(BuildContext context) {
+    final report = _operationalReport;
+    if (widget.reportsRepository == null) {
+      return const SizedBox.shrink();
+    }
+    if (_operationalError != null) {
+      return Card(
+        child: ListTile(
+          leading: const Icon(Icons.info_outline),
+          title: const Text('ملخص العمليات لهذا الشهر غير متاح'),
+          subtitle: Text(_operationalError!),
+        ),
+      );
+    }
+    if (report == null) return const SizedBox.shrink();
+    if (report.mayBeTruncated) {
+      return const Card(
+        child: ListTile(
+          leading: Icon(Icons.warning_amber_outlined),
+          title: Text('البيانات التشغيلية غير مكتملة'),
+          subtitle: Text('تجاوز التقرير حد القراءة؛ لا تعرض أرقامًا جزئية.'),
+        ),
+      );
+    }
+    if (report.salesRevenue.currency != _currency) {
+      return Card(
+        child: ListTile(
+          leading: const Icon(Icons.info_outline),
+          title: Text('ملخص العمليات — $_currency'),
+          subtitle: const Text(
+            'مصدر التقرير الحالي لا يدعم فصل العملات تلقائيًا؛ '
+            'لن تعرض أرقام بعملة أخرى.',
+          ),
+        ),
+      );
+    }
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Wrap(
+          spacing: 24,
+          runSpacing: 12,
+          children: [
+            Text('عمليات الشهر — $_currency'),
+            Text('المبيعات: ${report.salesRevenue.formatted} '
+                '(${report.salesCount} فاتورة)'),
+            Text('صافي المشتريات: ${report.purchasesTotal.formatted} '
+                '(${report.purchasesCount} شراء / '
+                '${report.purchaseReturnCount} مردود)'),
+            Text('المصروفات: ${report.expensesTotal.formatted}'),
           ],
         ),
       ),
@@ -188,10 +380,27 @@ class _DashboardPageState extends State<DashboardPage> {
         icon: Icons.receipt_long_outlined,
       ),
       _DashboardMetric(
+        title: 'الأصناف الفعالة',
+        subtitle: 'عدد الأصناف المتاحة',
+        value: Money(
+          minorUnits: _products.where((product) => product.isActive).length,
+          currency: _currency,
+        ),
+        icon: Icons.inventory_2_outlined,
+        displayAsCount: true,
+      ),
+      _DashboardMetric(
         title: 'أصناف منخفضة',
         subtitle: 'تحت حد إعادة الطلب',
         value: Money(
-          minorUnits: _products.where((product) => product.isLowStock).length,
+          minorUnits: _products
+              .where(
+                (product) =>
+                    product.isActive &&
+                    !product.isService &&
+                    product.isLowStock,
+              )
+              .length,
           currency: _currency,
         ),
         icon: Icons.warning_amber_outlined,
@@ -244,8 +453,16 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildIntegrityCard(BuildContext context) {
-    final trialBalance = _trialBalance!;
-    final isBalanced = trialBalance.isBalanced;
+    final lines = _trialBalance!.lines.where(
+      (line) => line.account.currency == _currency,
+    );
+    var debit = Money.zero(currency: _currency);
+    var credit = Money.zero(currency: _currency);
+    for (final line in lines) {
+      debit += line.debit;
+      credit += line.credit;
+    }
+    final isBalanced = debit == credit;
     final color =
         isBalanced ? Colors.green : Theme.of(context).colorScheme.error;
     return Card(
@@ -263,18 +480,25 @@ class _DashboardPageState extends State<DashboardPage> {
                   color: color,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  isBalanced
-                      ? 'ميزان المراجعة متوازن'
-                      : 'تنبيه: ميزان المراجعة غير متوازن',
-                  style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                Expanded(
+                  child: Text(
+                    isBalanced
+                        ? 'ميزان المراجعة متوازن — $_currency'
+                        : 'تنبيه: ميزان المراجعة غير متوازن — $_currency',
+                    style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
             Text(
-              'إجمالي المدين: ${trialBalance.totalDebit.formatted} • '
-              'إجمالي الدائن: ${trialBalance.totalCredit.formatted}',
+              'إجمالي المدين: ${debit.formatted} • '
+              'إجمالي الدائن: ${credit.formatted}',
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'مؤشر عرض سريع من الأرصدة الحالية؛ لا يغني عن المطابقة المحاسبية.',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),
@@ -315,7 +539,14 @@ class _DashboardPageState extends State<DashboardPage> {
                     'المتاح: ${product.quantityOnHand.formatted} • '
                     'الحد: ${product.minimumQuantity.formatted}',
                   ),
-                  trailing: const Icon(Icons.chevron_left),
+                  onTap: widget.onOpenModule != null &&
+                          widget.membership.role.canManageInventory
+                      ? () => widget.onOpenModule!('inventory')
+                      : null,
+                  trailing: widget.onOpenModule != null &&
+                          widget.membership.role.canManageInventory
+                      ? const Icon(Icons.chevron_left)
+                      : null,
                 ),
             if (products.length > 8)
               Text(
@@ -370,9 +601,27 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _load() async {
     final accountingRepository = widget.accountingQueryRepository;
     final productRepository = widget.productRepository;
+    final reportsRepository = widget.reportsRepository;
+    final contextAtStart = _storeContext;
+    final epoch = ++_reportEpoch;
+    bool current() =>
+        mounted &&
+        epoch == _reportEpoch &&
+        contextAtStart.storeId == widget.membership.storeId &&
+        contextAtStart.userId == widget.user.id &&
+        accountingRepository == widget.accountingQueryRepository &&
+        productRepository == widget.productRepository &&
+        reportsRepository == widget.reportsRepository;
+
     if (accountingRepository == null || productRepository == null) {
-      if (mounted) {
-        setState(() => _isLoading = false);
+      if (current()) {
+        setState(() {
+          _isLoading = false;
+          _trialBalance = null;
+          _products = const <Product>[];
+          _operationalReport = null;
+          _errorMessage = null;
+        });
       }
       return;
     }
@@ -380,14 +629,16 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _trialBalance = null;
+      _products = const <Product>[];
+      _operationalReport = null;
+      _operationalError = null;
     });
 
     final trialBalanceResult = await accountingRepository.getTrialBalance(
-      context: _storeContext,
+      context: contextAtStart,
     );
-    if (!mounted) {
-      return;
-    }
+    if (!current()) return;
     if (trialBalanceResult is FailureResult<TrialBalance>) {
       setState(() {
         _isLoading = false;
@@ -397,11 +648,9 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     final productResult = await productRepository.getProducts(
-      context: _storeContext,
+      context: contextAtStart,
     );
-    if (!mounted) {
-      return;
-    }
+    if (!current()) return;
     if (productResult is FailureResult<List<Product>>) {
       setState(() {
         _isLoading = false;
@@ -410,14 +659,51 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
 
+    if (productResult is Success<List<Product>> &&
+        productResult.value.any((p) => p.storeId != contextAtStart.storeId)) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'تعذر التحقق من تبعية الأصناف للمتجر الحالي.';
+      });
+      return;
+    }
+
+    OperationalReport? operational;
+    String? operationalError;
+    if (reportsRepository != null) {
+      final now = DateTime.now();
+      final start = DateTime(now.year, now.month);
+      final end = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      final result = await reportsRepository.getOperationalReport(
+        context: contextAtStart,
+        from: start,
+        to: end,
+      );
+      if (!current()) return;
+      if (result is Success<OperationalReport>) {
+        operational = result.value;
+      } else if (result is FailureResult<OperationalReport>) {
+        operationalError = result.failure.message;
+      }
+    }
+
     if (trialBalanceResult is Success<TrialBalance> &&
         productResult is Success<List<Product>>) {
       setState(() {
         _isLoading = false;
         _trialBalance = trialBalanceResult.value;
         _products = productResult.value;
+        _operationalReport = operational;
+        _operationalError = operationalError;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    ++_preferenceEpoch;
+    ++_reportEpoch;
+    super.dispose();
   }
 }
 

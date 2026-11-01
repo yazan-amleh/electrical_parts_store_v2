@@ -9,7 +9,7 @@ This matrix keeps the V1 surface visible while V2 is rebuilt on a new data set. 
 | Authentication and store membership | Complete | features/auth (sign-in, registration, password reset, membership session) |
 | Dashboard and low-stock summary | Complete | features/dashboard |
 | Products, services, units, prices and categories | Complete | features/inventory, features/categories |
-| Inventory movements and atomic stock effects | Complete | features/inventory |
+| Inventory movements and atomic stock effects | Implemented / policy gate open | features/inventory (transactional stock mutation is hardened; manual opening/valuation adjustment counter-account policy and true returns remain release gates) |
 | Sales and point of sale | Complete | features/sales |
 | Offers and offer orders | Complete | features/offers |
 | Purchases and purchase orders | Complete | features/purchases, features/purchase_orders |

@@ -12,6 +12,11 @@ final class AuthorizationFailure extends Failure {
   const AuthorizationFailure(super.message);
 }
 
+/// The user has no membership record for a requested store.
+final class StoreMembershipNotFoundFailure extends Failure {
+  const StoreMembershipNotFoundFailure(super.message);
+}
+
 final class ConflictFailure extends Failure {
   const ConflictFailure(super.message);
 }

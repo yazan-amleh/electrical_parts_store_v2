@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/errors/failure.dart';
@@ -8,6 +10,7 @@ import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
 import '../../inventory/domain/entities/product.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
 import '../../parties/domain/entities/party.dart';
@@ -60,6 +63,12 @@ class _SalesPageState extends State<SalesPage> {
   bool _isLoading = true;
   bool _isLoadingCustomers = false;
   bool _isPosting = false;
+  Sale? _pendingSale;
+  String? _pendingSignature;
+  bool _pendingQueued = false;
+  int _postingEpoch = 0;
+  int _productsRequest = 0;
+  int _customersRequest = 0;
   String? _errorMessage;
   String? _customerError;
 
@@ -114,15 +123,35 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   @override
+  void didUpdateWidget(covariant SalesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.user.id != oldWidget.user.id ||
+        widget.membership.storeId != oldWidget.membership.storeId ||
+        widget.membership.role != oldWidget.membership.role) {
+      ++_postingEpoch;
+      _isPosting = false;
+      _clearCart();
+      _products = const [];
+      _customers = const [];
+      _loadProducts();
+      _loadCustomers();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (!widget.membership.role.canManageSales) {
+      return const Center(child: Text('ليس لديك صلاحية لإنشاء المبيعات.'));
+    }
     final search = _searchController.text.trim().toLowerCase();
     final filteredProducts = _products
         .where(
           (product) =>
-              search.isEmpty ||
-              product.name.toLowerCase().contains(search) ||
-              (product.sku?.toLowerCase().contains(search) ?? false) ||
-              (product.barcode?.toLowerCase().contains(search) ?? false),
+              product.isActive &&
+              (search.isEmpty ||
+                  product.name.toLowerCase().contains(search) ||
+                  (product.sku?.toLowerCase().contains(search) ?? false) ||
+                  (product.barcode?.toLowerCase().contains(search) ?? false)),
         )
         .toList(growable: false);
 
@@ -244,10 +273,14 @@ class _SalesPageState extends State<SalesPage> {
             subtitle: Text('${product.sellingPrice.formatted} • $available'),
             trailing: IconButton(
               tooltip: 'إضافة',
-              onPressed: () => _addProduct(product),
+              onPressed: _isPosting || _pendingQueued
+                  ? null
+                  : () => _addProduct(product),
               icon: const Icon(Icons.add_circle_outline),
             ),
-            onTap: () => _addProduct(product),
+            onTap: _isPosting || _pendingQueued
+                ? null
+                : () => _addProduct(product),
           ),
         );
       },
@@ -265,15 +298,18 @@ class _SalesPageState extends State<SalesPage> {
               children: [
                 const Icon(Icons.shopping_cart_outlined),
                 const SizedBox(width: 8),
-                Text(
-                  'الفاتورة الحالية',
-                  style: Theme.of(context).textTheme.titleLarge,
+                Expanded(
+                  child: Text(
+                    'الفاتورة الحالية',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                 ),
-                const Spacer(),
                 if (_cart.isNotEmpty)
                   IconButton(
                     tooltip: 'تفريغ الفاتورة',
-                    onPressed: _clearCart,
+                    onPressed: _isPosting ? null : _requestClearCart,
                     icon: const Icon(Icons.delete_sweep_outlined),
                   ),
               ],
@@ -299,7 +335,7 @@ class _SalesPageState extends State<SalesPage> {
             child: SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _isPosting ? null : _postSale,
+                onPressed: _isPosting || _pendingQueued ? null : _postSale,
                 icon: _isPosting
                     ? const SizedBox(
                         height: 18,
@@ -310,7 +346,9 @@ class _SalesPageState extends State<SalesPage> {
                 label: Text(
                   _isPosting
                       ? 'جارٍ الترحيل...'
-                      : 'ترحيل البيع • ${(_cartTotal + _taxAmount).formatted}',
+                      : _pendingQueued
+                          ? 'البيع محفوظ في طابور الترحيل'
+                          : 'ترحيل البيع • ${(_cartTotal + _taxAmount).formatted}',
                 ),
               ),
             ),
@@ -349,20 +387,25 @@ class _SalesPageState extends State<SalesPage> {
               IconButton(
                 visualDensity: VisualDensity.compact,
                 tooltip: 'تعديل الخصم',
-                onPressed: item.product.discountable && !_isPosting
-                    ? () => _editDiscount(item.product)
-                    : null,
+                onPressed:
+                    item.product.discountable && !_isPosting && !_pendingQueued
+                        ? () => _editDiscount(item.product)
+                        : null,
                 icon: const Icon(Icons.percent_outlined),
               ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                onPressed: () => _decrementProduct(item.product),
+                onPressed: _isPosting || _pendingQueued
+                    ? null
+                    : () => _decrementProduct(item.product),
                 icon: const Icon(Icons.remove_circle_outline),
               ),
               Text(item.quantity.formatted),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                onPressed: () => _addProduct(item.product),
+                onPressed: _isPosting || _pendingQueued
+                    ? null
+                    : () => _addProduct(item.product),
                 icon: const Icon(Icons.add_circle_outline),
               ),
             ],
@@ -424,19 +467,35 @@ class _SalesPageState extends State<SalesPage> {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Text('الإجمالي قبل الضريبة'),
-              const Spacer(),
-              Text(_cartTotal.formatted),
+              const Expanded(
+                child: Text(
+                  'الإجمالي قبل الضريبة',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  _cartTotal.formatted,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
           Row(
             children: [
-              const Text('الإجمالي'),
-              const Spacer(),
-              Text(
-                (_cartTotal + _taxAmount).formatted,
-                style: const TextStyle(fontWeight: FontWeight.bold),
+              const Expanded(child: Text('الإجمالي')),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  (_cartTotal + _taxAmount).formatted,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
@@ -446,6 +505,9 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   Future<void> _loadProducts() async {
+    final epoch = ++_productsRequest;
+    final storeId = widget.membership.storeId;
+    final userId = widget.user.id;
     final repository = widget.productRepository;
     if (repository == null) {
       setState(() {
@@ -462,11 +524,14 @@ class _SalesPageState extends State<SalesPage> {
 
     final result = await repository.getProducts(
       context: StoreContext(
-        storeId: widget.membership.storeId,
-        userId: widget.user.id,
+        storeId: storeId,
+        userId: userId,
       ),
     );
-    if (!mounted) {
+    if (!mounted ||
+        epoch != _productsRequest ||
+        storeId != widget.membership.storeId ||
+        userId != widget.user.id) {
       return;
     }
 
@@ -578,6 +643,9 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   Future<void> _loadCustomers() async {
+    final epoch = ++_customersRequest;
+    final storeId = widget.membership.storeId;
+    final userId = widget.user.id;
     final repository = widget.partyRepository;
     if (repository == null) {
       return;
@@ -588,12 +656,15 @@ class _SalesPageState extends State<SalesPage> {
     });
     final result = await repository.getParties(
       context: StoreContext(
-        storeId: widget.membership.storeId,
-        userId: widget.user.id,
+        storeId: storeId,
+        userId: userId,
       ),
       type: PartyType.customer,
     );
-    if (!mounted) {
+    if (!mounted ||
+        epoch != _customersRequest ||
+        storeId != widget.membership.storeId ||
+        userId != widget.user.id) {
       return;
     }
     if (result is FailureResult<List<Party>>) {
@@ -612,6 +683,17 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   void _addProduct(Product product) {
+    if (_isPosting || _pendingQueued) {
+      return;
+    }
+    if (!product.isActive || product.storeId != widget.membership.storeId) {
+      _showMessage('هذا الصنف غير متاح للبيع في هذا المتجر.');
+      return;
+    }
+    if (_cart.isNotEmpty && product.sellingPrice.currency != _currency) {
+      _showMessage('لا يمكن بيع أصناف بعملات مختلفة في فاتورة واحدة.');
+      return;
+    }
     if (!product.isService) {
       final current =
           _cart[product.id]?.quantity ?? const Quantity.fromMilliUnits(0);
@@ -640,7 +722,10 @@ class _SalesPageState extends State<SalesPage> {
 
   Future<void> _editDiscount(Product product) async {
     final current = _cart[product.id];
-    if (current == null || !product.discountable || _isPosting) {
+    if (current == null ||
+        !product.discountable ||
+        _isPosting ||
+        _pendingQueued) {
       return;
     }
 
@@ -703,7 +788,7 @@ class _SalesPageState extends State<SalesPage> {
 
   void _decrementProduct(Product product) {
     final current = _cart[product.id];
-    if (current == null) {
+    if (current == null || _isPosting || _pendingQueued) {
       return;
     }
 
@@ -729,8 +814,40 @@ class _SalesPageState extends State<SalesPage> {
     });
   }
 
+  Future<void> _requestClearCart() async {
+    if (_pendingQueued) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('فاتورة في طابور الترحيل'),
+          content: const Text(
+            'قد تُرحّل الفاتورة عند عودة الاتصال. بدء فاتورة جديدة '
+            'لا يلغي العملية المعلقة. تحقق من حالتها قبل تسجيلها مجددًا.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('بدء فاتورة جديدة'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true) {
+        return;
+      }
+    }
+    _clearCart();
+  }
+
   void _clearCart() {
     setState(() {
+      _pendingSale = null;
+      _pendingSignature = null;
+      _pendingQueued = false;
       _cart.clear();
       _customerController.clear();
       _taxController.clear();
@@ -739,6 +856,11 @@ class _SalesPageState extends State<SalesPage> {
   }
 
   Future<void> _postSale() async {
+    if (_isPosting ||
+        _pendingQueued ||
+        !widget.membership.role.canManageSales) {
+      return;
+    }
     final repository = widget.repository;
     if (repository == null) {
       _showMessage('مستودع المبيعات غير موصول بهذه البيئة.');
@@ -760,43 +882,88 @@ class _SalesPageState extends State<SalesPage> {
       return;
     }
 
-    final saleId = 'sale-${DateTime.now().microsecondsSinceEpoch}';
-    final sale = Sale(
-      id: saleId,
-      storeId: widget.membership.storeId,
-      idempotencyKey: IdempotencyKey(saleId),
-      postedAt: DateTime.now().toUtc(),
-      paymentMethod: _paymentMethod,
-      lines: _cart.values
-          .map(
-            (item) => SaleLine(
-              id: '$saleId-${item.product.id}',
-              productId: item.product.id,
-              description: item.product.name,
-              quantity: item.quantity,
-              unitFactorToBase: const Quantity.fromMilliUnits(1000),
-              unitPrice: item.product.sellingPrice,
-              unitCost: item.product.purchasePrice,
-              discount: item.discount,
-              unitId: item.product.baseUnitId,
-              unitName: item.product.baseUnitName,
-              isService: item.product.isService,
-            ),
-          )
-          .toList(growable: false),
-      tax: tax,
-      customerId:
-          _paymentMethod == SalePaymentMethod.credit ? customerId : null,
-      description: 'بيع من نقطة البيع',
-    );
+    final sortedLines = _cart.values.toList()
+      ..sort((a, b) => a.product.id.compareTo(b.product.id));
+    final signature = jsonEncode([
+      widget.membership.storeId,
+      widget.user.id,
+      _paymentMethod.name,
+      _paymentMethod == SalePaymentMethod.credit ? customerId : null,
+      tax.minorUnits,
+      _currency,
+      for (final line in sortedLines)
+        [
+          line.product.id,
+          line.quantity.milliUnits,
+          line.product.sellingPrice.minorUnits,
+          line.product.purchasePrice.minorUnits,
+          line.discount.minorUnits,
+          line.product.baseUnitId,
+          line.product.baseUnitName,
+          line.product.isService,
+        ],
+    ]);
+    final existing = _pendingSignature == signature ? _pendingSale : null;
+    final saleId =
+        existing?.id ?? 'sale-${DateTime.now().microsecondsSinceEpoch}';
+    final sale = existing ??
+        Sale(
+          id: saleId,
+          storeId: widget.membership.storeId,
+          idempotencyKey: IdempotencyKey(saleId),
+          postedAt: DateTime.now().toUtc(),
+          paymentMethod: _paymentMethod,
+          lines: sortedLines
+              .map(
+                (item) => SaleLine(
+                  id: '$saleId-${item.product.id}',
+                  productId: item.product.id,
+                  description: item.product.name,
+                  quantity: item.quantity,
+                  unitFactorToBase: const Quantity.fromMilliUnits(1000),
+                  unitPrice: item.product.sellingPrice,
+                  unitCost: item.product.purchasePrice,
+                  discount: item.discount,
+                  unitId: item.product.baseUnitId,
+                  unitName: item.product.baseUnitName,
+                  isService: item.product.isService,
+                ),
+              )
+              .toList(growable: false),
+          tax: tax,
+          customerId:
+              _paymentMethod == SalePaymentMethod.credit ? customerId : null,
+          description: 'بيع من نقطة البيع',
+        );
 
-    setState(() => _isPosting = true);
-    final result = await repository.postSale(
-      context: sale.contextFor(widget.user.id),
-      sale: sale,
-      accounts: _postingAccounts,
-    );
-    if (!mounted) {
+    final epoch = ++_postingEpoch;
+    final postingUserId = widget.user.id;
+    setState(() {
+      _pendingSignature = signature;
+      _pendingSale = sale;
+      _isPosting = true;
+    });
+    final Result<SalePostingPlan> result;
+    try {
+      result = await repository.postSale(
+        context: sale.contextFor(widget.user.id),
+        sale: sale,
+        accounts: _postingAccounts,
+      );
+    } catch (_) {
+      if (mounted &&
+          epoch == _postingEpoch &&
+          postingUserId == widget.user.id &&
+          sale.storeId == widget.membership.storeId) {
+        setState(() => _isPosting = false);
+        _showMessage('تعذر التأكد من نتيجة البيع؛ أعد المحاولة بنفس الفاتورة.');
+      }
+      return;
+    }
+    if (!mounted ||
+        epoch != _postingEpoch ||
+        postingUserId != widget.user.id ||
+        sale.storeId != widget.membership.storeId) {
       return;
     }
     setState(() => _isPosting = false);
@@ -804,7 +971,9 @@ class _SalesPageState extends State<SalesPage> {
     if (result is FailureResult<SalePostingPlan>) {
       final failure = result.failure;
       if (failure is QueuedFailure) {
-        _showMessage('تم حفظ البيع للطابور وسيُرحّل عند عودة الاتصال.');
+        setState(() => _pendingQueued = true);
+        _showMessage(
+            'البيع محفوظ بالطابور؛ لا تعِد ترحيله قبل التحقق من حالته.');
       } else {
         _showMessage(failure.message);
       }

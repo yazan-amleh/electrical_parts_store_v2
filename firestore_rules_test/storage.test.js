@@ -109,4 +109,36 @@ describe('Storage security rules', function () {
     );
     await assertSucceeds(deleteObject(participantRef));
   });
+
+  it('keeps profile avatars private to the signed-in account', async () => {
+    const avatar = 'users/sales-1/avatar/photo';
+    const own = storageRef(participantStorage, avatar);
+    await assertSucceeds(uploadString(
+      own, 'private-jpeg-payload', 'raw', {contentType: 'image/jpeg'},
+    ));
+    await assertSucceeds(getBytes(own));
+    await assertFails(getBytes(storageRef(roomOwnerStorage, avatar)));
+    await assertFails(getBytes(storageRef(outsiderStorage, avatar)));
+    await assertFails(uploadString(
+      storageRef(roomOwnerStorage, avatar),
+      'spoof', 'raw', {contentType: 'image/png'},
+    ));
+    await assertFails(deleteObject(storageRef(roomOwnerStorage, avatar)));
+    await assertSucceeds(deleteObject(own));
+  });
+
+  it('requires PNG or JPEG content type for profile avatars', async () => {
+    const own = storageRef(
+      participantStorage, 'users/sales-1/avatar/photo',
+    );
+    await assertFails(uploadString(
+      own, 'unsupported', 'raw', {contentType: 'image/gif'},
+    ));
+    await assertFails(uploadString(
+      own, 'unsupported', 'raw', {contentType: 'text/plain'},
+    ));
+    await assertSucceeds(uploadString(
+      own, 'replacement', 'raw', {contentType: 'image/png'},
+    ));
+  });
 });

@@ -1,6 +1,7 @@
 enum NoteType {
   general,
   customer,
+  appointment,
   employee,
   task,
   reminder,
@@ -13,6 +14,8 @@ extension NoteTypeLabels on NoteType {
         return 'عامة';
       case NoteType.customer:
         return 'عميل';
+      case NoteType.appointment:
+        return 'موعد';
       case NoteType.employee:
         return 'موظف';
       case NoteType.task:
@@ -41,6 +44,23 @@ extension NotePriorityLabels on NotePriority {
         return 'عالية';
       case NotePriority.urgent:
         return 'عاجلة';
+    }
+  }
+}
+
+enum ReminderRepeatType { none, daily, weekly, monthly }
+
+extension ReminderRepeatTypeLabels on ReminderRepeatType {
+  String get arabicLabel {
+    switch (this) {
+      case ReminderRepeatType.none:
+        return 'بدون تكرار';
+      case ReminderRepeatType.daily:
+        return 'يوميًا';
+      case ReminderRepeatType.weekly:
+        return 'أسبوعيًا';
+      case ReminderRepeatType.monthly:
+        return 'شهريًا';
     }
   }
 }

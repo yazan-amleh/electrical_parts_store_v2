@@ -23,53 +23,67 @@ abstract final class PartyLedgerEntryFirestoreMapper {
   static PartyLedgerEntry fromSnapshot(
     DocumentSnapshot<Map<String, dynamic>> snapshot,
   ) {
-    final data = snapshot.data() ?? const <String, dynamic>{};
-    final currency = _string(data['currency'], 'ILS');
-    final partyTypeName = _string(data['partyType'], PartyType.customer.name);
-    final partyType = PartyType.values.firstWhere(
+    final data = snapshot.data();
+    if (data == null) {
+      throw const FormatException('Party ledger document is empty.');
+    }
+
+    final partyTypeName = _requiredString(data['partyType'], 'partyType');
+    final partyType = PartyType.values.where(
       (type) => type.name == partyTypeName,
-      orElse: () => PartyType.customer,
     );
+    if (partyType.length != 1) {
+      throw FormatException('Unknown party ledger type: $partyTypeName.');
+    }
+
+    final description = data['description'];
+    if (description != null && description is! String) {
+      throw const FormatException(
+        'Party ledger description must be text when present.',
+      );
+    }
 
     return PartyLedgerEntry(
       id: snapshot.id,
-      storeId: _string(data['storeId'], ''),
-      partyType: partyType,
-      partyId: _string(data['partyId'], ''),
-      sourceType: _string(data['sourceType'], ''),
-      sourceId: _string(data['sourceId'], snapshot.id),
-      postedAt: _date(data['postedAt']) ?? DateTime.now().toUtc(),
+      storeId: _requiredString(data['storeId'], 'storeId'),
+      partyType: partyType.single,
+      partyId: _requiredString(data['partyId'], 'partyId'),
+      sourceType: _requiredString(data['sourceType'], 'sourceType'),
+      sourceId: _requiredString(data['sourceId'], 'sourceId'),
+      postedAt: _requiredDate(data['postedAt'], 'postedAt'),
       debit: Money(
-        minorUnits: _int(data['debitMinorUnits']),
-        currency: currency,
+        minorUnits: _requiredInt(data['debitMinorUnits'], 'debitMinorUnits'),
+        currency: _requiredString(data['currency'], 'currency'),
       ),
       credit: Money(
-        minorUnits: _int(data['creditMinorUnits']),
-        currency: currency,
+        minorUnits: _requiredInt(data['creditMinorUnits'], 'creditMinorUnits'),
+        currency: _requiredString(data['currency'], 'currency'),
       ),
-      description: data['description'] as String?,
+      description: description as String?,
     );
   }
 
-  static DateTime? _date(Object? value) {
+  static DateTime _requiredDate(Object? value, String field) {
     if (value is Timestamp) {
       return value.toDate();
     }
     if (value is DateTime) {
       return value;
     }
-    return null;
+    throw FormatException('Party ledger $field is invalid.');
   }
 
-  static String _string(Object? value, String fallback) {
-    return value is String && value.isNotEmpty ? value : fallback;
+  static String _requiredString(Object? value, String field) {
+    if (value is String && value.trim().isNotEmpty) {
+      return value;
+    }
+    throw FormatException('Party ledger $field is invalid.');
   }
 
-  static int _int(Object? value) {
-    return value is int
-        ? value
-        : value is num
-            ? value.toInt()
-            : 0;
+  static int _requiredInt(Object? value, String field) {
+    if (value is int) {
+      return value;
+    }
+    throw FormatException('Party ledger $field is invalid.');
   }
 }

@@ -156,10 +156,14 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
       pw.SizedBox(height: 6),
       _summaryTable(
         values: [
-          ['المبيعات', report.salesRevenue.formatted],
-          ['تكلفة المبيعات', report.salesCost.formatted],
+          ['صافي المبيعات', report.salesRevenue.formatted],
+          ['صافي تكلفة المبيعات', report.salesCost.formatted],
           ['مجمل الربح', report.grossProfit.formatted],
-          ['المشتريات', report.purchasesTotal.formatted],
+          ['عدد فواتير البيع', report.salesCount.toString()],
+          ['عدد مردودات البيع', report.salesReturnCount.toString()],
+          ['صافي المشتريات', report.purchasesTotal.formatted],
+          ['عدد فواتير الشراء', report.purchasesCount.toString()],
+          ['عدد مردودات المشتريات', report.purchaseReturnCount.toString()],
           ['المصروفات', report.expensesTotal.formatted],
           ['نتيجة التشغيل', report.operatingResult.formatted],
         ],
@@ -208,8 +212,8 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
       _summaryTable(
         values: [
           ['عدد الفواتير', analytics.salesCount.toString()],
-          ['إجمالي المبيعات', analytics.salesRevenue.formatted],
-          ['التكلفة', analytics.salesCost.formatted],
+          ['صافي المبيعات', analytics.salesRevenue.formatted],
+          ['صافي التكلفة', analytics.salesCost.formatted],
           ['مجمل الربح', analytics.grossProfit.formatted],
         ],
         fonts: fonts,
@@ -580,8 +584,12 @@ class PdfReportDocumentBuilder implements ReportDocumentBuilder {
     switch (value) {
       case 'sale':
         return 'بيع';
+      case 'saleReturn':
+        return 'مردود بيع';
       case 'purchase':
         return 'شراء';
+      case 'purchaseReturn':
+        return 'مردود شراء';
       case 'expense':
         return 'مصروف';
       default:

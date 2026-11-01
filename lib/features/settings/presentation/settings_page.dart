@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/result/result.dart';
+import '../../../app/theme/app_appearance_controller.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
+import '../../auth/domain/repositories/account_profile_repository.dart';
+import '../../auth/domain/repositories/account_avatar_repository.dart';
+import '../../auth/presentation/account_profile_page.dart';
 import '../domain/entities/store_member.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../auth/domain/enums/store_role.dart';
@@ -14,10 +18,14 @@ class SettingsPage extends StatefulWidget {
     required this.repository,
     required this.user,
     required this.membership,
+    this.accountProfileRepository,
+    this.accountAvatarRepository,
     super.key,
   });
 
   final SettingsRepository? repository;
+  final AccountProfileRepository? accountProfileRepository;
+  final AccountAvatarRepository? accountAvatarRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -35,7 +43,11 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _isLoading = true;
   bool _isSavingProfile = false;
   bool _isAddingMember = false;
+  final Set<String> _savingMemberIds = <String>{};
+  String _memberSearch = '';
+  bool _showInactiveMembers = true;
   String? _errorMessage;
+  int _loadEpoch = 0;
 
   bool get _canManage => widget.membership.role.canManageStore;
 
@@ -54,6 +66,20 @@ class _SettingsPageState extends State<SettingsPage> {
     _phoneController = TextEditingController();
     _addressController = TextEditingController();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant SettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId) {
+      _profile = null;
+      _members = const <StoreMember>[];
+      _savingMemberIds.clear();
+      _memberSearch = '';
+      _errorMessage = null;
+      _load();
+    }
   }
 
   @override
@@ -81,6 +107,14 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             _buildHeader(context),
             const SizedBox(height: 12),
+            if (widget.accountProfileRepository != null) ...[
+              _buildAccountCard(context),
+              const SizedBox(height: 12),
+            ],
+            if (AppAppearanceScope.maybeOf(context) != null) ...[
+              _buildAppearanceCard(context),
+              const SizedBox(height: 12),
+            ],
             _buildProfileCard(context),
             const SizedBox(height: 12),
             _buildMembersCard(context),
@@ -119,6 +153,146 @@ class _SettingsPageState extends State<SettingsPage> {
               tooltip: 'تحديث',
               onPressed: _isLoading ? null : _load,
               icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccountCard(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: const CircleAvatar(
+          child: Icon(Icons.manage_accounts_outlined),
+        ),
+        title: const Text('حسابي والمعلومات الشخصية'),
+        subtitle: Text(
+          widget.user.displayName?.trim().isNotEmpty == true
+              ? '${widget.user.displayName} • ${widget.user.email}'
+              : widget.user.email,
+        ),
+        trailing: const Icon(Icons.chevron_left),
+        onTap: () {
+          final repository = widget.accountProfileRepository;
+          if (repository == null) return;
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => AccountProfilePage(
+                repository: repository,
+                avatarRepository: widget.accountAvatarRepository,
+                user: widget.user,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAppearanceCard(BuildContext context) {
+    final appearance = AppAppearanceScope.maybeOf(context)!;
+    const modeLabels = <ThemeMode, String>{
+      ThemeMode.system: 'حسب إعداد الجهاز',
+      ThemeMode.light: 'فاتح',
+      ThemeMode.dark: 'داكن',
+    };
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'المظهر واللغة',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'تفضيلات شخصية تُطبق على التطبيق وتحفظ لهذا الحساب على الجهاز.',
+            ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<ThemeMode>(
+              key: ValueKey('appearance-mode-${appearance.themeMode.name}'),
+              value: appearance.themeMode,
+              decoration: const InputDecoration(
+                labelText: 'وضع العرض',
+                prefixIcon: Icon(Icons.brightness_6_outlined),
+              ),
+              items: [
+                for (final mode in ThemeMode.values)
+                  DropdownMenuItem(
+                    value: mode,
+                    child: Text(modeLabels[mode]!),
+                  ),
+              ],
+              onChanged: !appearance.isLoaded
+                  ? null
+                  : (mode) async {
+                      if (mode == null) return;
+                      final saved = await appearance.setThemeMode(mode);
+                      if (!saved && context.mounted) {
+                        _showMessage('تم التطبيق، لكن تعذر حفظ تفضيل المظهر.');
+                      }
+                    },
+            ),
+            const SizedBox(height: 14),
+            const Text('اللون الأساسي'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final accent in AppearanceAccent.values)
+                  ChoiceChip(
+                    label: Text(accent.arabicName),
+                    avatar: CircleAvatar(
+                      radius: 9,
+                      backgroundColor: accent.seed,
+                    ),
+                    selected: appearance.accent == accent,
+                    onSelected: !appearance.isLoaded
+                        ? null
+                        : (selected) async {
+                            if (!selected) return;
+                            final saved = await appearance.setAccent(accent);
+                            if (!saved && context.mounted) {
+                              _showMessage('تم التطبيق، لكن تعذر حفظ اللون.');
+                            }
+                          },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<AppLanguage>(
+              key: ValueKey('appearance-language-${appearance.language.name}'),
+              value: appearance.language,
+              decoration: const InputDecoration(
+                labelText: 'لغة واجهة النظام',
+                prefixIcon: Icon(Icons.language_outlined),
+              ),
+              items: [
+                for (final language in AppLanguage.values)
+                  DropdownMenuItem(
+                    value: language,
+                    child: Text(language.label),
+                  ),
+              ],
+              onChanged: !appearance.isLoaded
+                  ? null
+                  : (language) async {
+                      if (language == null) return;
+                      final saved = await appearance.setLanguage(language);
+                      if (!saved && context.mounted) {
+                        _showMessage('تم التطبيق، لكن تعذر حفظ اللغة.');
+                      }
+                    },
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'عند اختيار English تتغير لغة عناصر Flutter القياسية '
+              'والاتجاه الأساسي؛ ترجمة بقية شاشات النظام إلى الإنجليزية '
+              'لم تكتمل بعد.',
             ),
           ],
         ),
@@ -211,11 +385,15 @@ class _SettingsPageState extends State<SettingsPage> {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 6),
-            const Text(
-              'يمكن للمالك أو المدير تعديل دور العضو وتفعيله. لا يمكن نقل '
-              'ملكية المتجر من هذه الشاشة.',
-            ),
-            if (_canManage) ...[
+            if (!_canManage)
+              const Text(
+                'قائمة الأعضاء والصلاحيات متاحة للمالك والمدير فقط.',
+              )
+            else ...[
+              const Text(
+                'يمكن للمالك أو المدير تعديل دور العضو وتفعيله. لا يمكن نقل '
+                'ملكية المتجر من هذه الشاشة.',
+              ),
               const SizedBox(height: 10),
               Align(
                 alignment: AlignmentDirectional.centerStart,
@@ -233,20 +411,65 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                decoration: const InputDecoration(
+                  labelText: 'البحث عن مستخدم',
+                  hintText: 'الاسم أو البريد الإلكتروني أو UID',
+                  prefixIcon: Icon(Icons.search),
+                ),
+                onChanged: (value) {
+                  setState(() => _memberSearch = value.trim().toLowerCase());
+                },
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('إظهار المستخدمين غير النشطين'),
+                value: _showInactiveMembers,
+                onChanged: (value) {
+                  setState(() => _showInactiveMembers = value);
+                },
+              ),
+              Text(
+                'إجمالي الأعضاء: ${_members.length} • '
+                'النشطون: ${_members.where((member) => member.isActive).length}',
+              ),
+              const SizedBox(height: 8),
+              if (_members.isEmpty)
+                const Text('لا يوجد أعضاء مسجلون.')
+              else if (_visibleMembers.isEmpty)
+                const Text('لا يوجد أعضاء مطابقون للبحث أو الفلتر.')
+              else
+                for (final member in _visibleMembers)
+                  _memberTile(context, member),
             ],
-            const SizedBox(height: 12),
-            if (_members.isEmpty)
-              const Text('لا يوجد أعضاء مسجلون.')
-            else
-              for (final member in _members) _memberTile(context, member),
           ],
         ),
       ),
     );
   }
 
+  /*
+   * Member controls are intentionally omitted for non-managers. Membership
+   * list rules are manager-only, so read-only users still get the store
+   * profile without triggering a forbidden member enumeration.
+   */
+
+  List<StoreMember> get _visibleMembers {
+    return _members.where((member) {
+      if (!_showInactiveMembers && !member.isActive) return false;
+      if (_memberSearch.isEmpty) return true;
+      return member.userId.toLowerCase().contains(_memberSearch) ||
+          (member.displayName ?? '').toLowerCase().contains(_memberSearch) ||
+          (member.email ?? '').toLowerCase().contains(_memberSearch);
+    }).toList();
+  }
+
   Widget _memberTile(BuildContext context, StoreMember member) {
-    final canEditMember = _canManage && member.role != StoreRole.owner;
+    final isSaving = _savingMemberIds.contains(member.userId);
+    final canEditMember =
+        _canManage && member.role != StoreRole.owner && !isSaving;
     final roleItems = StoreRole.values
         .where((role) => role != StoreRole.owner)
         .map(
@@ -330,11 +553,17 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ],
               ),
-              if (canEditMember)
+              if (_canManage && member.role != StoreRole.owner)
                 OutlinedButton.icon(
-                  onPressed: () => _saveMember(member),
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('حفظ'),
+                  onPressed: isSaving ? null : () => _saveMember(member),
+                  icon: isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: Text(isSaving ? 'جارٍ الحفظ...' : 'حفظ'),
                 ),
             ],
           ),
@@ -371,12 +600,19 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
+    final epoch = ++_loadEpoch;
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
+
     final profileResult = await repository.getStoreProfile(context: _context);
-    if (!mounted) {
+    if (!mounted ||
+        epoch != _loadEpoch ||
+        requestedStore != widget.membership.storeId ||
+        requestedUser != widget.user.id) {
       return;
     }
     if (profileResult is FailureResult<StoreProfile>) {
@@ -387,16 +623,23 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
 
-    final membersResult = await repository.getMembers(context: _context);
-    if (!mounted) {
-      return;
-    }
-    if (membersResult is FailureResult<List<StoreMember>>) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = membersResult.failure.message;
-      });
-      return;
+    List<StoreMember> members = const <StoreMember>[];
+    if (_canManage) {
+      final membersResult = await repository.getMembers(context: _context);
+      if (!mounted ||
+          epoch != _loadEpoch ||
+          requestedStore != widget.membership.storeId ||
+          requestedUser != widget.user.id) {
+        return;
+      }
+      if (membersResult is FailureResult<List<StoreMember>>) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = membersResult.failure.message;
+        });
+        return;
+      }
+      members = (membersResult as Success<List<StoreMember>>).value;
     }
 
     final profile = (profileResult as Success<StoreProfile>).value;
@@ -406,7 +649,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _addressController.text = profile.address;
     setState(() {
       _profile = profile;
-      _members = (membersResult as Success<List<StoreMember>>).value;
+      _members = members;
       _isLoading = false;
     });
   }
@@ -449,7 +692,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _addMember() async {
     final repository = widget.repository;
-    if (repository == null || !_canManage) {
+    if (repository == null || !_canManage || _isAddingMember) {
       return;
     }
 
@@ -457,52 +700,72 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (context) => const _AddMemberDialog(),
     );
-    if (draft == null || !mounted) {
+    if (draft == null || !mounted || _isAddingMember) {
+      return;
+    }
+
+    if (_members.any((member) => member.userId == draft.userId)) {
+      _showMessage('هذا المستخدم مرتبط بالفعل بالمتجر.');
       return;
     }
 
     setState(() => _isAddingMember = true);
-    final result = await repository.addMember(
-      context: _context,
-      member: StoreMember(
-        userId: draft.userId,
-        role: draft.role,
-        isActive: true,
-        displayName: draft.displayName,
-        email: draft.email,
-      ),
-    );
-    if (!mounted) {
-      return;
+    try {
+      final result = await repository.addMember(
+        context: _context,
+        member: StoreMember(
+          userId: draft.userId,
+          role: draft.role,
+          isActive: true,
+        ),
+      );
+      if (!mounted) return;
+      if (result is FailureResult<void>) {
+        _showMessage(result.failure.message);
+        return;
+      }
+      await _load();
+      if (mounted) _showMessage('تمت إضافة المستخدم إلى المتجر.');
+    } catch (error) {
+      if (mounted) _showMessage('تعذر إضافة المستخدم: $error');
+    } finally {
+      if (mounted) setState(() => _isAddingMember = false);
     }
-    setState(() => _isAddingMember = false);
-    if (result is FailureResult<void>) {
-      _showMessage(result.failure.message);
-      return;
-    }
-    _showMessage('تمت إضافة المستخدم إلى المتجر.');
-    await _load();
   }
 
   Future<void> _saveMember(StoreMember member) async {
     final repository = widget.repository;
-    if (repository == null) {
+    if (repository == null ||
+        !_canManage ||
+        member.role == StoreRole.owner ||
+        _savingMemberIds.contains(member.userId)) {
       return;
     }
 
-    final result = await repository.updateMember(
-      context: _context,
-      member: member,
-    );
-    if (!mounted) {
-      return;
+    setState(() => _savingMemberIds.add(member.userId));
+    try {
+      final result = await repository.updateMember(
+        context: _context,
+        member: member,
+      );
+      if (!mounted) return;
+      if (result is FailureResult<void>) {
+        await _load();
+        if (mounted) _showMessage(result.failure.message);
+        return;
+      }
+      await _load();
+      if (mounted) _showMessage('تم تحديث صلاحيات العضو.');
+    } catch (error) {
+      if (mounted) {
+        await _load();
+        if (mounted) _showMessage('تعذر تحديث صلاحيات العضو: $error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _savingMemberIds.remove(member.userId));
+      }
     }
-    if (result is FailureResult<void>) {
-      _showMessage(result.failure.message);
-      return;
-    }
-    _showMessage('تم تحديث صلاحيات العضو.');
-    await _load();
   }
 
   void _replaceMember(StoreMember replacement) {
@@ -554,14 +817,10 @@ class _NewMemberDraft {
   const _NewMemberDraft({
     required this.userId,
     required this.role,
-    this.displayName,
-    this.email,
   });
 
   final String userId;
   final StoreRole role;
-  final String? displayName;
-  final String? email;
 }
 
 class _AddMemberDialog extends StatefulWidget {
@@ -573,15 +832,11 @@ class _AddMemberDialog extends StatefulWidget {
 
 class _AddMemberDialogState extends State<_AddMemberDialog> {
   final _userIdController = TextEditingController();
-  final _displayNameController = TextEditingController();
-  final _emailController = TextEditingController();
   StoreRole _role = StoreRole.viewer;
 
   @override
   void dispose() {
     _userIdController.dispose();
-    _displayNameController.dispose();
-    _emailController.dispose();
     super.dispose();
   }
 
@@ -594,12 +849,6 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
       _NewMemberDraft(
         userId: userId,
         role: _role,
-        displayName: _displayNameController.text.trim().isEmpty
-            ? null
-            : _displayNameController.text.trim(),
-        email: _emailController.text.trim().isEmpty
-            ? null
-            : _emailController.text.trim(),
       ),
     );
   }
@@ -623,23 +872,6 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                     labelText: 'UID المستخدم في Firebase',
                     hintText: 'مثال: FqDRlUu2gLdPuawD5A9pVd57DI23',
                     prefixIcon: Icon(Icons.fingerprint_outlined),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'البريد الإلكتروني (اختياري)',
-                    prefixIcon: Icon(Icons.email_outlined),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _displayNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'اسم العرض (اختياري)',
-                    prefixIcon: Icon(Icons.badge_outlined),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -667,7 +899,8 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
                 const SizedBox(height: 8),
                 const Text(
                   'يجب أن يكون المستخدم موجوداً مسبقاً في Firebase Authentication. '
-                  'هذه الشاشة تربطه بالمتجر ولا تنشئ حساب تسجيل دخول جديداً.',
+                  'الاسم والبريد يُقرآن من حساب Authentication الموثوق، '
+                  'وهذه الشاشة تربطه بالمتجر فقط.',
                 ),
               ],
             ),

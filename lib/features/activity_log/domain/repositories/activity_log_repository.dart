@@ -6,5 +6,7 @@ abstract interface class ActivityLogRepository {
   Stream<Result<List<ActivityLog>>> watchLogs({
     required StoreContext context,
     int limit = 100,
+    DateTime? fromInclusive,
+    DateTime? toExclusive,
   });
 }

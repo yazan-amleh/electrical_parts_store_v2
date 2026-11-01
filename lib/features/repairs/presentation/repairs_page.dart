@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
+import '../../../../core/errors/failure.dart';
 import '../../../../core/idempotency/idempotency_key.dart';
 import '../../../../core/money/money.dart';
 import '../../../../core/quantity/quantity.dart';
@@ -323,6 +324,11 @@ class _RepairDialogState extends State<_RepairDialog> {
   bool _busy = false;
   bool _isExporting = false;
   String? _error;
+  _PendingRepairDelivery? _pendingDelivery;
+  RepairPayment? _pendingPayment;
+
+  bool get _financialUnresolved =>
+      _pendingDelivery != null || _pendingPayment != null;
 
   @override
   void initState() {
@@ -414,7 +420,15 @@ class _RepairDialogState extends State<_RepairDialog> {
       repairId: _repair.id,
     );
     if (mounted && result is Success<List<RepairPayment>>) {
-      setState(() => _payments = result.value);
+      final payments = result.value;
+      final pendingPayment = _pendingPayment;
+      setState(() {
+        _payments = payments;
+        if (pendingPayment != null &&
+            payments.any((payment) => payment.id == pendingPayment.id)) {
+          _pendingPayment = null;
+        }
+      });
     }
   }
 
@@ -427,7 +441,13 @@ class _RepairDialogState extends State<_RepairDialog> {
       return;
     }
     if (result is Success<RepairRequest>) {
-      setState(() => _repair = result.value);
+      final repair = result.value;
+      setState(() {
+        _repair = repair;
+        if (repair.isInvoiced) {
+          _pendingDelivery = null;
+        }
+      });
       await _loadPayments();
     } else if (result is FailureResult<RepairRequest>) {
       _setError(result.failure.message);
@@ -435,6 +455,12 @@ class _RepairDialogState extends State<_RepairDialog> {
   }
 
   Future<void> _status(RepairStatus next) async {
+    if (_financialUnresolved) {
+      _setError(
+        'احسم العملية المالية المعلقة قبل تغيير حالة الصيانة.',
+      );
+      return;
+    }
     final result = await _run(
       () => widget.repository.updateRepair(
         context: widget.storeContext,
@@ -450,6 +476,12 @@ class _RepairDialogState extends State<_RepairDialog> {
   }
 
   Future<void> _addPart() async {
+    if (_financialUnresolved) {
+      _setError(
+        'احسم العملية المالية المعلقة قبل تعديل قطع الصيانة.',
+      );
+      return;
+    }
     final productsRepository = widget.productRepository;
     if (productsRepository == null) {
       _setError('مستودع الأصناف غير متاح.');
@@ -492,6 +524,12 @@ class _RepairDialogState extends State<_RepairDialog> {
   }
 
   Future<void> _payment(RepairPaymentKind kind) async {
+    if (_financialUnresolved) {
+      _setError(
+        'هناك عملية مالية غير محسومة. أعد نفس العملية أو حدّث البيانات.',
+      );
+      return;
+    }
     if (kind == RepairPaymentKind.advance && _repair.isInvoiced) {
       _setError('لا يمكن إضافة دفعة مقدمة بعد الفاتورة.');
       return;
@@ -513,6 +551,11 @@ class _RepairDialogState extends State<_RepairDialog> {
     if (payment == null || !mounted) {
       return;
     }
+    setState(() => _pendingPayment = payment);
+    await _submitPayment(payment);
+  }
+
+  Future<void> _submitPayment(RepairPayment payment) async {
     final result = await _run(
       () => widget.repository.postPayment(
         context: widget.storeContext,
@@ -520,28 +563,101 @@ class _RepairDialogState extends State<_RepairDialog> {
         accounts: const RepairPostingAccounts(),
       ),
     );
-    if (mounted && result is Success<RepairPayment>) {
-      await _reload();
+    if (!mounted) {
+      return;
     }
+    if (result == null) {
+      _setError(
+        'تعذر التأكد من نتيجة الدفعة. أعد نفس الدفعة أو حدّث البيانات.',
+      );
+      return;
+    }
+    if (result is FailureResult<RepairPayment>) {
+      final unresolved = result.failure is InfrastructureFailure ||
+          result.failure is QueuedFailure;
+      if (!unresolved) {
+        setState(() => _pendingPayment = null);
+      } else {
+        _setError(
+          result.failure is QueuedFailure
+              ? 'تم حفظ نفس الدفعة للطابور. لا تنشئ دفعة أخرى قبل حسمها.'
+              : 'تعذر التأكد من نتيجة الدفعة. '
+                  'أعد نفس الدفعة أو حدّث البيانات.',
+        );
+      }
+      return;
+    }
+
+    setState(() => _pendingPayment = null);
+    await _reload();
   }
 
   Future<void> _deliver() async {
     if (_repair.isInvoiced || _repair.status == RepairStatus.cancelled) {
       return;
     }
+    if (_pendingPayment != null) {
+      _setError('احسم الدفعة المعلقة قبل إصدار فاتورة الصيانة.');
+      return;
+    }
+    final pending = _pendingDelivery;
+    if (pending != null) {
+      await _submitDelivery(pending);
+      return;
+    }
+
+    final delivery = _PendingRepairDelivery(
+      idempotencyKey: 'repair-delivery-${_repair.id}',
+      postedAt: DateTime.now().toUtc(),
+      accounts: const RepairPostingAccounts(),
+    );
+    setState(() => _pendingDelivery = delivery);
+    await _submitDelivery(delivery);
+  }
+
+  Future<void> _submitDelivery(_PendingRepairDelivery delivery) async {
     final result = await _run(
       () => widget.repository.deliverRepair(
         context: widget.storeContext,
         repairId: _repair.id,
-        idempotencyKey: 'repair-delivery-${_repair.id}',
-        postedAt: DateTime.now().toUtc(),
-        accounts: const RepairPostingAccounts(),
+        idempotencyKey: delivery.idempotencyKey,
+        postedAt: delivery.postedAt,
+        accounts: delivery.accounts,
       ),
     );
-    if (mounted && result is Success<RepairRequest>) {
-      setState(() => _repair = result.value);
-      await _loadPayments();
+    if (!mounted) {
+      return;
     }
+    if (result == null) {
+      _setError(
+        'تعذر التأكد من نتيجة الفاتورة والتسليم. '
+        'أعد نفس العملية أو حدّث البيانات.',
+      );
+      return;
+    }
+    if (result is FailureResult<RepairRequest>) {
+      final unresolved = result.failure is InfrastructureFailure ||
+          result.failure is QueuedFailure;
+      if (!unresolved) {
+        setState(() => _pendingDelivery = null);
+      } else {
+        _setError(
+          result.failure is QueuedFailure
+              ? 'تم حفظ نفس الفاتورة والتسليم للطابور. '
+                  'لا تنشئ عملية أخرى قبل حسمها.'
+              : 'تعذر التأكد من نتيجة الفاتورة والتسليم. '
+                  'أعد نفس العملية أو حدّث البيانات.',
+        );
+      }
+      return;
+    }
+
+    final repair = (result as Success<RepairRequest>).value;
+    setState(() {
+      _pendingDelivery = null;
+      _repair = repair;
+    });
+    await _loadPayments();
   }
 
   Future<Result<T>?> _run<T>(Future<Result<T>> Function() action) async {
@@ -592,6 +708,7 @@ class _RepairDialogState extends State<_RepairDialog> {
   @override
   Widget build(BuildContext context) {
     final canEdit = !_busy &&
+        !_financialUnresolved &&
         !_repair.isInvoiced &&
         _repair.status != RepairStatus.cancelled;
     return Directionality(
@@ -633,6 +750,33 @@ class _RepairDialogState extends State<_RepairDialog> {
               children: [
                 if (_error != null) ...[
                   _Banner(text: _error!),
+                  const SizedBox(height: 8),
+                ],
+                if (_financialUnresolved) ...[
+                  _Banner(
+                    text: _pendingPayment != null
+                        ? 'هناك دفعة صيانة غير محسومة. '
+                            'أعد نفس الدفعة أو استخدم التحديث للتحقق.'
+                        : 'هناك فاتورة وتسليم غير محسومة. '
+                            'أعد نفس العملية أو استخدم التحديث للتحقق.',
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: OutlinedButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : _pendingPayment != null
+                              ? () => _submitPayment(_pendingPayment!)
+                              : () => _submitDelivery(_pendingDelivery!),
+                      icon: const Icon(Icons.refresh),
+                      label: Text(
+                        _pendingPayment != null
+                            ? 'إعادة نفس الدفعة'
+                            : 'إعادة نفس الفاتورة والتسليم',
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 8),
                 ],
                 Card(
@@ -748,9 +892,10 @@ class _RepairDialogState extends State<_RepairDialog> {
                       child: const Text('دفعة مقدمة'),
                     ),
                     OutlinedButton(
-                      onPressed: !_busy && _repair.isInvoiced
-                          ? () => _payment(RepairPaymentKind.settlement)
-                          : null,
+                      onPressed:
+                          !_busy && !_financialUnresolved && _repair.isInvoiced
+                              ? () => _payment(RepairPaymentKind.settlement)
+                              : null,
                       child: const Text('دفعة على الفاتورة'),
                     ),
                   ],
@@ -761,16 +906,24 @@ class _RepairDialogState extends State<_RepairDialog> {
         ),
         actions: [
           TextButton(
-            onPressed: _busy || _isExporting
+            onPressed: _busy || _isExporting || _financialUnresolved
                 ? null
                 : () => Navigator.of(context).pop(),
             child: const Text('إغلاق'),
           ),
           if (!_repair.isInvoiced && _repair.status != RepairStatus.cancelled)
             FilledButton.icon(
-              onPressed: _busy ? null : _deliver,
-              icon: const Icon(Icons.receipt_long_outlined),
-              label: const Text('فاتورة وتسليم'),
+              onPressed: _busy || _pendingPayment != null ? null : _deliver,
+              icon: Icon(
+                _pendingDelivery == null
+                    ? Icons.receipt_long_outlined
+                    : Icons.refresh,
+              ),
+              label: Text(
+                _pendingDelivery == null
+                    ? 'فاتورة وتسليم'
+                    : 'إعادة نفس الفاتورة والتسليم',
+              ),
             ),
           if (_busy)
             const SizedBox(
@@ -782,6 +935,18 @@ class _RepairDialogState extends State<_RepairDialog> {
       ),
     );
   }
+}
+
+class _PendingRepairDelivery {
+  const _PendingRepairDelivery({
+    required this.idempotencyKey,
+    required this.postedAt,
+    required this.accounts,
+  });
+
+  final String idempotencyKey;
+  final DateTime postedAt;
+  final RepairPostingAccounts accounts;
 }
 
 class _CreateRepairDialog extends StatefulWidget {

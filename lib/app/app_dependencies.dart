@@ -1,15 +1,20 @@
 import '../core/config/app_runtime_config.dart';
 import '../features/accounting/domain/repositories/accounting_query_repository.dart';
+import '../features/accounting/data/repositories/firestore_chart_mutation_repository.dart';
 import '../features/offers/domain/repositories/offer_repository.dart';
 import '../features/accounting/domain/repositories/accounting_repository.dart';
 import '../features/accounting_audit/domain/repositories/accounting_audit_repository.dart';
+import '../features/accounting_audit/data/repositories/firestore_accounting_close_repository.dart';
 import '../features/activity_log/domain/repositories/activity_log_repository.dart';
 import '../features/categories/domain/repositories/category_repository.dart';
 import '../features/notes/domain/repositories/note_repository.dart';
 import '../features/categories/domain/services/category_inventory_document_builder.dart';
 import '../features/cheques/domain/repositories/cheque_repository.dart';
 import '../features/auth/application/auth_session_controller.dart';
+import '../features/auth/domain/repositories/account_avatar_repository.dart';
+import '../features/auth/domain/repositories/account_profile_repository.dart';
 import '../features/inventory/domain/repositories/inventory_repository.dart';
+import '../features/inventory/domain/repositories/inventory_count_repository.dart';
 import '../features/inventory/domain/repositories/product_repository.dart';
 import '../features/sales/domain/repositories/sale_repository.dart';
 import '../features/purchases/domain/repositories/purchase_repository.dart';
@@ -24,6 +29,8 @@ import '../features/repairs/domain/services/repair_document_builder.dart';
 import '../features/purchase_orders/domain/repositories/purchase_order_repository.dart';
 import '../features/expenses/domain/repositories/expense_repository.dart';
 import '../features/payments/domain/repositories/party_payment_repository.dart';
+import '../features/payments/domain/repositories/voucher_query_repository.dart';
+import '../features/payments/domain/repositories/voucher_draft_repository.dart';
 import '../features/parties/domain/repositories/party_ledger_repository.dart';
 import '../features/parties/domain/repositories/party_repository.dart';
 import '../features/transfers/domain/repositories/account_transfer_repository.dart';
@@ -32,13 +39,18 @@ class AppDependencies {
   const AppDependencies({
     required this.runtime,
     this.authSession,
+    this.accountProfileRepository,
+    this.accountAvatarRepository,
     this.accountingRepository,
     this.accountingAuditRepository,
+    this.accountingCloseRepository,
     this.categoryRepository,
     this.categoryInventoryDocumentBuilder,
     this.chequeRepository,
     this.accountingQueryRepository,
+    this.chartMutationRepository,
     this.inventoryRepository,
+    this.inventoryCountRepository,
     this.productRepository,
     this.saleRepository,
     this.purchaseRepository,
@@ -46,6 +58,8 @@ class AppDependencies {
     this.offerRepository,
     this.expenseRepository,
     this.partyPaymentRepository,
+    this.voucherQueryRepository,
+    this.voucherDraftRepository,
     this.partyRepository,
     this.partyLedgerRepository,
     this.accountTransferRepository,
@@ -63,13 +77,18 @@ class AppDependencies {
 
   final AppRuntimeConfig runtime;
   final AuthSessionController? authSession;
+  final AccountProfileRepository? accountProfileRepository;
+  final AccountAvatarRepository? accountAvatarRepository;
   final AccountingRepository? accountingRepository;
   final AccountingAuditRepository? accountingAuditRepository;
+  final FirestoreAccountingCloseRepository? accountingCloseRepository;
   final CategoryRepository? categoryRepository;
   final CategoryInventoryDocumentBuilder? categoryInventoryDocumentBuilder;
   final ChequeRepository? chequeRepository;
   final AccountingQueryRepository? accountingQueryRepository;
+  final FirestoreChartMutationRepository? chartMutationRepository;
   final InventoryRepository? inventoryRepository;
+  final InventoryCountRepository? inventoryCountRepository;
   final ProductRepository? productRepository;
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
@@ -77,6 +96,8 @@ class AppDependencies {
   final OfferRepository? offerRepository;
   final ExpenseRepository? expenseRepository;
   final PartyPaymentRepository? partyPaymentRepository;
+  final VoucherQueryRepository? voucherQueryRepository;
+  final VoucherDraftRepository? voucherDraftRepository;
   final PartyRepository? partyRepository;
   final PartyLedgerRepository? partyLedgerRepository;
   final AccountTransferRepository? accountTransferRepository;

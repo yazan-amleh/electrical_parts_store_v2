@@ -7,8 +7,6 @@ import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
 import '../../../../infrastructure/firebase/firebase_paths.dart';
 import '../../../../infrastructure/queue/cloud_function_queue_fallback.dart';
-import '../../../sales/domain/entities/sale_posting_plan.dart';
-import '../../../sales/domain/enums/sale_payment_method.dart';
 import '../../domain/entities/offer.dart';
 import '../../domain/entities/offer_order.dart';
 import '../../domain/entities/offer_order_confirmation.dart';
@@ -224,13 +222,11 @@ class FirestoreOfferRepository implements OfferRepository {
   Future<Result<OfferOrderConfirmation>> confirmOfferOrder({
     required StoreContext context,
     required OfferOrder order,
-    required SalePaymentMethod paymentMethod,
-    required SalePostingAccounts accounts,
+    required OfferOrderConfirmationRequest confirmation,
   }) async {
     final payload = OfferCommandMapper.confirmOrderRequest(
       order: order,
-      paymentMethod: paymentMethod,
-      accounts: accounts,
+      confirmation: confirmation,
     );
     try {
       final response = await _functions
@@ -242,15 +238,16 @@ class FirestoreOfferRepository implements OfferRepository {
           orderId: order.id,
           saleId: data['saleId'] as String? ?? '',
           journalEntryId: data['journalEntryId'] as String? ?? '',
+          alreadyConfirmed: data['status'] == 'already_confirmed',
         ),
       );
     } on firebase_functions.FirebaseFunctionsException catch (error) {
       final queued = await _enqueueIfTransient(
         error: error,
         context: context,
-        commandId: 'confirm-offer-order-${order.id}',
+        commandId: 'confirm-offer-order-${confirmation.idempotencyKey.value}',
         operation: 'confirmOfferOrder',
-        idempotencyKey: 'confirm-${order.id}',
+        idempotencyKey: confirmation.idempotencyKey.value,
         payload: payload,
       );
       if (queued != null) {

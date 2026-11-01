@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/errors/failure.dart';
+import '../../../core/idempotency/idempotency_key.dart';
 import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../parties/domain/enums/party_type.dart';
 import '../domain/entities/cheque.dart';
+import '../domain/entities/cheque_settlement_request.dart';
 import '../domain/entities/cheque_settlement_result.dart';
 import '../domain/enums/cheque_settlement_action.dart';
 import '../domain/enums/cheque_status.dart';
@@ -34,6 +36,9 @@ class _ChequesPageState extends State<ChequesPage> {
   String? _errorMessage;
   String? _busyChequeId;
   bool _isLoading = true;
+  int _loadEpoch = 0;
+  final Map<String, _PendingChequeSettlement> _pendingSettlements =
+      <String, _PendingChequeSettlement>{};
 
   StoreContext get _context {
     return StoreContext(
@@ -62,6 +67,19 @@ class _ChequesPageState extends State<ChequesPage> {
   }
 
   @override
+  void didUpdateWidget(covariant ChequesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId) {
+      _cheques = const <Cheque>[];
+      _pendingSettlements.clear();
+      _busyChequeId = null;
+      _filter = 'all';
+      _load();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (widget.repository == null) {
       return const Center(child: Text('مستودع الشيكات غير موصول بهذه البيئة.'));
@@ -87,6 +105,7 @@ class _ChequesPageState extends State<ChequesPage> {
                   width: 170,
                   child: DropdownButtonFormField<String>(
                     value: _filter,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'الحالة',
                       isDense: true,
@@ -162,6 +181,7 @@ class _ChequesPageState extends State<ChequesPage> {
 
   Widget _buildChequeCard(Cheque cheque) {
     final isBusy = _busyChequeId == cheque.id;
+    final pending = _pendingSettlements[cheque.id];
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -200,7 +220,35 @@ class _ChequesPageState extends State<ChequesPage> {
               const SizedBox(height: 8),
               Text(cheque.description!),
             ],
-            if (cheque.status == ChequeStatus.pending) ...[
+            if (pending != null) ...[
+              const SizedBox(height: 12),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        pending.queued
+                            ? 'تسوية هذا الشيك محفوظة في طابور التنفيذ. '
+                                'لا تنشئ تسوية أخرى حتى تتغير حالة الشيك.'
+                            : 'تعذر التأكد من نتيجة التسوية السابقة. '
+                                'أعد نفس الطلب حرفيًا لتأكيد النتيجة.',
+                      ),
+                      if (!pending.queued)
+                        TextButton.icon(
+                          onPressed: isBusy
+                              ? null
+                              : () => _submitSettlement(cheque, pending),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('إعادة نفس التسوية'),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            if (cheque.status == ChequeStatus.pending && pending == null) ...[
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -243,7 +291,23 @@ class _ChequesPageState extends State<ChequesPage> {
     );
   }
 
-  Future<void> _settle(Cheque cheque, ChequeSettlementAction action) async {
+  Future<void> _settle(
+    Cheque cheque,
+    ChequeSettlementAction action,
+  ) async {
+    final existing = _pendingSettlements[cheque.id];
+    if (existing != null) {
+      if (existing.queued) {
+        _showMessage(
+          'تسوية هذا الشيك موجودة في طابور التنفيذ. '
+          'انتظر تحديث حالته قبل إنشاء أمر آخر.',
+        );
+      } else {
+        await _submitSettlement(cheque, existing);
+      }
+      return;
+    }
+
     final isCustomer = cheque.partyType == PartyType.customer;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -278,14 +342,39 @@ class _ChequesPageState extends State<ChequesPage> {
       return;
     }
 
-    setState(() => _busyChequeId = cheque.id);
-    final result = await widget.repository!.settleCheque(
-      context: _context,
+    final now = DateTime.now().toUtc();
+    final key = 'cheque-${cheque.id}-${action.name}';
+    final request = ChequeSettlementRequest(
       chequeId: cheque.id,
       action: action,
+      idempotencyKey: IdempotencyKey(key),
+      postedAt: now,
       bankAccountId: action == ChequeSettlementAction.clear ? '1121' : null,
     );
-    if (!mounted) {
+    final pending = _PendingChequeSettlement(request: request);
+    _pendingSettlements[cheque.id] = pending;
+    await _submitSettlement(cheque, pending);
+  }
+
+  Future<void> _submitSettlement(
+    Cheque cheque,
+    _PendingChequeSettlement pending,
+  ) async {
+    final repository = widget.repository;
+    if (repository == null || _busyChequeId != null) {
+      return;
+    }
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
+    setState(() => _busyChequeId = cheque.id);
+
+    final result = await repository.settleCheque(
+      context: _context,
+      request: pending.request,
+    );
+    if (!mounted ||
+        requestedStore != widget.membership.storeId ||
+        requestedUser != widget.user.id) {
       return;
     }
     setState(() => _busyChequeId = null);
@@ -293,24 +382,36 @@ class _ChequesPageState extends State<ChequesPage> {
     if (result is FailureResult<ChequeSettlementResult>) {
       final failure = result.failure;
       if (failure is QueuedFailure) {
-        _showMessage('تم حفظ التسوية للطابور وستُرحّل عند عودة الاتصال.');
+        setState(() => pending.queued = true);
+        _showMessage(
+          'تم حفظ نفس تسوية الشيك للطابور. '
+          'لن يسمح النظام بإنشاء تسوية أخرى لهذا الشيك حاليًا.',
+        );
+      } else if (failure is InfrastructureFailure) {
+        _showMessage(
+          'تعذر التأكد من نتيجة التسوية. استخدم «إعادة نفس التسوية» '
+          'حتى يبقى التاريخ والمفتاح المحاسبيان كما هما.',
+        );
       } else {
+        _pendingSettlements.remove(cheque.id);
         _showMessage(failure.message);
       }
       return;
     }
-    if (result is Success<ChequeSettlementResult>) {
-      _showMessage(
-        action == ChequeSettlementAction.clear
-            ? (isCustomer
-                ? 'تم تحصيل الشيك ونقله إلى البنك.'
-                : 'تم صرف الشيك ونقله من الالتزام إلى البنك.')
-            : (isCustomer
-                ? 'تم تسجيل ارتجاع الشيك وإعادته على ذمة العميل.'
-                : 'تم تسجيل ارتجاع الشيك وإعادته على ذمة المورد.'),
-      );
-      await _load();
-    }
+
+    _pendingSettlements.remove(cheque.id);
+    final posted = (result as Success<ChequeSettlementResult>).value;
+    final isCustomer = cheque.partyType == PartyType.customer;
+    _showMessage(
+      posted.status == ChequeStatus.cleared
+          ? (isCustomer
+              ? 'تم تحصيل الشيك ونقله إلى البنك.'
+              : 'تم صرف الشيك ونقله من الالتزام إلى البنك.')
+          : (isCustomer
+              ? 'تم تسجيل ارتجاع الشيك وإعادته على ذمة العميل.'
+              : 'تم تسجيل ارتجاع الشيك وإعادته على ذمة المورد.'),
+    );
+    await _load();
   }
 
   Future<void> _load() async {
@@ -318,6 +419,9 @@ class _ChequesPageState extends State<ChequesPage> {
     if (repository == null) {
       return;
     }
+    final epoch = ++_loadEpoch;
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -326,7 +430,10 @@ class _ChequesPageState extends State<ChequesPage> {
       context: _context,
       status: _statusFilter,
     );
-    if (!mounted) {
+    if (!mounted ||
+        epoch != _loadEpoch ||
+        requestedStore != widget.membership.storeId ||
+        requestedUser != widget.user.id) {
       return;
     }
     if (result is FailureResult<List<Cheque>>) {
@@ -336,8 +443,18 @@ class _ChequesPageState extends State<ChequesPage> {
       });
       return;
     }
+    final cheques = (result as Success<List<Cheque>>).value;
+    if (_statusFilter == null || _statusFilter == ChequeStatus.pending) {
+      final visibleById = <String, Cheque>{
+        for (final cheque in cheques) cheque.id: cheque,
+      };
+      _pendingSettlements.removeWhere((chequeId, _) {
+        final cheque = visibleById[chequeId];
+        return cheque == null || cheque.status != ChequeStatus.pending;
+      });
+    }
     setState(() {
-      _cheques = (result as Success<List<Cheque>>).value;
+      _cheques = cheques;
       _isLoading = false;
     });
   }
@@ -366,4 +483,11 @@ class _ChequesPageState extends State<ChequesPage> {
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
   }
+}
+
+class _PendingChequeSettlement {
+  _PendingChequeSettlement({required this.request});
+
+  final ChequeSettlementRequest request;
+  bool queued = false;
 }

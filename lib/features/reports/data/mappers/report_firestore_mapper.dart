@@ -7,7 +7,11 @@ abstract final class ReportFirestoreMapper {
   static ReportTransaction? tryTransaction(
     DocumentSnapshot<Map<String, dynamic>> snapshot, {
     required String source,
+    int sign = 1,
   }) {
+    if (sign != 1 && sign != -1) {
+      throw ArgumentError.value(sign, 'sign', 'must be 1 or -1');
+    }
     final data = snapshot.data() ?? const <String, dynamic>{};
     final postedAt = _date(data['postedAt']);
     if (postedAt == null) {
@@ -20,12 +24,14 @@ abstract final class ReportFirestoreMapper {
       _int(data['amountMinorUnits']),
     );
     final costMinorUnits = _int(data['costTotalMinorUnits']);
+    final taxMinorUnits = _int(data['taxMinorUnits']);
     return ReportTransaction(
       id: snapshot.id,
       postedAt: postedAt,
       source: source,
-      amount: Money(minorUnits: amountMinorUnits, currency: currency),
-      cost: Money(minorUnits: costMinorUnits, currency: currency),
+      amount: Money(minorUnits: sign * amountMinorUnits, currency: currency),
+      cost: Money(minorUnits: sign * costMinorUnits, currency: currency),
+      tax: Money(minorUnits: sign * taxMinorUnits, currency: currency),
       description: _stringOrNull(data['description']),
       paymentMethod: _stringOrNull(data['paymentMethod']),
     );

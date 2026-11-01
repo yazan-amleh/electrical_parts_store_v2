@@ -6,6 +6,7 @@ import '../../shell/presentation/app_shell_page.dart';
 import '../application/auth_session_controller.dart';
 import '../domain/entities/authenticated_user.dart';
 import 'login_page.dart';
+import 'store_setup_page.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({required this.dependencies, super.key});
@@ -38,14 +39,23 @@ class AuthGate extends StatelessWidget {
                 user: user,
                 onRetry: controller.reloadMembership,
                 onSignOut: controller.signOut,
+                onChooseStore: controller.openStoreSetup,
               );
             }
+            // Reset all stateful feature screens when tenant or role changes.
             return AppShellPage(
+              key: ValueKey(
+                  'tenant:${user.id}:${membership.storeId}:${membership.role.name}'),
               dependencies: dependencies,
               user: user,
               membership: membership,
               onSignOut: controller.signOut,
+              onChooseStore: controller.openStoreSetup,
             );
+          case AuthSessionStatus.storeSetupRequired:
+            return StoreSetupPage(controller: controller);
+          case AuthSessionStatus.creatingStore:
+            return const _LoadingPage(message: 'جارٍ إنشاء المتجر...');
           case AuthSessionStatus.storeNotConfigured:
             return FirebaseSetupPage(runtime: dependencies.runtime);
           case AuthSessionStatus.failure:
@@ -55,6 +65,8 @@ class AuthGate extends StatelessWidget {
               user: controller.user,
               onRetry: controller.reloadMembership,
               onSignOut: controller.signOut,
+              onChooseStore:
+                  controller.user == null ? null : controller.openStoreSetup,
             );
         }
       },
@@ -154,6 +166,7 @@ class _SessionErrorPage extends StatelessWidget {
     this.user,
     this.onRetry,
     this.onSignOut,
+    this.onChooseStore,
   });
 
   final String message;
@@ -161,6 +174,7 @@ class _SessionErrorPage extends StatelessWidget {
   final AuthenticatedUser? user;
   final Future<void> Function()? onRetry;
   final Future<void> Function()? onSignOut;
+  final VoidCallback? onChooseStore;
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +230,12 @@ class _SessionErrorPage extends StatelessWidget {
                       onPressed: onRetry,
                       icon: const Icon(Icons.refresh),
                       label: const Text('إعادة المحاولة'),
+                    ),
+                  if (onChooseStore != null)
+                    TextButton.icon(
+                      onPressed: onChooseStore,
+                      icon: const Icon(Icons.storefront_outlined),
+                      label: const Text('اختيار متجر آخر'),
                     ),
                   if (onSignOut != null)
                     TextButton(

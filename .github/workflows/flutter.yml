@@ -5,9 +5,11 @@ on:
     branches:
       - main
       - "v2/**"
+      - "audit/**"
   pull_request:
     branches:
       - main
+      - "v2/**"
 
 permissions:
   contents: read
@@ -40,13 +42,26 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: |
+          dart format lib test
+          if ! git diff --exit-code -- lib test; then
+            echo "::error::Dart formatting differs from repository contents"
+            exit 1
+          fi
 
       - name: Analyze
         run: flutter analyze
 
       - name: Test
         run: flutter test
+
+      # Compile the deployable Web target; compilation does not publish or
+      # connect to production Firebase. Runtime Firebase E2E is a separate gate.
+      - name: Build V2 Web release (no deploy)
+        run: |
+          flutter build web --release \
+            --dart-define=USE_FIREBASE=true \
+            --dart-define=FIREBASE_PROJECT_ID=electrical-store-v2-prod
 
       - name: Install Firestore rules test dependencies
         working-directory: firestore_rules_test

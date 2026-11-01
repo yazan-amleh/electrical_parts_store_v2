@@ -28,6 +28,18 @@ service firebase.storage {
         ];
     }
 
+    // Personal pictures are readable only by their owner; never use a
+    // publicly shareable Firebase download-token URL for this resource.
+    match /users/{userId}/avatar/photo {
+      allow get: if signedIn() && request.auth.uid == userId;
+      allow list: if false;
+      allow create, update: if signedIn() &&
+        request.auth.uid == userId &&
+        request.resource.size <= 2 * 1024 * 1024 &&
+        request.resource.contentType in ['image/jpeg', 'image/png'];
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
     match /stores/{storeId}/chatRooms/{roomId}/attachments/{userId}/{fileName} {
       allow read: if isChatParticipant(storeId, roomId);
       allow create: if isChatParticipant(storeId, roomId) &&

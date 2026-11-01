@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart' as firebase_functions;
 
 import '../../../../core/errors/failure.dart';
 import '../../../../core/result/result.dart';
@@ -12,10 +13,14 @@ import '../mappers/store_member_firestore_mapper.dart';
 import '../mappers/store_profile_firestore_mapper.dart';
 
 class FirestoreSettingsRepository implements SettingsRepository {
-  FirestoreSettingsRepository({required FirebaseFirestore firestore})
-      : _firestore = firestore;
+  FirestoreSettingsRepository({
+    required FirebaseFirestore firestore,
+    required firebase_functions.FirebaseFunctions functions,
+  })  : _firestore = firestore,
+        _functions = functions;
 
   final FirebaseFirestore _firestore;
+  final firebase_functions.FirebaseFunctions _functions;
 
   @override
   Future<Result<StoreProfile>> getStoreProfile({
@@ -82,40 +87,28 @@ class FirestoreSettingsRepository implements SettingsRepository {
     }
 
     try {
-      final storeRef = FirebasePaths.store(_firestore, context.storeId);
-      await _firestore.runTransaction((transaction) async {
-        final snapshot = await transaction.get(storeRef);
-        if (!snapshot.exists) {
-          throw FirebaseException(
-            plugin: 'cloud_firestore',
-            code: 'not-found',
-            message: 'Store profile was not found.',
-          );
-        }
-        final data = snapshot.data() ?? const <String, dynamic>{};
-        final existingCurrency = data['currency'];
-        if (existingCurrency is String &&
-            existingCurrency.trim().isNotEmpty &&
-            existingCurrency.trim().toUpperCase() !=
-                profile.currency.trim().toUpperCase()) {
-          throw FirebaseException(
-            plugin: 'cloud_firestore',
-            code: 'failed-precondition',
-            message: 'Store currency cannot change after initialization.',
-          );
-        }
-        transaction.update(storeRef, {
+      final response = await _functions
+          .httpsCallable('updateStoreProfile')
+          .call<Map<String, dynamic>>({
+        'storeId': context.storeId,
+        'profile': <String, dynamic>{
           'name': profile.name.trim(),
           'currency': profile.currency.trim().toUpperCase(),
           'phone': profile.phone.trim(),
           'address': profile.address.trim(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+        },
       });
+      if (response.data['storeId'] != context.storeId) {
+        return const FailureResult<void>(
+          InfrastructureFailure(
+            'Store profile service returned another store.',
+          ),
+        );
+      }
       return const Success<void>(null);
-    } on FirebaseException catch (error) {
+    } on firebase_functions.FirebaseFunctionsException catch (error) {
       return FailureResult<void>(
-        _mapFirebaseFailure(error, 'Store profile could not be updated.'),
+        _mapFunctionFailure(error, 'Store profile could not be updated.'),
       );
     } catch (error) {
       return FailureResult<void>(
@@ -141,36 +134,27 @@ class FirestoreSettingsRepository implements SettingsRepository {
     }
 
     try {
-      final memberRef = FirebasePaths.members(
-        _firestore,
-        context.storeId,
-      ).doc(member.userId.trim());
-      await _firestore.runTransaction((transaction) async {
-        final snapshot = await transaction.get(memberRef);
-        if (snapshot.exists) {
-          throw FirebaseException(
-            plugin: 'cloud_firestore',
-            code: 'already-exists',
-            message: 'This user is already a member of the store.',
-          );
-        }
-        transaction.set(memberRef, {
-          'storeId': context.storeId,
+      final response = await _functions
+          .httpsCallable('addStoreMember')
+          .call<Map<String, dynamic>>({
+        'storeId': context.storeId,
+        'member': <String, dynamic>{
           'userId': member.userId.trim(),
           'role': member.role.name,
-          'isActive': member.isActive,
-          if (member.displayName?.trim().isNotEmpty == true)
-            'displayName': member.displayName!.trim(),
-          if (member.email?.trim().isNotEmpty == true)
-            'email': member.email!.trim().toLowerCase(),
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+        },
       });
+      if (response.data['storeId'] != context.storeId ||
+          response.data['userId'] != member.userId.trim()) {
+        return const FailureResult<void>(
+          InfrastructureFailure(
+            'Store member service returned inconsistent data.',
+          ),
+        );
+      }
       return const Success<void>(null);
-    } on FirebaseException catch (error) {
+    } on firebase_functions.FirebaseFunctionsException catch (error) {
       return FailureResult<void>(
-        _mapFirebaseFailure(error, 'Store member could not be added.'),
+        _mapFunctionFailure(error, 'Store member could not be added.'),
       );
     } catch (error) {
       return FailureResult<void>(
@@ -196,37 +180,28 @@ class FirestoreSettingsRepository implements SettingsRepository {
     }
 
     try {
-      final memberRef = FirebasePaths.members(
-        _firestore,
-        context.storeId,
-      ).doc(member.userId);
-      await _firestore.runTransaction((transaction) async {
-        final snapshot = await transaction.get(memberRef);
-        if (!snapshot.exists) {
-          throw FirebaseException(
-            plugin: 'cloud_firestore',
-            code: 'not-found',
-            message: 'Member was not found.',
-          );
-        }
-        final data = snapshot.data() ?? const <String, dynamic>{};
-        if (data['role'] == StoreRole.owner.name) {
-          throw FirebaseException(
-            plugin: 'cloud_firestore',
-            code: 'failed-precondition',
-            message: 'The store owner cannot be changed here.',
-          );
-        }
-        transaction.update(memberRef, {
+      final response = await _functions
+          .httpsCallable('updateStoreMember')
+          .call<Map<String, dynamic>>({
+        'storeId': context.storeId,
+        'member': <String, dynamic>{
+          'userId': member.userId.trim(),
           'role': member.role.name,
           'isActive': member.isActive,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+        },
       });
+      if (response.data['storeId'] != context.storeId ||
+          response.data['userId'] != member.userId.trim()) {
+        return const FailureResult<void>(
+          InfrastructureFailure(
+            'Store member service returned inconsistent data.',
+          ),
+        );
+      }
       return const Success<void>(null);
-    } on FirebaseException catch (error) {
+    } on firebase_functions.FirebaseFunctionsException catch (error) {
       return FailureResult<void>(
-        _mapFirebaseFailure(error, 'Store member could not be updated.'),
+        _mapFunctionFailure(error, 'Store member could not be updated.'),
       );
     } catch (error) {
       return FailureResult<void>(
@@ -235,16 +210,23 @@ class FirestoreSettingsRepository implements SettingsRepository {
     }
   }
 
-  Failure _mapFirebaseFailure(FirebaseException error, String fallback) {
+  Failure _mapFunctionFailure(
+    firebase_functions.FirebaseFunctionsException error,
+    String fallback,
+  ) {
     switch (error.code) {
       case 'permission-denied':
       case 'unauthenticated':
         return AuthorizationFailure(error.message ?? fallback);
       case 'not-found':
       case 'failed-precondition':
+      case 'invalid-argument':
         return ValidationFailure(error.message ?? fallback);
+      case 'already-exists':
+      case 'aborted':
+        return ConflictFailure(error.message ?? fallback);
       default:
-        return InfrastructureFailure(error.message ?? fallback);
+        return InfrastructureFailure(error.message ?? error.code);
     }
   }
 }

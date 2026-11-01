@@ -1,20 +1,29 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/errors/failure.dart';
 import '../../../core/idempotency/idempotency_key.dart';
 import '../../../core/money/money.dart';
 import '../../../core/result/result.dart';
+import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
+import '../../auth/domain/enums/store_role.dart';
+import '../../parties/domain/entities/party.dart';
 import '../../parties/domain/enums/party_type.dart';
+import '../../parties/domain/repositories/party_repository.dart';
 import '../domain/entities/party_payment.dart';
 import '../domain/entities/party_payment_posting_plan.dart';
 import '../domain/enums/party_payment_method.dart';
 import '../domain/repositories/party_payment_repository.dart';
+import '../domain/repositories/voucher_draft_repository.dart';
 
 class PartyPaymentsPage extends StatefulWidget {
   const PartyPaymentsPage({
     required this.repository,
+    this.draftRepository,
+    this.partyRepository,
     required this.user,
     required this.membership,
     this.initialPartyType = PartyType.customer,
@@ -23,6 +32,8 @@ class PartyPaymentsPage extends StatefulWidget {
   });
 
   final PartyPaymentRepository? repository;
+  final VoucherDraftRepository? draftRepository;
+  final PartyRepository? partyRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
   final PartyType initialPartyType;
@@ -52,6 +63,20 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
   PartyPaymentMethod _paymentMethod = PartyPaymentMethod.cash;
   DateTime? _dueDate;
   bool _isPosting = false;
+  PartyPayment? _pendingPayment;
+  String? _pendingSignature;
+  bool _pendingQueued = false;
+  bool _pendingUncertain = false;
+  List<Party> _parties = const <Party>[];
+  Party? _selectedParty;
+  bool _isLoadingParties = false;
+  String? _partyLoadError;
+  int _partyLoadEpoch = 0;
+
+  StoreContext get _storeContext => StoreContext(
+        storeId: widget.membership.storeId,
+        userId: widget.user.id,
+      );
 
   @override
   void initState() {
@@ -60,10 +85,41 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
     if (widget.initialPartyId != null) {
       _partyController.text = widget.initialPartyId!;
     }
+    _loadParties();
+  }
+
+  @override
+  void didUpdateWidget(covariant PartyPaymentsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId ||
+        oldWidget.initialPartyType != widget.initialPartyType ||
+        oldWidget.initialPartyId != widget.initialPartyId) {
+      _partyType = widget.initialPartyType;
+      _partyController.text = widget.initialPartyId ?? '';
+      _selectedParty = null;
+      _parties = const <Party>[];
+      _pendingPayment = null;
+      _pendingSignature = null;
+      _pendingQueued = false;
+      _pendingUncertain = false;
+      _amountController.clear();
+      _descriptionController.clear();
+      _chequeNumberController.clear();
+      _bankNameController.clear();
+      _dueDate = null;
+      _paymentMethod = PartyPaymentMethod.cash;
+      _loadParties();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.membership.role.canPostAccounting) {
+      return const Center(
+        child: Text('ليس لديك صلاحية لترحيل سندات القبض أو الدفع.'),
+      );
+    }
     final isCustomer = _partyType == PartyType.customer;
     final actionLabel = isCustomer ? 'قبض من عميل' : 'دفع لمورد';
 
@@ -119,26 +175,24 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                       onSelectionChanged: _isPosting
                           ? null
                           : (selection) {
-                              setState(() => _partyType = selection.first);
+                              final nextType = selection.first;
+                              if (nextType == _partyType) {
+                                return;
+                              }
+                              setState(() {
+                                _partyType = nextType;
+                                _selectedParty = null;
+                                _partyController.clear();
+                                _partyLoadError = null;
+                              });
+                              _loadParties();
                             },
                     ),
                     const SizedBox(height: 16),
-                    TextField(
-                      controller: _partyController,
-                      enabled: !_isPosting,
-                      decoration: InputDecoration(
-                        labelText: isCustomer ? 'معرّف العميل' : 'معرّف المورد',
-                        hintText:
-                            isCustomer ? 'أدخل customerId' : 'أدخل supplierId',
-                        prefixIcon: Icon(
-                          isCustomer
-                              ? Icons.person_outline
-                              : Icons.local_shipping_outlined,
-                        ),
-                      ),
-                    ),
+                    _buildPartySelector(isCustomer),
                     const SizedBox(height: 12),
                     TextField(
+                      key: const ValueKey('party-payment-amount'),
                       controller: _amountController,
                       enabled: !_isPosting,
                       keyboardType: const TextInputType.numberWithOptions(
@@ -231,8 +285,34 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
                         prefixIcon: Icon(Icons.notes_outlined),
                       ),
                     ),
+                    if (_pendingQueued || _pendingUncertain) ...[
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            _pendingQueued
+                                ? 'هذه الحركة محفوظة في طابور التنفيذ. '
+                                    'لا تنشئ حركة أخرى حتى يتم التحقق من نتيجتها.'
+                                : 'تعذر التأكد من نتيجة الترحيل السابقة. '
+                                    'أعد نفس الحركة بنفس البيانات فقط.',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     const SizedBox(height: 20),
+                    if (widget.draftRepository != null) ...[
+                      OutlinedButton.icon(
+                        onPressed: _isPosting
+                            ? null
+                            : () => _postPayment(saveDraft: true),
+                        icon: const Icon(Icons.save_outlined),
+                        label: const Text('حفظ كمسودة دون ترحيل'),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     FilledButton.icon(
+                      key: const ValueKey('party-payment-submit'),
                       onPressed: _isPosting ? null : _postPayment,
                       icon: _isPosting
                           ? const SizedBox(
@@ -251,6 +331,211 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildPartySelector(bool isCustomer) {
+    final repository = widget.partyRepository;
+    if (repository == null) {
+      return TextField(
+        controller: _partyController,
+        enabled: !_isPosting,
+        decoration: InputDecoration(
+          labelText: isCustomer ? 'معرّف العميل' : 'معرّف المورد',
+          hintText: isCustomer ? 'أدخل customerId' : 'أدخل supplierId',
+          prefixIcon: Icon(
+            isCustomer ? Icons.person_outline : Icons.local_shipping_outlined,
+          ),
+        ),
+      );
+    }
+
+    if (_isLoadingParties) {
+      return const LinearProgressIndicator();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Autocomplete<Party>(
+          key: ValueKey(
+            'party-selector-${_partyType.name}-'
+            '$_partyLoadEpoch-${_selectedParty?.id ?? 'none'}',
+          ),
+          initialValue: TextEditingValue(
+            text: _selectedParty?.name ?? '',
+          ),
+          displayStringForOption: (party) => party.name,
+          optionsBuilder: (textEditingValue) {
+            final query = textEditingValue.text.trim().toLowerCase();
+            final candidates = query.isEmpty
+                ? _parties
+                : _parties.where((party) {
+                    return party.name.toLowerCase().contains(query) ||
+                        party.id.toLowerCase().contains(query) ||
+                        (party.phone?.toLowerCase().contains(query) ?? false);
+                  }).toList(growable: false);
+            return candidates.take(20);
+          },
+          onSelected: (party) {
+            setState(() {
+              _selectedParty = party;
+              _partyController.text = party.id;
+              _partyLoadError = null;
+            });
+          },
+          fieldViewBuilder: (
+            context,
+            textEditingController,
+            focusNode,
+            onFieldSubmitted,
+          ) {
+            return TextField(
+              key: const ValueKey('party-payment-party-search'),
+              controller: textEditingController,
+              focusNode: focusNode,
+              enabled: !_isPosting,
+              decoration: InputDecoration(
+                labelText: isCustomer ? 'العميل' : 'المورد',
+                hintText: isCustomer
+                    ? 'ابحث بالاسم أو المعرّف أو الهاتف'
+                    : 'ابحث باسم المورد أو المعرّف أو الهاتف',
+                prefixIcon: Icon(
+                  isCustomer
+                      ? Icons.person_search_outlined
+                      : Icons.manage_search_outlined,
+                ),
+                suffixIcon: _selectedParty == null
+                    ? null
+                    : IconButton(
+                        tooltip: 'إلغاء الاختيار',
+                        onPressed: _isPosting
+                            ? null
+                            : () {
+                                setState(() {
+                                  _selectedParty = null;
+                                  _partyController.clear();
+                                  _partyLoadEpoch++;
+                                });
+                              },
+                        icon: const Icon(Icons.clear),
+                      ),
+              ),
+              onChanged: (_) {
+                if (_selectedParty != null) {
+                  _selectedParty = null;
+                  _partyController.clear();
+                }
+              },
+              onSubmitted: (_) => onFieldSubmitted(),
+            );
+          },
+          optionsViewBuilder: (context, onSelected, options) {
+            final rows = options.toList(growable: false);
+            return Align(
+              alignment: Alignment.topRight,
+              child: Material(
+                elevation: 8,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 620,
+                    maxHeight: 280,
+                  ),
+                  child: ListView.builder(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: rows.length,
+                    itemBuilder: (context, index) {
+                      final party = rows[index];
+                      final details = [
+                        party.id,
+                        if (party.phone?.trim().isNotEmpty == true)
+                          party.phone!.trim(),
+                      ].join(' • ');
+                      return ListTile(
+                        title: Text(party.name),
+                        subtitle: Text(details),
+                        onTap: () => onSelected(party),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        if (_partyLoadError != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            _partyLoadError!,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _isPosting ? null : _loadParties,
+              icon: const Icon(Icons.refresh),
+              label: const Text('إعادة تحميل القائمة'),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _loadParties() async {
+    final repository = widget.partyRepository;
+    if (repository == null) {
+      return;
+    }
+    final epoch = ++_partyLoadEpoch;
+    final requestedStore = widget.membership.storeId;
+    final requestedUser = widget.user.id;
+    setState(() {
+      _isLoadingParties = true;
+      _partyLoadError = null;
+    });
+
+    final result = await repository.getParties(
+      context: _storeContext,
+      type: _partyType,
+    );
+    if (!mounted ||
+        epoch != _partyLoadEpoch ||
+        requestedStore != widget.membership.storeId ||
+        requestedUser != widget.user.id) {
+      return;
+    }
+    if (result is FailureResult<List<Party>>) {
+      setState(() {
+        _isLoadingParties = false;
+        _parties = const <Party>[];
+        _partyLoadError = result.failure.message;
+      });
+      return;
+    }
+
+    final parties = (result as Success<List<Party>>).value;
+    Party? selected;
+    final requestedId = _partyController.text.trim();
+    if (requestedId.isNotEmpty) {
+      for (final party in parties) {
+        if (party.id == requestedId) {
+          selected = party;
+          break;
+        }
+      }
+    }
+    setState(() {
+      _isLoadingParties = false;
+      _parties = parties;
+      _selectedParty = selected;
+      if (requestedId.isNotEmpty && selected == null) {
+        _partyController.clear();
+        _partyLoadError = 'الطرف المحدد غير موجود أو غير نشط في المتجر الحالي.';
+      }
+    });
   }
 
   Money? _parseMoney(String raw) {
@@ -276,9 +561,17 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
     return Money(minorUnits: major * 100 + fraction, currency: _currency);
   }
 
-  Future<void> _postPayment() async {
+  Future<void> _postPayment({bool saveDraft = false}) async {
+    if (_isPosting) return;
+    if (_pendingQueued) {
+      _showMessage(
+        'هذه الحركة محفوظة في طابور الترحيل. لا تُرسلها مرة أخرى '
+        'حتى يتم التحقق من نتيجتها.',
+      );
+      return;
+    }
     final repository = widget.repository;
-    if (repository == null) {
+    if (!saveDraft && repository == null) {
       _showMessage('مستودع المقبوضات والمدفوعات غير موصول بهذه البيئة.');
       return;
     }
@@ -314,26 +607,82 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
       return;
     }
 
-    final paymentId = 'party-payment-${DateTime.now().microsecondsSinceEpoch}';
-    final payment = PartyPayment(
-      id: paymentId,
-      storeId: widget.membership.storeId,
-      idempotencyKey: IdempotencyKey(paymentId),
-      postedAt: DateTime.now().toUtc(),
-      partyType: _partyType,
-      partyId: partyId,
-      paymentMethod: _paymentMethod,
-      amount: amount,
-      description: _descriptionController.text.trim().isEmpty
-          ? null
-          : _descriptionController.text.trim(),
-      chequeNumber: chequeNumber,
-      bankName: bankName,
-      dueDate: _dueDate,
-    );
+    final signature = jsonEncode([
+      widget.membership.storeId,
+      widget.user.id,
+      _partyType.name,
+      partyId,
+      amount.minorUnits,
+      amount.currency,
+      _paymentMethod.name,
+      _descriptionController.text.trim(),
+      chequeNumber,
+      bankName,
+      _dueDate?.toUtc().toIso8601String(),
+    ]);
+    if (_pendingUncertain && _pendingSignature != signature) {
+      _showMessage(
+        'نتيجة الحركة السابقة غير محسومة. أعد نفس الحركة بنفس البيانات '
+        'ولا تنشئ حركة جديدة حتى يتم تأكيد النتيجة.',
+      );
+      return;
+    }
+
+    final previous = _pendingSignature == signature ? _pendingPayment : null;
+    final paymentId = previous?.id ??
+        'party-payment-${DateTime.now().microsecondsSinceEpoch}';
+    final payment = previous ??
+        PartyPayment(
+          id: paymentId,
+          storeId: widget.membership.storeId,
+          idempotencyKey: IdempotencyKey(paymentId),
+          postedAt: DateTime.now().toUtc(),
+          partyType: _partyType,
+          partyId: partyId,
+          paymentMethod: _paymentMethod,
+          amount: amount,
+          description: _descriptionController.text.trim().isEmpty
+              ? null
+              : _descriptionController.text.trim(),
+          chequeNumber: chequeNumber,
+          bankName: bankName,
+          dueDate: _dueDate,
+        );
+
+    _pendingSignature = signature;
+    _pendingPayment = payment;
+
+    if (saveDraft) {
+      final draftRepository = widget.draftRepository;
+      if (draftRepository == null) return;
+      setState(() => _isPosting = true);
+      final draftResult = await draftRepository.saveDraft(
+        context: payment.contextFor(widget.user.id),
+        payment: payment,
+        accounts: PartyPaymentPostingAccounts(
+          settlementAccountId: _settlementAccountId,
+          partyAccountId: _partyAccountId,
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _isPosting = false);
+      if (draftResult is FailureResult<String>) {
+        _showMessage(draftResult.failure.message);
+      } else {
+        _pendingPayment = null;
+        _pendingSignature = null;
+        _showMessage(
+            'تم حفظ المسودة دون ترحيل. أرسلها للاعتماد من تبويب المسودات.');
+        _amountController.clear();
+        _descriptionController.clear();
+        _chequeNumberController.clear();
+        _bankNameController.clear();
+      }
+      return;
+    }
 
     setState(() => _isPosting = true);
-    final result = await repository.postPartyPayment(
+    final result = await repository!.postPartyPayment(
       context: payment.contextFor(widget.user.id),
       payment: payment,
       accounts: PartyPaymentPostingAccounts(
@@ -349,14 +698,31 @@ class _PartyPaymentsPageState extends State<PartyPaymentsPage> {
     if (result is FailureResult<PartyPaymentPostingPlan>) {
       final failure = result.failure;
       if (failure is QueuedFailure) {
-        _showMessage('تم حفظ الحركة للطابور وسيُرحّل عند عودة الاتصال.');
+        _pendingQueued = true;
+        _pendingUncertain = false;
+        _showMessage(
+          'تم حفظ الحركة للطابور. لا تعِد إرسالها قبل التحقق من حالتها.',
+        );
+      } else if (failure is InfrastructureFailure) {
+        _pendingUncertain = true;
+        _showMessage(
+          'تعذر التأكد من نتيجة الترحيل. أعد نفس الحركة بنفس البيانات فقط.',
+        );
       } else {
+        _pendingPayment = null;
+        _pendingSignature = null;
+        _pendingQueued = false;
+        _pendingUncertain = false;
         _showMessage(failure.message);
       }
       return;
     }
 
     if (result is Success<PartyPaymentPostingPlan>) {
+      _pendingPayment = null;
+      _pendingSignature = null;
+      _pendingQueued = false;
+      _pendingUncertain = false;
       _amountController.clear();
       _descriptionController.clear();
       _chequeNumberController.clear();

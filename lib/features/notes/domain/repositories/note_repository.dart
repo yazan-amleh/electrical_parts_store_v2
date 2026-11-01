@@ -13,4 +13,9 @@ abstract interface class NoteRepository {
     required StoreContext context,
     required Note note,
   });
+
+  Future<Result<void>> deleteNote({
+    required StoreContext context,
+    required Note note,
+  });
 }

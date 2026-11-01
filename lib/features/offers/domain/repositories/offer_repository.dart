@@ -1,7 +1,5 @@
 import '../../../../core/result/result.dart';
 import '../../../../core/tenancy/store_context.dart';
-import '../../../sales/domain/entities/sale_posting_plan.dart';
-import '../../../sales/domain/enums/sale_payment_method.dart';
 import '../entities/offer.dart';
 import '../entities/offer_order.dart';
 import '../entities/offer_order_confirmation.dart';
@@ -46,8 +44,7 @@ abstract interface class OfferRepository {
   Future<Result<OfferOrderConfirmation>> confirmOfferOrder({
     required StoreContext context,
     required OfferOrder order,
-    required SalePaymentMethod paymentMethod,
-    required SalePostingAccounts accounts,
+    required OfferOrderConfirmationRequest confirmation,
   });
 
   Future<Result<void>> cancelOfferOrder({
