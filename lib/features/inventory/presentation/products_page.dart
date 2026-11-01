@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/result/result.dart';
+import '../../../core/money/money.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/entities/store_membership.dart';
@@ -40,6 +41,11 @@ class _ProductsPageState extends State<ProductsPage> {
   String _productType = 'all';
   String? _selectedCategoryId;
   String? _errorMessage;
+  String _sortOrder = 'name';
+  int _visibleLimit = 50;
+  int _loadEpoch = 0;
+  int _categoryEpoch = 0;
+  static const _pageSize = 50;
 
   bool get _canManage => widget.membership.role.canManageInventory;
 
@@ -49,6 +55,35 @@ class _ProductsPageState extends State<ProductsPage> {
     _loadProducts();
     _loadCategories();
   }
+
+  @override
+  void didUpdateWidget(covariant ProductsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.id != widget.user.id ||
+        oldWidget.membership.storeId != widget.membership.storeId ||
+        oldWidget.repository != widget.repository ||
+        oldWidget.categoryRepository != widget.categoryRepository) {
+      ++_loadEpoch;
+      ++_categoryEpoch;
+      _products = const <Product>[];
+      _categories = const <Category>[];
+      _selectedCategoryId = null;
+      _showInactive = false;
+      _lowStockOnly = false;
+      _productType = 'all';
+      _sortOrder = 'name';
+      _visibleLimit = _pageSize;
+      _searchController.clear();
+      _errorMessage = null;
+      _loadProducts();
+      _loadCategories();
+    }
+  }
+
+  StoreContext get _storeContext => StoreContext(
+        storeId: widget.membership.storeId,
+        userId: widget.user.id,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +101,38 @@ class _ProductsPageState extends State<ProductsPage> {
           product.name.toLowerCase().contains(search) ||
           (product.sku?.toLowerCase().contains(search) ?? false) ||
           (product.barcode?.toLowerCase().contains(search) ?? false);
-    }).toList(growable: false);
+    }).toList();
+    filtered.sort((left, right) {
+      switch (_sortOrder) {
+        case 'stock-ascending':
+          if (left.isService != right.isService) {
+            return left.isService ? 1 : -1;
+          }
+          final compare = left.quantityOnHand.milliUnits
+              .compareTo(right.quantityOnHand.milliUnits);
+          if (compare != 0) return compare;
+        case 'stock-descending':
+          if (left.isService != right.isService) {
+            return left.isService ? 1 : -1;
+          }
+          final compare = right.quantityOnHand.milliUnits
+              .compareTo(left.quantityOnHand.milliUnits);
+          if (compare != 0) return compare;
+        case 'price':
+          final currencies = left.sellingPrice.currency
+              .compareTo(right.sellingPrice.currency);
+          if (currencies != 0) return currencies;
+          final compare = left.sellingPrice.minorUnits
+              .compareTo(right.sellingPrice.minorUnits);
+          if (compare != 0) return compare;
+        case 'sku':
+          final compare = (left.sku ?? '').compareTo(right.sku ?? '');
+          if (compare != 0) return compare;
+        default:
+          break;
+      }
+      return left.name.toLowerCase().compareTo(right.name.toLowerCase());
+    });
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -83,7 +149,7 @@ class _ProductsPageState extends State<ProductsPage> {
                       hintText: 'ابحث بالاسم أو SKU أو الباركود',
                       prefixIcon: Icon(Icons.search),
                     ),
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (_) => setState(() => _visibleLimit = _pageSize),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -113,17 +179,26 @@ class _ProductsPageState extends State<ProductsPage> {
                   ChoiceChip(
                     label: Text(option.$2),
                     selected: _productType == option.$1,
-                    onSelected: (_) => setState(() => _productType = option.$1),
+                    onSelected: (_) => setState(() {
+                      _productType = option.$1;
+                      _visibleLimit = _pageSize;
+                    }),
                   ),
                 FilterChip(
                   label: const Text('منخفض المخزون'),
                   selected: _lowStockOnly,
-                  onSelected: (value) => setState(() => _lowStockOnly = value),
+                  onSelected: (value) => setState(() {
+                    _lowStockOnly = value;
+                    _visibleLimit = _pageSize;
+                  }),
                 ),
                 FilterChip(
                   label: const Text('إظهار غير النشط'),
                   selected: _showInactive,
-                  onSelected: (value) => setState(() => _showInactive = value),
+                  onSelected: (value) => setState(() {
+                    _showInactive = value;
+                    _visibleLimit = _pageSize;
+                  }),
                 ),
                 if (_categories.isNotEmpty)
                   DropdownButton<String?>(
@@ -140,19 +215,48 @@ class _ProductsPageState extends State<ProductsPage> {
                           child: Text(category.name),
                         ),
                     ],
-                    onChanged: (value) =>
-                        setState(() => _selectedCategoryId = value),
+                    onChanged: (value) => setState(() {
+                      _selectedCategoryId = value;
+                      _visibleLimit = _pageSize;
+                    }),
                   ),
+                DropdownButton<String>(
+                  key: const ValueKey('products-sort'),
+                  value: _sortOrder,
+                  items: const [
+                    DropdownMenuItem(value: 'name', child: Text('ترتيب: الاسم')),
+                    DropdownMenuItem(value: 'sku', child: Text('ترتيب: SKU')),
+                    DropdownMenuItem(
+                      value: 'stock-ascending',
+                      child: Text('الأقل مخزونًا'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'stock-descending',
+                      child: Text('الأكثر مخزونًا'),
+                    ),
+                    DropdownMenuItem(value: 'price', child: Text('سعر البيع')),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _sortOrder = value;
+                      _visibleLimit = _pageSize;
+                    });
+                  },
+                ),
               ],
             ),
           ),
+          _buildInventorySummary(context),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Row(
               children: [
                 Expanded(
                   child: Text(
-                    'المعروض: ${filtered.length} من أصل ${_products.length} صنف',
+                    'مطابق للفلاتر: ${filtered.length} • المعروض: '
+                    '${filtered.length < _visibleLimit ? filtered.length : _visibleLimit} '
+                    'من أصل ${_products.length} صنف محمّل',
                   ),
                 ),
                 IconButton(
@@ -164,6 +268,51 @@ class _ProductsPageState extends State<ProductsPage> {
             ),
           ),
           Expanded(child: _buildBody(context, filtered)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInventorySummary(BuildContext context) {
+    if (_isLoading || _errorMessage != null || widget.repository == null) {
+      return const SizedBox.shrink();
+    }
+    final active = _products.where((p) => p.isActive).toList();
+    final stock = active.where((p) => !p.isService);
+    final low = stock.where((p) => p.isLowStock).length;
+    final services = active.where((p) => p.isService).length;
+    final valueByCurrency = <String, int>{};
+    for (final product in stock) {
+      final currency = product.inventoryValue.currency;
+      valueByCurrency.update(
+        currency,
+        (value) => value + product.inventoryValue.minorUnits,
+        ifAbsent: () => product.inventoryValue.minorUnits,
+      );
+    }
+    final values = valueByCurrency.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          Chip(label: Text('أصناف نشطة: ${active.length}')),
+          Chip(label: Text('خدمات: $services')),
+          Chip(label: Text('أصناف منخفضة: $low')),
+          for (final entry in values)
+            Chip(
+              label: Text(
+                'قيمة المخزون المحمّل — ${entry.key}: '
+                '${Money(minorUnits: entry.value, currency: entry.key).formatted}',
+              ),
+            ),
+          if (values.isNotEmpty)
+            const Text(
+              'قيمة الأصناف من حقل المخزون المحمّل، وليست رصيد حساب '
+              'المخزون في دفتر الأستاذ.',
+            ),
         ],
       ),
     );
@@ -188,12 +337,25 @@ class _ProductsPageState extends State<ProductsPage> {
       return const Center(child: Text('لا توجد أصناف مطابقة للبحث.'));
     }
 
+    final shown = products.take(_visibleLimit).toList(growable: false);
     return ListView.separated(
       padding: const EdgeInsets.all(16),
-      itemCount: products.length,
+      itemCount: shown.length + (products.length > shown.length ? 1 : 0),
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
-        final product = products[index];
+        if (index >= shown.length) {
+          return Center(
+            child: OutlinedButton.icon(
+              key: const ValueKey('products-show-more'),
+              onPressed: () => setState(() => _visibleLimit += _pageSize),
+              icon: const Icon(Icons.expand_more),
+              label: Text(
+                'عرض 50 صنفًا إضافيًا (${shown.length} من ${products.length})',
+              ),
+            ),
+          );
+        }
+        final product = shown[index];
         return Card(
           child: ListTile(
             onTap: !_canManage || _isSaving ? null : () => _openEditor(product),
