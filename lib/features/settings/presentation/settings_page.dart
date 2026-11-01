@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/result/result.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
+import '../../auth/domain/repositories/account_profile_repository.dart';
+import '../../auth/presentation/account_profile_page.dart';
 import '../domain/entities/store_member.dart';
 import '../../auth/domain/entities/store_membership.dart';
 import '../../auth/domain/enums/store_role.dart';
@@ -14,10 +16,12 @@ class SettingsPage extends StatefulWidget {
     required this.repository,
     required this.user,
     required this.membership,
+    this.accountProfileRepository,
     super.key,
   });
 
   final SettingsRepository? repository;
+  final AccountProfileRepository? accountProfileRepository;
   final AuthenticatedUser user;
   final StoreMembership membership;
 
@@ -99,6 +103,10 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             _buildHeader(context),
             const SizedBox(height: 12),
+            if (widget.accountProfileRepository != null) ...[
+              _buildAccountCard(context),
+              const SizedBox(height: 12),
+            ],
             _buildProfileCard(context),
             const SizedBox(height: 12),
             _buildMembersCard(context),
@@ -140,6 +148,35 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAccountCard(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: const CircleAvatar(
+          child: Icon(Icons.manage_accounts_outlined),
+        ),
+        title: const Text('حسابي والمعلومات الشخصية'),
+        subtitle: Text(
+          widget.user.displayName?.trim().isNotEmpty == true
+              ? '${widget.user.displayName} • ${widget.user.email}'
+              : widget.user.email,
+        ),
+        trailing: const Icon(Icons.chevron_left),
+        onTap: () {
+          final repository = widget.accountProfileRepository;
+          if (repository == null) return;
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => AccountProfilePage(
+                repository: repository,
+                user: widget.user,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
