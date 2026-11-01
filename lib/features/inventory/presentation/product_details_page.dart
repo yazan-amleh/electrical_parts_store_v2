@@ -162,7 +162,8 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       final range = _dateRange;
       if (range != null) {
         final date = movement.occurredAt.toLocal();
-        final begin = DateTime(range.start.year, range.start.month, range.start.day);
+        final begin =
+            DateTime(range.start.year, range.start.month, range.start.day);
         final end = DateTime(range.end.year, range.end.month, range.end.day)
             .add(const Duration(days: 1));
         if (date.isBefore(begin) || !date.isBefore(end)) return false;
@@ -247,25 +248,56 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               children: [
                 SizedBox(width: 220, child: _info('الاسم', product.name)),
                 SizedBox(width: 220, child: _info('SKU', product.sku ?? '—')),
-                SizedBox(width: 220, child: _info('الباركود', product.barcode ?? '—')),
-                SizedBox(width: 220, child: _info('التصنيف', product.categoryId)),
-                SizedBox(width: 220, child: _info('العلامة التجارية', product.brand ?? '—')),
-                SizedBox(width: 220, child: _info('الموديل', product.model ?? '—')),
-                SizedBox(width: 220, child: _info('الموقع', product.location ?? '—')),
-                SizedBox(width: 220, child: _info('الرف', product.shelf ?? '—')),
-                SizedBox(width: 220, child: _info('الوحدة', product.baseUnitName ?? '—')),
-                SizedBox(width: 220, child: _info('سعر الشراء', product.purchasePrice.formatted)),
-                SizedBox(width: 220, child: _info('سعر الجملة', product.wholesalePrice.formatted)),
-                SizedBox(width: 220, child: _info('سعر البيع', product.sellingPrice.formatted)),
-                SizedBox(width: 220, child: _info('قابل للخصم', product.discountable ? 'نعم' : 'لا')),
-                SizedBox(width: 220, child: _info('الحالة', product.isActive ? 'نشط' : 'غير نشط')),
+                SizedBox(
+                    width: 220,
+                    child: _info('الباركود', product.barcode ?? '—')),
+                SizedBox(
+                    width: 220, child: _info('التصنيف', product.categoryId)),
+                SizedBox(
+                    width: 220,
+                    child: _info('العلامة التجارية', product.brand ?? '—')),
+                SizedBox(
+                    width: 220, child: _info('الموديل', product.model ?? '—')),
+                SizedBox(
+                    width: 220,
+                    child: _info('الموقع', product.location ?? '—')),
+                SizedBox(
+                    width: 220, child: _info('الرف', product.shelf ?? '—')),
+                SizedBox(
+                    width: 220,
+                    child: _info('الوحدة', product.baseUnitName ?? '—')),
+                SizedBox(
+                    width: 220,
+                    child:
+                        _info('سعر الشراء', product.purchasePrice.formatted)),
+                SizedBox(
+                    width: 220,
+                    child:
+                        _info('سعر الجملة', product.wholesalePrice.formatted)),
+                SizedBox(
+                    width: 220,
+                    child: _info('سعر البيع', product.sellingPrice.formatted)),
+                SizedBox(
+                    width: 220,
+                    child: _info(
+                        'قابل للخصم', product.discountable ? 'نعم' : 'لا')),
+                SizedBox(
+                    width: 220,
+                    child:
+                        _info('الحالة', product.isActive ? 'نشط' : 'غير نشط')),
                 if (!product.isService) ...[
-                  SizedBox(width: 220, child: _info('الرصيد الحالي',
-                      product.quantityOnHand.formatted)),
-                  SizedBox(width: 220, child: _info('الحد الأدنى',
-                      product.minimumQuantity.formatted)),
-                  SizedBox(width: 220, child: _info('قيمة المخزون المسجلة',
-                      product.inventoryValue.formatted)),
+                  SizedBox(
+                      width: 220,
+                      child: _info(
+                          'الرصيد الحالي', product.quantityOnHand.formatted)),
+                  SizedBox(
+                      width: 220,
+                      child: _info(
+                          'الحد الأدنى', product.minimumQuantity.formatted)),
+                  SizedBox(
+                      width: 220,
+                      child: _info('قيمة المخزون المسجلة',
+                          product.inventoryValue.formatted)),
                 ],
               ],
             ),
@@ -289,9 +321,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
   Widget _historyCard(Product product) {
     final visible = _visible;
-    final incoming = visible.where((m) => m.quantityDelta.milliUnits > 0)
+    final incoming = visible
+        .where((m) => m.quantityDelta.milliUnits > 0)
         .fold<int>(0, (sum, m) => sum + m.quantityDelta.milliUnits);
-    final outgoing = visible.where((m) => m.quantityDelta.milliUnits < 0)
+    final outgoing = visible
+        .where((m) => m.quantityDelta.milliUnits < 0)
         .fold<int>(0, (sum, m) => sum - m.quantityDelta.milliUnits);
     String qty(int milli) => (milli / 1000).toStringAsFixed(3);
     return Card(
@@ -452,16 +486,22 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
             ),
             IconButton(
               tooltip: 'طباعة كشف الصنف',
-              onPressed: _loading || _exporting || _error != null ||
-                      _product == null || widget.inventoryRepository == null
+              onPressed: _loading ||
+                      _exporting ||
+                      _error != null ||
+                      _product == null ||
+                      widget.inventoryRepository == null
                   ? null
                   : () => _print(share: false),
               icon: const Icon(Icons.print_outlined),
             ),
             IconButton(
               tooltip: 'مشاركة PDF للصنف',
-              onPressed: _loading || _exporting || _error != null ||
-                      _product == null || widget.inventoryRepository == null
+              onPressed: _loading ||
+                      _exporting ||
+                      _error != null ||
+                      _product == null ||
+                      widget.inventoryRepository == null
                   ? null
                   : () => _print(share: true),
               icon: const Icon(Icons.share_outlined),
