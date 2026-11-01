@@ -173,8 +173,8 @@ class _DashboardPageState extends State<DashboardPage> {
               physics: const NeverScrollableScrollPhysics(),
               itemCount: metrics.length,
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 250,
-                mainAxisExtent: 132,
+                maxCrossAxisExtent: 300,
+                mainAxisExtent: 184,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
               ),
