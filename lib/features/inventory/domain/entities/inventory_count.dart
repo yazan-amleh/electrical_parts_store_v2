@@ -32,7 +32,8 @@ class InventoryCountItem {
   Money? get estimatedDifference {
     final delta = difference;
     if (delta == null) return null;
-    final absolute = (delta.milliUnits.abs() * unitCost.minorUnits + 500) ~/ 1000;
+    final absolute =
+        (delta.milliUnits.abs() * unitCost.minorUnits + 500) ~/ 1000;
     return Money(
       minorUnits: delta.milliUnits.isNegative ? -absolute : absolute,
       currency: unitCost.currency,
@@ -44,7 +45,8 @@ class InventoryCountItem {
     bool? reviewed,
     String? reason,
     String? notes,
-  }) => InventoryCountItem(
+  }) =>
+      InventoryCountItem(
         productId: productId,
         productName: productName,
         barcode: barcode,
@@ -60,10 +62,13 @@ class InventoryCountItem {
     final system = data['systemQuantityMilliUnits'];
     final counted = data['actualQuantityMilliUnits'];
     final cost = data['unitCostMinorUnits'];
-    if (system is! int || system < 0 ||
+    if (system is! int ||
+        system < 0 ||
         (counted != null && (counted is! int || counted < 0)) ||
-        cost is! int || cost < 0) {
-      throw const FormatException('Inventory count has invalid numeric values.');
+        cost is! int ||
+        cost < 0) {
+      throw const FormatException(
+          'Inventory count has invalid numeric values.');
     }
     return InventoryCountItem(
       productId: data['productId'] as String,
@@ -146,8 +151,8 @@ class InventoryCount {
       throw const FormatException('Inventory count status is invalid.');
     }
     final items = (data['items'] as List)
-        .map((item) => InventoryCountItem.fromMap(
-            Map<String, dynamic>.from(item as Map)))
+        .map((item) =>
+            InventoryCountItem.fromMap(Map<String, dynamic>.from(item as Map)))
         .toList(growable: false);
     if (items.map((item) => item.productId).toSet().length != items.length) {
       throw const FormatException('Duplicate inventory count product.');
