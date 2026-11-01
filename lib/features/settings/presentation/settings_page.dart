@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/result/result.dart';
+import '../../../app/theme/app_appearance_controller.dart';
 import '../../../core/tenancy/store_context.dart';
 import '../../auth/domain/entities/authenticated_user.dart';
 import '../../auth/domain/repositories/account_profile_repository.dart';
@@ -107,6 +108,10 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildAccountCard(context),
               const SizedBox(height: 12),
             ],
+            if (AppAppearanceScope.maybeOf(context) != null) ...[
+              _buildAppearanceCard(context),
+              const SizedBox(height: 12),
+            ],
             _buildProfileCard(context),
             const SizedBox(height: 12),
             _buildMembersCard(context),
@@ -177,6 +182,116 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildAppearanceCard(BuildContext context) {
+    final appearance = AppAppearanceScope.maybeOf(context)!;
+    const modeLabels = <ThemeMode, String>{
+      ThemeMode.system: 'حسب إعداد الجهاز',
+      ThemeMode.light: 'فاتح',
+      ThemeMode.dark: 'داكن',
+    };
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'المظهر واللغة',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'تفضيلات شخصية تُطبق على التطبيق وتحفظ لهذا الحساب على الجهاز.',
+            ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<ThemeMode>(
+              key: ValueKey('appearance-mode-${appearance.themeMode.name}'),
+              value: appearance.themeMode,
+              decoration: const InputDecoration(
+                labelText: 'وضع العرض',
+                prefixIcon: Icon(Icons.brightness_6_outlined),
+              ),
+              items: [
+                for (final mode in ThemeMode.values)
+                  DropdownMenuItem(
+                    value: mode,
+                    child: Text(modeLabels[mode]!),
+                  ),
+              ],
+              onChanged: !appearance.isLoaded
+                  ? null
+                  : (mode) async {
+                      if (mode == null) return;
+                      final saved = await appearance.setThemeMode(mode);
+                      if (!saved && context.mounted) {
+                        _showMessage('تم التطبيق، لكن تعذر حفظ تفضيل المظهر.');
+                      }
+                    },
+            ),
+            const SizedBox(height: 14),
+            const Text('اللون الأساسي'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final accent in AppearanceAccent.values)
+                  ChoiceChip(
+                    label: Text(accent.arabicName),
+                    avatar: CircleAvatar(
+                      radius: 9,
+                      backgroundColor: accent.seed,
+                    ),
+                    selected: appearance.accent == accent,
+                    onSelected: !appearance.isLoaded
+                        ? null
+                        : (selected) async {
+                            if (!selected) return;
+                            final saved = await appearance.setAccent(accent);
+                            if (!saved && context.mounted) {
+                              _showMessage('تم التطبيق، لكن تعذر حفظ اللون.');
+                            }
+                          },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<AppLanguage>(
+              key: ValueKey('appearance-language-${appearance.language.name}'),
+              value: appearance.language,
+              decoration: const InputDecoration(
+                labelText: 'لغة واجهة النظام',
+                prefixIcon: Icon(Icons.language_outlined),
+              ),
+              items: [
+                for (final language in AppLanguage.values)
+                  DropdownMenuItem(
+                    value: language,
+                    child: Text(language.label),
+                  ),
+              ],
+              onChanged: !appearance.isLoaded
+                  ? null
+                  : (language) async {
+                      if (language == null) return;
+                      final saved = await appearance.setLanguage(language);
+                      if (!saved && context.mounted) {
+                        _showMessage('تم التطبيق، لكن تعذر حفظ اللغة.');
+                      }
+                    },
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'عند اختيار English تتغير لغة عناصر Flutter القياسية '
+              'والاتجاه الأساسي؛ ترجمة بقية شاشات النظام إلى الإنجليزية '
+              'لم تكتمل بعد.',
+            ),
+          ],
+        ),
       ),
     );
   }
