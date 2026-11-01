@@ -50,6 +50,7 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _isLoading = true;
   bool _shortcutsOnly = false;
   int _preferenceEpoch = 0;
+  int _reportEpoch = 0;
   String? _errorMessage;
 
   StoreContext get _storeContext {
@@ -73,7 +74,10 @@ class _DashboardPageState extends State<DashboardPage> {
   void didUpdateWidget(covariant DashboardPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.user.id != widget.user.id ||
-        oldWidget.membership.storeId != widget.membership.storeId) {
+        oldWidget.membership.storeId != widget.membership.storeId ||
+        oldWidget.accountingQueryRepository != widget.accountingQueryRepository ||
+        oldWidget.productRepository != widget.productRepository ||
+        oldWidget.reportsRepository != widget.reportsRepository) {
       _loadViewPreference();
       _load();
     }
@@ -596,9 +600,27 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _load() async {
     final accountingRepository = widget.accountingQueryRepository;
     final productRepository = widget.productRepository;
+    final reportsRepository = widget.reportsRepository;
+    final contextAtStart = _storeContext;
+    final epoch = ++_reportEpoch;
+    bool current() =>
+        mounted &&
+        epoch == _reportEpoch &&
+        contextAtStart.storeId == widget.membership.storeId &&
+        contextAtStart.userId == widget.user.id &&
+        accountingRepository == widget.accountingQueryRepository &&
+        productRepository == widget.productRepository &&
+        reportsRepository == widget.reportsRepository;
+
     if (accountingRepository == null || productRepository == null) {
-      if (mounted) {
-        setState(() => _isLoading = false);
+      if (current()) {
+        setState(() {
+          _isLoading = false;
+          _trialBalance = null;
+          _products = const <Product>[];
+          _operationalReport = null;
+          _errorMessage = null;
+        });
       }
       return;
     }
@@ -606,16 +628,16 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _trialBalance = null;
+      _products = const <Product>[];
       _operationalReport = null;
       _operationalError = null;
     });
 
     final trialBalanceResult = await accountingRepository.getTrialBalance(
-      context: _storeContext,
+      context: contextAtStart,
     );
-    if (!mounted) {
-      return;
-    }
+    if (!current()) return;
     if (trialBalanceResult is FailureResult<TrialBalance>) {
       setState(() {
         _isLoading = false;
@@ -625,11 +647,9 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     final productResult = await productRepository.getProducts(
-      context: _storeContext,
+      context: contextAtStart,
     );
-    if (!mounted) {
-      return;
-    }
+    if (!current()) return;
     if (productResult is FailureResult<List<Product>>) {
       setState(() {
         _isLoading = false;
@@ -638,19 +658,27 @@ class _DashboardPageState extends State<DashboardPage> {
       return;
     }
 
+    if (productResult is Success<List<Product>> &&
+        productResult.value.any((p) => p.storeId != contextAtStart.storeId)) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'تعذر التحقق من تبعية الأصناف للمتجر الحالي.';
+      });
+      return;
+    }
+
     OperationalReport? operational;
     String? operationalError;
-    final reportsRepository = widget.reportsRepository;
     if (reportsRepository != null) {
       final now = DateTime.now();
       final start = DateTime(now.year, now.month);
       final end = DateTime(now.year, now.month, now.day, 23, 59, 59);
       final result = await reportsRepository.getOperationalReport(
-        context: _storeContext,
+        context: contextAtStart,
         from: start,
         to: end,
       );
-      if (!mounted) return;
+      if (!current()) return;
       if (result is Success<OperationalReport>) {
         operational = result.value;
       } else if (result is FailureResult<OperationalReport>) {
@@ -669,6 +697,14 @@ class _DashboardPageState extends State<DashboardPage> {
       });
     }
   }
+
+  @override
+  void dispose() {
+    ++_preferenceEpoch;
+    ++_reportEpoch;
+    super.dispose();
+  }
+
 }
 
 class _DashboardMetric {
