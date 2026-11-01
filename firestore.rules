@@ -392,6 +392,13 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
+      // Only callable Functions can mutate stocktake data. Clients read
+      // snapshots for review; no stock or journal adjustments are possible.
+      match /inventory_counts/{countId} {
+        allow get, list: if canReadStore(storeId);
+        allow create, update, delete: if false;
+      }
+
       match /inventory_movements/{movementId} {
         allow read: if canReadStore(storeId);
         allow create, update, delete: if false;
