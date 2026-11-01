@@ -278,6 +278,13 @@ abstract final class FirebasePaths {
     return store(firestore, storeId).collection('journal_entries');
   }
 
+  static CollectionReference<Map<String, dynamic>> inventoryCounts(
+    FirebaseFirestore firestore,
+    String storeId,
+  ) {
+    return store(firestore, storeId).collection('inventory_counts');
+  }
+
   static CollectionReference<Map<String, dynamic>> inventoryMovements(
     FirebaseFirestore firestore,
     String storeId,
