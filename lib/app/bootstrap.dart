@@ -23,6 +23,7 @@ import '../features/auth/data/repositories/firebase_account_avatar_repository.da
 import '../features/auth/data/repositories/firestore_store_membership_repository.dart';
 import '../features/auth/data/repositories/firebase_store_onboarding_repository.dart';
 import '../features/inventory/data/repositories/firestore_inventory_repository.dart';
+import '../features/inventory/data/repositories/firestore_inventory_count_repository.dart';
 import '../features/inventory/data/repositories/firestore_product_repository.dart';
 import '../features/sales/data/repositories/firestore_sale_repository.dart';
 import '../features/purchases/data/repositories/firestore_purchase_repository.dart';
@@ -119,6 +120,10 @@ abstract final class AppBootstrap {
       ),
       accountingQueryRepository: FirestoreAccountingQueryRepository(
         firestore: firestore,
+      ),
+      inventoryCountRepository: FirestoreInventoryCountRepository(
+        firestore: firestore,
+        functions: functions,
       ),
       inventoryRepository: FirestoreInventoryRepository(
         firestore: firestore,
