@@ -53,7 +53,7 @@ class AppAppearanceController extends ChangeNotifier {
   Future<void> loadForUser(String? userId) async {
     final normalized = userId?.trim();
     final nextId = normalized == null || normalized.isEmpty ? null : normalized;
-    if (_userId == nextId && _loaded) return;
+    if (_userId == nextId && _revision > 0) return;
     _userId = nextId;
     final revision = ++_revision;
     _themeMode = ThemeMode.system;
@@ -129,4 +129,16 @@ class AppAppearanceController extends ChangeNotifier {
     ++_revision;
     super.dispose();
   }
+}
+
+class AppAppearanceScope extends InheritedNotifier<AppAppearanceController> {
+  const AppAppearanceScope({
+    required AppAppearanceController controller,
+    required super.child,
+    super.key,
+  }) : super(notifier: controller);
+
+  static AppAppearanceController? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppAppearanceScope>()
+          ?.notifier;
 }
