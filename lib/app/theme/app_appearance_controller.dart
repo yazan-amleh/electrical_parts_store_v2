@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -118,7 +117,7 @@ class AppAppearanceController extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (uid != _userId || revision != _revision) return false;
-      return prefs.setString('$_keyPrefix$uid:$field', value);
+      return await prefs.setString('$_keyPrefix$uid:$field', value);
     } catch (_) {
       return false;
     }
