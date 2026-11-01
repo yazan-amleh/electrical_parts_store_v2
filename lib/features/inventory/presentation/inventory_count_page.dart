@@ -102,8 +102,8 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
     List<Category> categories = const [];
     if (categoriesRepo != null) {
       final result = await categoriesRepo.getCategories(context: scope);
-      if (!_still(epoch, scope) ||
-          widget.categoryRepository != categoriesRepo) return;
+      if (!_still(epoch, scope) || widget.categoryRepository != categoriesRepo)
+        return;
       if (result is Success<List<Category>>) {
         categories = result.value
             .where((value) => value.storeId == scope.storeId)
@@ -259,7 +259,8 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('كمية النظام عند بدء الجرد: ${item.systemQuantity.formatted}'),
+                Text(
+                    'كمية النظام عند بدء الجرد: ${item.systemQuantity.formatted}'),
                 const SizedBox(height: 8),
                 TextField(
                   key: const ValueKey('count-actual-quantity'),
@@ -286,8 +287,7 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
                 CheckboxListTile(
                   value: reviewed,
                   title: const Text('تمت مراجعة الكمية'),
-                  onChanged: (value) =>
-                      update(() => reviewed = value ?? false),
+                  onChanged: (value) => update(() => reviewed = value ?? false),
                 ),
               ],
             ),
@@ -349,8 +349,11 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
   Future<void> _complete() async {
     final count = _selected;
     final repository = widget.repository;
-    if (count == null || repository == null || _busy ||
-        !_canCount || !count.canComplete) return;
+    if (count == null ||
+        repository == null ||
+        _busy ||
+        !_canCount ||
+        !count.canComplete) return;
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -393,9 +396,12 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
   Future<void> _cancel() async {
     final count = _selected;
     final repository = widget.repository;
-    if (count == null || repository == null || _busy || !_canCount ||
+    if (count == null ||
+        repository == null ||
+        _busy ||
+        !_canCount ||
         (count.status != InventoryCountStatus.draft &&
-         count.status != InventoryCountStatus.completed)) return;
+            count.status != InventoryCountStatus.completed)) return;
     final reason = TextEditingController();
     final accepted = await showDialog<bool>(
       context: context,
@@ -472,7 +478,8 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('الجرد ${count.id}', style: Theme.of(context).textTheme.titleMedium),
+        Text('الجرد ${count.id}',
+            style: Theme.of(context).textTheme.titleMedium),
         Text('الحالة: ${_status(count.status)} • المراجعة ${count.revision}'),
         Text('تمت مراجعة ${count.reviewedItems} من ${count.items.length} صنف'),
         const Text(
@@ -524,8 +531,7 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
               leading: Icon(
                 item.reviewed ? Icons.verified_outlined : Icons.hourglass_empty,
               ),
-              trailing: _canCount &&
-                      count.status == InventoryCountStatus.draft
+              trailing: _canCount && count.status == InventoryCountStatus.draft
                   ? IconButton(
                       tooltip: 'إدخال كمية ${item.productName}',
                       onPressed: _busy ? null : () => _editItem(item),
@@ -573,8 +579,7 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
                   'الجرد لا يغير مخزون المتجر. كل تسوية تحتاج '
                   'اعتمادًا وترحيلًا مستقلًا وآمنًا.',
                 ),
-                if (_loading)
-                  const Center(child: CircularProgressIndicator()),
+                if (_loading) const Center(child: CircularProgressIndicator()),
                 if (_error != null)
                   ListTile(
                     title: Text(_error!),
@@ -602,8 +607,7 @@ class _InventoryCountPageState extends State<InventoryCountPage> {
                       ),
                     ),
                 ],
-                if (_busy)
-                  const Center(child: LinearProgressIndicator()),
+                if (_busy) const Center(child: LinearProgressIndicator()),
                 if (_selected != null) ...[
                   const SizedBox(height: 16),
                   _details(_selected!),
