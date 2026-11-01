@@ -51,35 +51,46 @@ void main() {
     );
     expect(
       count.estimatedDifferenceByCurrency,
-      {'ILS': const Money(minorUnits: -250), 'USD': const Money(minorUnits: 300)},
+      {
+        'ILS': const Money(minorUnits: -250),
+        'USD': const Money(minorUnits: 300)
+      },
     );
     expect(count.status, InventoryCountStatus.draft);
   });
 
   test('unreviewed or missing reason keeps count in draft', () {
-    final one = InventoryCount.fromMap('count-1', raw(items: [
-      {
-        'productId': 'one', 'productName': 'مفتاح',
-        'systemQuantityMilliUnits': 2000,
-        'actualQuantityMilliUnits': 1500,
-        'currency': 'ILS',
-        'unitCostMinorUnits': 500,
-        'reviewed': true,
-        'reason': '',
-      },
-    ]), 'store-a');
+    final one = InventoryCount.fromMap(
+        'count-1',
+        raw(items: [
+          {
+            'productId': 'one',
+            'productName': 'مفتاح',
+            'systemQuantityMilliUnits': 2000,
+            'actualQuantityMilliUnits': 1500,
+            'currency': 'ILS',
+            'unitCostMinorUnits': 500,
+            'reviewed': true,
+            'reason': '',
+          },
+        ]),
+        'store-a');
     expect(one.canComplete, isFalse);
     expect(one.items.single.difference?.formatted, ' -0.5'.trim());
-    final two = InventoryCount.fromMap('count-1', raw(items: [
-      {
-        'productId': 'one', 'productName': 'مفتاح',
-        'systemQuantityMilliUnits': 2000,
-        'actualQuantityMilliUnits': null,
-        'currency': 'ILS',
-        'unitCostMinorUnits': 500,
-        'reviewed': false,
-      },
-    ]), 'store-a');
+    final two = InventoryCount.fromMap(
+        'count-1',
+        raw(items: [
+          {
+            'productId': 'one',
+            'productName': 'مفتاح',
+            'systemQuantityMilliUnits': 2000,
+            'actualQuantityMilliUnits': null,
+            'currency': 'ILS',
+            'unitCostMinorUnits': 500,
+            'reviewed': false,
+          },
+        ]),
+        'store-a');
     expect(two.canComplete, isFalse);
   });
 
@@ -91,8 +102,8 @@ void main() {
     );
     final item = raw()['items'] as List<Map<String, dynamic>>;
     expect(
-      () => InventoryCount.fromMap('count-1', raw(items: [item[0], item[0]]),
-          'store-a'),
+      () => InventoryCount.fromMap(
+          'count-1', raw(items: [item[0], item[0]]), 'store-a'),
       throwsFormatException,
     );
     final bad = {...item[0], 'actualQuantityMilliUnits': -10};
