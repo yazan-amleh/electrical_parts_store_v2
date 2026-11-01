@@ -168,7 +168,10 @@ void main() {
     expect(find.textContaining('تم رفض حركات تخص صنفًا'), findsOneWidget);
     expect(find.byTooltip('طباعة كشف الصنف'), findsOneWidget);
     final button = tester.widget<IconButton>(
-      find.byTooltip('طباعة كشف الصنف'),
+      find.ancestor(
+        of: find.byTooltip('طباعة كشف الصنف'),
+        matching: find.byType(IconButton),
+      ),
     );
     expect(button.onPressed, isNull);
   });
