@@ -32,6 +32,8 @@ import '../../parties/presentation/party_directory_page.dart';
 import '../../inventory/domain/repositories/product_repository.dart';
 import '../../inventory/presentation/products_page.dart';
 import '../../inventory/domain/repositories/inventory_repository.dart';
+import '../../inventory/domain/repositories/inventory_count_repository.dart';
+import '../../inventory/presentation/inventory_count_page.dart';
 import '../../inventory/presentation/inventory_movements_page.dart';
 import '../../sales/domain/repositories/sale_repository.dart';
 import '../../sales/presentation/sales_page.dart';
@@ -183,6 +185,14 @@ class _AppShellPageState extends State<AppShellPage> {
           icon: Icons.swap_vert_outlined,
           description: 'تتبع الحركة والقيمة والكميات دون تعديل مباشر للرصيد.',
           capabilities: ['حركة وارد', 'حركة صادر', 'حد الطلب'],
+          foundationReady: true,
+        ),
+        _Module(
+          id: 'inventory-counts',
+          label: 'جرد المخزون',
+          icon: Icons.fact_check_outlined,
+          description: 'مسودات الجرد والعد والمراجعة قبل اعتماد الفروقات.',
+          capabilities: ['جرد جديد', 'عدّ الأصناف', 'إكمال ومراجعة'],
           foundationReady: true,
         ),
         _Module(
@@ -789,6 +799,7 @@ class _AppShellPageState extends State<AppShellPage> {
           categoryInventoryDocumentBuilder:
               widget.dependencies.categoryInventoryDocumentBuilder,
           inventoryRepository: widget.dependencies.inventoryRepository,
+          inventoryCountRepository: widget.dependencies.inventoryCountRepository,
           saleRepository: widget.dependencies.saleRepository,
           purchaseRepository: widget.dependencies.purchaseRepository,
           purchaseOrderRepository: widget.dependencies.purchaseOrderRepository,
@@ -1019,6 +1030,7 @@ class _ModuleLandingPage extends StatelessWidget {
     required this.categoryRepository,
     required this.categoryInventoryDocumentBuilder,
     required this.inventoryRepository,
+    required this.inventoryCountRepository,
     required this.saleRepository,
     required this.purchaseRepository,
     required this.purchaseOrderRepository,
@@ -1058,6 +1070,7 @@ class _ModuleLandingPage extends StatelessWidget {
   final CategoryRepository? categoryRepository;
   final CategoryInventoryDocumentBuilder? categoryInventoryDocumentBuilder;
   final InventoryRepository? inventoryRepository;
+  final InventoryCountRepository? inventoryCountRepository;
   final SaleRepository? saleRepository;
   final PurchaseRepository? purchaseRepository;
   final PurchaseOrderRepository? purchaseOrderRepository;
@@ -1219,6 +1232,14 @@ class _ModuleLandingPage extends StatelessWidget {
         repository: productRepository,
         categoryRepository: categoryRepository,
         inventoryRepository: inventoryRepository,
+        user: user,
+        membership: membership,
+      );
+    }
+    if (module.id == 'inventory-counts') {
+      return InventoryCountPage(
+        repository: inventoryCountRepository,
+        categoryRepository: categoryRepository,
         user: user,
         membership: membership,
       );
