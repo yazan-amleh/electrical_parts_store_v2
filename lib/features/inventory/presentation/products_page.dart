@@ -414,24 +414,16 @@ class _ProductsPageState extends State<ProductsPage> {
     }
     final requestedContext = _storeContext;
     final epoch = _loadEpoch;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ProductDetailsPage(
+    final editRequested = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (detailsContext) => ProductDetailsPage(
           productId: product.id,
           contextScope: requestedContext,
           productRepository: repository,
           inventoryRepository: widget.inventoryRepository,
           onEdit: !_canManage
               ? null
-              : () {
-                  Navigator.of(context).pop();
-                  if (mounted &&
-                      epoch == _loadEpoch &&
-                      requestedContext.storeId == widget.membership.storeId &&
-                      requestedContext.userId == widget.user.id) {
-                    _openEditor(product);
-                  }
-                },
+              : () => Navigator.of(detailsContext).pop(true),
         ),
       ),
     );
@@ -439,7 +431,11 @@ class _ProductsPageState extends State<ProductsPage> {
         epoch == _loadEpoch &&
         requestedContext.storeId == widget.membership.storeId &&
         requestedContext.userId == widget.user.id) {
-      await _loadProducts();
+      if (editRequested == true && _canManage) {
+        await _openEditor(product);
+      } else {
+        await _loadProducts();
+      }
     }
   }
 
