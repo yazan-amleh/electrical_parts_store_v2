@@ -204,6 +204,45 @@ describe('Firestore security rules', function () {
     await testEnv.cleanup();
   });
 
+  it('allows tenant stocktake review but no client-created approvals or updates', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(storeDoc(context.firestore(), 'inventory_counts', 'count-1'), {
+        id: 'count-1',
+        storeId: STORE_ID,
+        status: 'draft',
+        revision: 1,
+        createdBy: 'warehouse-1',
+        items: [],
+      });
+    });
+    const count = storeDoc(ownerDb, 'inventory_counts', 'count-1');
+    await assertSucceeds(getDoc(count));
+    await assertSucceeds(
+      getDoc(storeDoc(salesDb, 'inventory_counts', 'count-1')),
+    );
+    await assertSucceeds(
+      getDocs(collection(warehouseDb, 'stores', STORE_ID, 'inventory_counts')),
+    );
+    await assertFails(
+      getDoc(storeDoc(outsiderDb, 'inventory_counts', 'count-1')),
+    );
+    await assertFails(
+      getDoc(storeDoc(inactiveDb, 'inventory_counts', 'count-1')),
+    );
+    await assertFails(setDoc(storeDoc(ownerDb, 'inventory_counts', 'forged'), {
+      storeId: STORE_ID, status: 'approved', items: [],
+    }));
+    await assertFails(
+      updateDoc(count, {status: 'approved', revision: 999}),
+    );
+    await assertFails(
+      updateDoc(storeDoc(warehouseDb, 'inventory_counts', 'count-1'), {
+        status: 'completed',
+      }),
+    );
+    await assertFails(deleteDoc(count));
+  });
+
   it('requires an active store membership for reads', async () => {
     await assertSucceeds(getDoc(storeDoc(accountantDb, 'accounts', '1110')));
     await assertSucceeds(getDoc(storeDoc(accountantDb, 'party_balances', 'customer-1')));
