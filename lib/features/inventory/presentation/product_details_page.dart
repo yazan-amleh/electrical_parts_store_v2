@@ -92,7 +92,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     );
     if (!_sameContext(epoch, scope) ||
         products != widget.productRepository ||
-        productId != widget.productId) return;
+        productId != widget.productId) {
+      return;
+    }
     if (result is! Success<Product>) {
       setState(() {
         _loading = false;
@@ -124,7 +126,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     if (!_sameContext(epoch, scope) ||
         historyRepository != widget.inventoryRepository ||
         products != widget.productRepository ||
-        productId != widget.productId) return;
+        productId != widget.productId) {
+      return;
+    }
 
     if (history is FailureResult<List<InventoryMovement>>) {
       setState(() {
@@ -173,7 +177,9 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
             movement.description,
             movement.sourceType,
             movement.sourceId ?? '',
-          ].any((part) => part.toLowerCase().contains(query))) return false;
+          ].any((part) => part.toLowerCase().contains(query))) {
+        return false;
+      }
       return true;
     }).toList(growable: false);
   }
