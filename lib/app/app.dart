@@ -60,7 +60,11 @@ class _V2AppState extends State<V2App> {
           themeMode: _appearance.themeMode,
           locale: _appearance.language.locale,
           supportedLocales: const [Locale('ar'), Locale('en')],
-          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
           home: child,
         ),
         child: AuthGate(dependencies: widget.dependencies),
