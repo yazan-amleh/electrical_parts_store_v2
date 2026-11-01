@@ -15,12 +15,16 @@ import 'package:electrical_parts_store_v2/features/inventory/presentation/produc
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Product _part(String id, String name, int milliUnits, {
+Product _part(
+  String id,
+  String name,
+  int milliUnits, {
   String storeId = 'store-a',
   String currency = 'ILS',
   int price = 1000,
   bool isService = false,
-}) => Product(
+}) =>
+    Product(
       id: id,
       storeId: storeId,
       name: name,
@@ -76,9 +80,12 @@ class _CategorySource implements CategoryRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _screen(_Catalog repo, String storeId, {
+Widget _screen(
+  _Catalog repo,
+  String storeId, {
   CategoryRepository? categories,
-}) => MaterialApp(
+}) =>
+    MaterialApp(
       home: Scaffold(
         body: ProductsPage(
           key: const ValueKey('catalog'),
