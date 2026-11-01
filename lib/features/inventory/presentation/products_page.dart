@@ -103,34 +103,26 @@ class _ProductsPageState extends State<ProductsPage> {
           (product.barcode?.toLowerCase().contains(search) ?? false);
     }).toList();
     filtered.sort((left, right) {
-      switch (_sortOrder) {
-        case 'stock-ascending':
-          if (left.isService != right.isService) {
-            return left.isService ? 1 : -1;
-          }
-          final compare = left.quantityOnHand.milliUnits
-              .compareTo(right.quantityOnHand.milliUnits);
-          if (compare != 0) return compare;
-        case 'stock-descending':
-          if (left.isService != right.isService) {
-            return left.isService ? 1 : -1;
-          }
-          final compare = right.quantityOnHand.milliUnits
-              .compareTo(left.quantityOnHand.milliUnits);
-          if (compare != 0) return compare;
-        case 'price':
-          final currencies = left.sellingPrice.currency
-              .compareTo(right.sellingPrice.currency);
-          if (currencies != 0) return currencies;
-          final compare = left.sellingPrice.minorUnits
+      int compare = 0;
+      if (_sortOrder == 'stock-ascending' ||
+          _sortOrder == 'stock-descending') {
+        if (left.isService != right.isService) {
+          return left.isService ? 1 : -1;
+        }
+        compare = left.quantityOnHand.milliUnits
+            .compareTo(right.quantityOnHand.milliUnits);
+        if (_sortOrder == 'stock-descending') compare = -compare;
+      } else if (_sortOrder == 'price') {
+        compare = left.sellingPrice.currency
+            .compareTo(right.sellingPrice.currency);
+        if (compare == 0) {
+          compare = left.sellingPrice.minorUnits
               .compareTo(right.sellingPrice.minorUnits);
-          if (compare != 0) return compare;
-        case 'sku':
-          final compare = (left.sku ?? '').compareTo(right.sku ?? '');
-          if (compare != 0) return compare;
-        default:
-          break;
+        }
+      } else if (_sortOrder == 'sku') {
+        compare = (left.sku ?? '').compareTo(right.sku ?? '');
       }
+      if (compare != 0) return compare;
       return left.name.toLowerCase().compareTo(right.name.toLowerCase());
     });
 
@@ -401,9 +393,19 @@ class _ProductsPageState extends State<ProductsPage> {
 
   Future<void> _loadProducts() async {
     final repository = widget.repository;
+    final contextAtStart = _storeContext;
+    final epoch = ++_loadEpoch;
+    bool stillCurrent() =>
+        mounted &&
+        epoch == _loadEpoch &&
+        contextAtStart.storeId == widget.membership.storeId &&
+        contextAtStart.userId == widget.user.id &&
+        repository == widget.repository;
+
     if (repository == null) {
       setState(() {
         _isLoading = false;
+        _products = const <Product>[];
         _errorMessage = null;
       });
       return;
@@ -412,18 +414,14 @@ class _ProductsPageState extends State<ProductsPage> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _products = const <Product>[];
     });
 
     final result = await repository.getProducts(
-      context: StoreContext(
-        storeId: widget.membership.storeId,
-        userId: widget.user.id,
-      ),
+      context: contextAtStart,
       includeInactive: true,
     );
-    if (!mounted) {
-      return;
-    }
+    if (!stillCurrent()) return;
 
     if (result is FailureResult<List<Product>>) {
       setState(() {
@@ -434,6 +432,16 @@ class _ProductsPageState extends State<ProductsPage> {
     }
 
     if (result is Success<List<Product>>) {
+      // Recheck document store IDs even when the repository has already
+      // enforced its own tenant query.
+      if (result.value.any((item) => item.storeId != contextAtStart.storeId)) {
+        setState(() {
+          _isLoading = false;
+          _products = const <Product>[];
+          _errorMessage = 'بيانات أصناف لا تتبع المتجر الحالي؛ تم رفض تحميلها.';
+        });
+        return;
+      }
       setState(() {
         _isLoading = false;
         _products = result.value;
@@ -452,6 +460,8 @@ class _ProductsPageState extends State<ProductsPage> {
       return;
     }
 
+    final editContext = _storeContext;
+    final editEpoch = _loadEpoch;
     final product = await showDialog<Product>(
       context: context,
       builder: (_) => ProductEditorDialog(
@@ -460,20 +470,25 @@ class _ProductsPageState extends State<ProductsPage> {
         categories: _categories,
       ),
     );
-    if (!mounted || product == null) {
+    if (!mounted || product == null ||
+        editEpoch != _loadEpoch ||
+        editContext.storeId != widget.membership.storeId ||
+        editContext.userId != widget.user.id ||
+        product.storeId != editContext.storeId ||
+        repository != widget.repository) {
       return;
     }
 
     setState(() => _isSaving = true);
     try {
       final result = await repository.saveProduct(
-        context: StoreContext(
-          storeId: widget.membership.storeId,
-          userId: widget.user.id,
-        ),
+        context: editContext,
         product: product,
       );
-      if (!mounted) return;
+      if (!mounted ||
+          editEpoch != _loadEpoch ||
+          editContext.storeId != widget.membership.storeId ||
+          editContext.userId != widget.user.id) return;
 
       if (result is FailureResult<void>) {
         _showMessage(result.failure.message);
@@ -496,21 +511,36 @@ class _ProductsPageState extends State<ProductsPage> {
 
   Future<void> _loadCategories() async {
     final repository = widget.categoryRepository;
+    final requestedContext = _storeContext;
+    final epoch = ++_categoryEpoch;
     if (repository == null) {
+      if (mounted) setState(() => _categories = const <Category>[]);
       return;
     }
 
-    final result = await repository.getCategories(
-      context: StoreContext(
-        storeId: widget.membership.storeId,
-        userId: widget.user.id,
-      ),
-    );
-    if (!mounted) {
-      return;
-    }
+    final result = await repository.getCategories(context: requestedContext);
+    if (!mounted ||
+        epoch != _categoryEpoch ||
+        repository != widget.categoryRepository ||
+        requestedContext.storeId != widget.membership.storeId ||
+        requestedContext.userId != widget.user.id) return;
+
     if (result is Success<List<Category>>) {
-      setState(() => _categories = result.value);
+      if (result.value.any((category) =>
+          category.storeId != requestedContext.storeId)) {
+        setState(() {
+          _categories = const <Category>[];
+          _selectedCategoryId = null;
+        });
+        return;
+      }
+      setState(() {
+        _categories = result.value;
+        if (_selectedCategoryId != null &&
+            !_categories.any((c) => c.id == _selectedCategoryId)) {
+          _selectedCategoryId = null;
+        }
+      });
     }
   }
 
@@ -522,6 +552,8 @@ class _ProductsPageState extends State<ProductsPage> {
 
   @override
   void dispose() {
+    ++_loadEpoch;
+    ++_categoryEpoch;
     _searchController.dispose();
     super.dispose();
   }
