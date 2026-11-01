@@ -127,7 +127,11 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(0), 'old-secret');
     await tester.enterText(find.byType(TextFormField).at(1), '123');
     await tester.enterText(find.byType(TextFormField).at(2), 'wrong');
-    await tester.tap(find.text('تغيير كلمة المرور').last);
+    await tester.testTextInput.hide();
+    final save = find.byKey(const Key('change-account-password-submit'));
+    await tester.ensureVisible(save);
+    await tester.pumpAndSettle();
+    await tester.tap(save);
     await tester.pumpAndSettle();
     expect(repository.passwords, isEmpty);
     expect(find.textContaining('8 أحرف'), findsOneWidget);
@@ -141,7 +145,10 @@ void main() {
       find.byType(TextFormField).at(2),
       'new-password-safe',
     );
-    await tester.tap(find.text('تغيير كلمة المرور').last);
+    await tester.testTextInput.hide();
+    await tester.ensureVisible(save);
+    await tester.pumpAndSettle();
+    await tester.tap(save);
     await tester.pumpAndSettle();
     expect(
       repository.passwords,
@@ -163,7 +170,11 @@ void main() {
         find.byType(TextFormField).at(1), 'new-password-safe');
     await tester.enterText(
         find.byType(TextFormField).at(2), 'new-password-safe');
-    await tester.tap(find.text('تغيير كلمة المرور').last);
+    await tester.testTextInput.hide();
+    final save = find.byKey(const Key('change-account-password-submit'));
+    await tester.ensureVisible(save);
+    await tester.pumpAndSettle();
+    await tester.tap(save);
     await tester.pumpAndSettle();
     expect(repository.passwords.single.$1, 'b');
     expect(find.text('تم تغيير كلمة المرور'), findsNothing);
