@@ -127,7 +127,7 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(0), 'old-secret');
     await tester.enterText(find.byType(TextFormField).at(1), '123');
     await tester.enterText(find.byType(TextFormField).at(2), 'wrong');
-    await tester.testTextInput.hide();
+    tester.testTextInput.hide();
     final save = find.byKey(const Key('change-account-password-submit'));
     await tester.ensureVisible(save);
     await tester.pumpAndSettle();
@@ -145,7 +145,7 @@ void main() {
       find.byType(TextFormField).at(2),
       'new-password-safe',
     );
-    await tester.testTextInput.hide();
+    tester.testTextInput.hide();
     await tester.ensureVisible(save);
     await tester.pumpAndSettle();
     await tester.tap(save);
@@ -170,7 +170,7 @@ void main() {
         find.byType(TextFormField).at(1), 'new-password-safe');
     await tester.enterText(
         find.byType(TextFormField).at(2), 'new-password-safe');
-    await tester.testTextInput.hide();
+    tester.testTextInput.hide();
     final save = find.byKey(const Key('change-account-password-submit'));
     await tester.ensureVisible(save);
     await tester.pumpAndSettle();
