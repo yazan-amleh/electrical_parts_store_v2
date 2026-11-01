@@ -421,9 +421,8 @@ class _ProductsPageState extends State<ProductsPage> {
           contextScope: requestedContext,
           productRepository: repository,
           inventoryRepository: widget.inventoryRepository,
-          onEdit: !_canManage
-              ? null
-              : () => Navigator.of(detailsContext).pop(true),
+          onEdit:
+              !_canManage ? null : () => Navigator.of(detailsContext).pop(true),
         ),
       ),
     );
