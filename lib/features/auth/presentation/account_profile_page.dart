@@ -160,8 +160,8 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
       if (file.size > AccountAvatarValidation.maxBytes ||
           file.bytes == null ||
           AccountAvatarValidation.mimeType(file.bytes!) == null) {
-        setState(() => _avatarError =
-            'اختر صورة JPEG أو PNG سليمة بحجم لا يتجاوز 2MB.');
+        setState(() =>
+            _avatarError = 'اختر صورة JPEG أو PNG سليمة بحجم لا يتجاوز 2MB.');
         return;
       }
       final result = await repository.upload(
@@ -245,13 +245,16 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                                     child: _avatar != null
                                         ? null
                                         : Text(
-                                      (_profile?.displayName?.isNotEmpty == true
-                                              ? _profile!.displayName!
-                                              : _profile?.email ?? '?')
-                                          .substring(0, 1)
-                                          .toUpperCase(),
-                                      style: const TextStyle(fontSize: 30),
-                                    ),
+                                            (_profile?.displayName
+                                                            ?.isNotEmpty ==
+                                                        true
+                                                    ? _profile!.displayName!
+                                                    : _profile?.email ?? '?')
+                                                .substring(0, 1)
+                                                .toUpperCase(),
+                                            style:
+                                                const TextStyle(fontSize: 30),
+                                          ),
                                   ),
                                 ),
                                 if (widget.avatarRepository != null) ...[
@@ -283,8 +286,8 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
                                       _avatarError!,
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
-                                        color: Theme.of(context)
-                                            .colorScheme.error,
+                                        color:
+                                            Theme.of(context).colorScheme.error,
                                       ),
                                     ),
                                 ],
