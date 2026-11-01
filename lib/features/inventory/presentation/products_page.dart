@@ -10,6 +10,8 @@ import '../../categories/domain/entities/category.dart';
 import '../../categories/domain/repositories/category_repository.dart';
 import '../domain/entities/product.dart';
 import '../domain/repositories/product_repository.dart';
+import '../domain/repositories/inventory_repository.dart';
+import 'product_details_page.dart';
 import 'product_editor_dialog.dart';
 
 class ProductsPage extends StatefulWidget {
@@ -18,6 +20,7 @@ class ProductsPage extends StatefulWidget {
     required this.user,
     required this.membership,
     this.categoryRepository,
+    this.inventoryRepository,
     super.key,
   });
 
@@ -25,6 +28,7 @@ class ProductsPage extends StatefulWidget {
   final AuthenticatedUser user;
   final StoreMembership membership;
   final CategoryRepository? categoryRepository;
+  final InventoryRepository? inventoryRepository;
 
   @override
   State<ProductsPage> createState() => _ProductsPageState();
@@ -350,7 +354,7 @@ class _ProductsPageState extends State<ProductsPage> {
         final product = shown[index];
         return Card(
           child: ListTile(
-            onTap: !_canManage || _isSaving ? null : () => _openEditor(product),
+            onTap: _isSaving ? null : () => _openDetails(product),
             leading: CircleAvatar(
               child: Icon(
                 product.isService
@@ -370,18 +374,29 @@ class _ProductsPageState extends State<ProductsPage> {
                 if (!product.isActive) 'غير نشط',
               ].join(' • '),
             ),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(product.sellingPrice.formatted),
-                if (!product.isService && product.isLowStock)
-                  Text(
-                    'منخفض',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontWeight: FontWeight.bold,
-                    ),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(product.sellingPrice.formatted),
+                    if (!product.isService && product.isLowStock)
+                      Text(
+                        'منخفض',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                  ],
+                ),
+                if (_canManage)
+                  IconButton(
+                    tooltip: 'تعديل الصنف',
+                    onPressed: _isSaving ? null : () => _openEditor(product),
+                    icon: const Icon(Icons.edit_outlined),
                   ),
               ],
             ),
@@ -389,6 +404,43 @@ class _ProductsPageState extends State<ProductsPage> {
         );
       },
     );
+  }
+
+  Future<void> _openDetails(Product product) async {
+    final repository = widget.repository;
+    if (repository == null || product.storeId != widget.membership.storeId) {
+      _showMessage('تعذر فتح تفاصيل هذا الصنف ضمن المتجر الحالي.');
+      return;
+    }
+    final requestedContext = _storeContext;
+    final epoch = _loadEpoch;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ProductDetailsPage(
+          productId: product.id,
+          contextScope: requestedContext,
+          productRepository: repository,
+          inventoryRepository: widget.inventoryRepository,
+          onEdit: !_canManage
+              ? null
+              : () {
+                  Navigator.of(context).pop();
+                  if (mounted &&
+                      epoch == _loadEpoch &&
+                      requestedContext.storeId == widget.membership.storeId &&
+                      requestedContext.userId == widget.user.id) {
+                    _openEditor(product);
+                  }
+                },
+        ),
+      ),
+    );
+    if (mounted &&
+        epoch == _loadEpoch &&
+        requestedContext.storeId == widget.membership.storeId &&
+        requestedContext.userId == widget.user.id) {
+      await _loadProducts();
+    }
   }
 
   Future<void> _loadProducts() async {
