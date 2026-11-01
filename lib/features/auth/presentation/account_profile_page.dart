@@ -55,7 +55,8 @@ class _AccountProfilePageState extends State<AccountProfilePage> {
       _loading = true;
       _error = null;
     });
-    final result = await widget.repository.getProfile(expectedUserId: expectedId);
+    final result =
+        await widget.repository.getProfile(expectedUserId: expectedId);
     if (!mounted || epoch != _epoch || widget.user.id != expectedId) return;
     setState(() {
       _loading = false;
